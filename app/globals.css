@@ -253,7 +253,8 @@ nav.tabbar {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-nav.tabbar button {
+nav.tabbar button,
+nav.tabbar a {
   flex: 1;
   border: 0;
   background: none;
@@ -263,9 +264,13 @@ nav.tabbar button {
   line-height: 1.25;
   color: var(--grey);
   cursor: pointer;
+  text-decoration: none;
+  text-align: center;
+  display: block;
 }
 
-nav.tabbar button.on {
+nav.tabbar button.on,
+nav.tabbar a.on {
   color: var(--pine);
   font-weight: 700;
   border-top: 3px solid var(--marker);
