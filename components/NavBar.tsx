@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { usePathname } from "next/navigation";
+import SignOutButton from "@/components/SignOutButton";
 
 const TABS = [
   { href: "/dashboard", icon: "✍️", label: "Capture" },
@@ -15,14 +15,6 @@ const TABS = [
 
 export default function NavBar() {
   const pathname = usePathname();
-  const router = useRouter();
-
-  async function signOut() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.replace("/login");
-    router.refresh();
-  }
 
   return (
     <nav className="tabbar">
@@ -33,11 +25,9 @@ export default function NavBar() {
           {t.label}
         </Link>
       ))}
-      <button onClick={signOut} title="Sign out" style={{ flex: "0 0 auto", padding: "8px 14px" }}>
-        🚪
-        <br />
-        Sign out
-      </button>
+      <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", padding: "0 10px" }}>
+        <SignOutButton />
+      </div>
     </nav>
   );
 }
