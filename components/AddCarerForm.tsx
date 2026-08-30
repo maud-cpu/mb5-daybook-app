@@ -50,8 +50,8 @@ export default function AddCarerForm() {
             {created.password}
           </div>
           <p className="muted" style={{ marginTop: 6 }}>
-            They can sign in straight away. There's no "change password" screen yet —
-            tell me when you want one and I'll add it.
+            They can sign in straight away. There&apos;s no &quot;change password&quot; screen yet —
+            tell me when you want one and I&apos;ll add it.
           </p>
         </div>
       )}
