@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>MB5 Day Book</title>
+<style>
+  :root{
+    --pine:#2d5a4a; --marker:#e0a800; --grey:#6b6b63; --accent:#8a6d3b;
+    --bg:#f6f5f0; --card:#ffffff; --ink:#25291f; --line:#e5e3d8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding-bottom:78px}
+  h1,h2,h3,h4{font-family:Georgia,'Times New Roman',serif;font-weight:400;margin:0 0 8px}
+  header{padding:16px 100px 8px 16px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  #hdr{font-size:15px;color:var(--grey)}
+  #view{padding:12px 14px 24px;max-width:640px;margin:0 auto}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+  .card h3{font-size:20px;margin-bottom:10px}
+  .row{display:flex;gap:8px;margin:8px 0}
+  .row input,.row select{flex:1;min-width:0}
+  input,select,textarea{font:inherit;font-size:15px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);width:100%}
+  input[type="checkbox"],input[type="radio"]{width:16px;height:16px;padding:0;flex:0 0 auto}
+  textarea{min-height:70px;resize:vertical}
+  label{font-size:14px}
+  .btn{display:block;width:100%;background:var(--pine);color:#fff;border:0;border-radius:10px;padding:14px;font-size:17px;font-weight:700;cursor:pointer;margin-top:10px}
+  .btn:disabled{opacity:.6}
+  .btn.quiet{background:transparent;color:var(--pine);border:1.5px solid var(--pine);margin-top:8px}
+  .chip{border:1.5px solid var(--pine);background:transparent;color:var(--pine);border-radius:999px;padding:5px 12px;font:inherit;font-size:14px;font-weight:700;cursor:pointer;display:inline-block;text-decoration:none;margin:2px 4px 2px 0}
+  .chip.on{background:var(--pine);color:#fff} .chip.add{border-style:dashed;font-weight:400}
+  .chip.urgent{border-color:#c0392b;color:#c0392b} .chip.urgent.on{background:#c0392b;color:#fff}
+  .chips{display:flex;flex-wrap:wrap;gap:4px}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+  .tabs button{border:1.5px solid var(--pine);background:transparent;color:var(--pine);border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer}
+  .tabs button.on{background:var(--pine);color:#fff}
+  .item{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px;background:#fbfaf6}
+  .rec{border-bottom:1px solid var(--line);padding:8px 0;font-size:15px;cursor:pointer}
+  .rec:last-child{border-bottom:0}
+  .rec.done{opacity:.5;text-decoration:line-through}
+  .rec.incident{border-left:3px solid #c0392b;padding-left:8px}
+  .note{background:#f4f1e8;border-radius:8px;padding:8px 10px;font-size:14px;margin:6px 0;color:#4a4636}
+  .hint,.muted{color:var(--grey);font-size:13px}
+  .empty{color:var(--grey);font-style:italic}
+  .x,.del{background:none;border:0;color:var(--grey);font-size:18px;cursor:pointer;line-height:1;padding:2px 6px}
+  .del{float:right}
+  .sub{font-size:14px;color:var(--grey);margin-top:10px}
+  .total{font-size:20px;font-weight:700;color:var(--pine)}
+  .calc{font-size:13px;color:var(--grey);margin:2px 0 6px}
+  #rep,#repx,#repm{white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;line-height:1.5;background:#f4f1e8;border-radius:8px;padding:10px 12px;max-width:100%;overflow-x:hidden}
+  a{color:var(--pine)}
+  nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom)}
+  nav button{flex:1;border:0;background:none;padding:8px 1px 10px;font:inherit;font-size:10px;line-height:1.25;color:var(--grey);cursor:pointer}
+  nav button.on{color:var(--pine);font-weight:700;border-top:3px solid var(--marker);margin-top:-1px}
+  #lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:50;align-items:center;justify-content:center}
+  #lightbox img{max-width:92%;max-height:92%;border-radius:8px}
+  #toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%) translateY(20px);background:#25291f;color:#fff;padding:10px 16px;border-radius:8px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;max-width:90%;text-align:center;z-index:60}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #qaBtns{position:fixed;top:14px;right:12px;z-index:45;display:flex;gap:6px}
+  #qaBtns button{width:38px;height:38px;border-radius:50%;border:1.5px solid var(--pine);background:#fff;font-size:17px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.15);padding:0}
+  #qaPanel{position:fixed;top:58px;right:12px;z-index:46;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.22);max-width:260px;max-height:65vh;overflow-y:auto;padding:10px 12px;display:none}
+  #qaPanel.show{display:block}
+  #qaPanel .qi{padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
+  #qaPanel .qi:last-child{border-bottom:0}
+  .photos{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+  .ph{position:relative;display:inline-block}
+  .ph img{width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+  .ph button{position:absolute;top:-6px;right:-6px;background:#c0392b;color:#fff;border:0;border-radius:50%;width:20px;height:20px;line-height:18px;font-size:13px;cursor:pointer;padding:0}
+</style>
+</head>
+<body>
+<header><h1 style="font-size:19px">MB5 Day Book</h1><span id="hdr"></span></header>
+<div id="qaBtns"><button onclick="toggleQuickPanel('phone')" title="Important numbers">📞</button><button onclick="openComposeFromAnywhere()" title="Compose an email">✉️</button></div>
+<div id="qaPanel"></div>
+<div id="view"></div>
+<nav>
+  <button data-v="capture" class="on">✍️<br>Capture</button>
+  <button data-v="buckets">🗂️<br>Entries</button>
+  <button data-v="docs">📄<br>Paperwork</button>
+  <button data-v="training">🎓<br>Training</button>
+  <button data-v="about">👪<br>About us</button>
+  <button data-v="settings">⚙️<br>Rates</button>
+</nav>
+<div id="lightbox" onclick="this.style.display='none'"><img></div>
+<div id="toast"></div>
+<script>
+
+const KEY='mb5-daybook-v4';
+const BUILD='2026-08-30-overnight-accuracy-fix';
+const BUCKETS={diary:'Diary',supervision:'Supervision',expenses:'Expenses',meds:'Medication',sw:'Social worker log',incident:'Incident',scratch:'Just record'};
+const FLAGS={
+ sexualised:{label:'Sexualised behaviour',urgent:true,guidance:"Record the exact words/actions, the time, place and who was present — don't ask leading questions. Tell your SSW and both children's social workers today. Whether and how it's investigated is their judgement, not yours."},
+ disclosure:{label:'Possible disclosure',urgent:true,guidance:"Stop. Record the child's exact words. No follow-up questions, no examination. Phone your SSW today — and the child's own social worker too if that's someone else."},
+ injury:{label:'Unexplained injury or mark',urgent:true,guidance:"Photograph it if you haven't already. Note what explanation was given, by whom, and when. Tell your SSW today."},
+ allegation:{label:'Allegation against an adult',urgent:true,guidance:"Don't investigate it or put it to the adult concerned. Record the exact words. Contact your SSW today — this may need LADO involvement."},
+ missing:{label:'Child missing or ran off',urgent:true,guidance:"Follow your safer-care plan. If not already resolved, this needs your SSW and the police informed without delay."},
+ contact:{label:'Contact cancelled or missed',urgent:false,guidance:"Check with the social worker whether it will be rearranged, and let the child know what's happening. Note how they reacted."},
+ health:{label:'New or worsening health issue',urgent:false,guidance:"Consider whether this needs a GP appointment, and whether the SSW should be told."},
+ school:{label:'School incident or exclusion risk',urgent:false,guidance:"Tell your SSW. Consider whether a PEP review is needed."},
+ reminder:{label:'Reminder',urgent:false,guidance:''},
+ training:{label:'Training suggestion',urgent:false,guidance:''}
+};
+function flagGuidance(r){return ['reminder','training'].includes(r.flag)?(r.flagNote||r.text):(FLAGS[r.flag]||{}).guidance||''}
+function courseTitle(note){return esc((note||'').split(' — ')[0])}
+function reminderFlagIcon(note){return /\b(expense|invoice|invoicing|pay|paid|payment|£|claim|reimburse|receipt|day ?care|mileage)\b/i.test(note||'')?'💷':'🔔'}
+function flagIcon(r){return r.flag==='training'?'💡':r.flag==='reminder'?reminderFlagIcon(r.flagNote||r.text):'⚠'}
+function findCourse(title){for(const [,,rows] of TRAINING){const hit=rows.find(r=>r[0]===title);if(hit)return hit}return null}
+function trainingRow(r,note,keyPrefix){const key=keyPrefix+r.id+'-t';const open=window._flagOpen===key;
+  const course=findCourse((note||'').split(' — ')[0]);const url=course?platUrl(course[2]):'';
+  return `<div class="rec" style="margin-top:2px" onclick="event.stopPropagation();window._flagOpen=window._flagOpen==='${key}'?null:'${key}';render()">
+    💡 <b>Training suggestion</b> · ${courseTitle(note)} <small class="muted">${open?'':'— tap for details'}</small>
+    ${open?`<div class="note">${esc(note)}</div>${url?`<a class="chip" href="${url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Open ↗</a> `:''}<button class="chip" onclick="event.stopPropagation();view='training';render()">View in Training list</button> <button class="chip on" onclick="event.stopPropagation();markFlagDone('${r.id}')">Mark done</button>`:''}</div>`}
+const BANDS=['0-4','5-10','11-13','14-18'];
+const DEFAULT_RATES={
+  label:'Surrey CC, April 2026',
+  mileage:0.45, dailyDeduct:20,
+  hourFirst:12.71, hourAdd:10.17,
+  dayFirst:{'0-4':63.57,'5-10':67.76,'11-13':79.53,'14-18':87.15},
+  dayAdd:{'0-4':50.86,'5-10':54.21,'11-13':63.62,'14-18':69.72},
+  overnight:{'0-4':93.06,'5-10':97.24,'11-13':109.02,'14-18':120.08},
+};
+// children: [{name,band,home:true/false}]  records: {id,bucket,child,text,date,done,created, kind:'purchase'|'mileage'|'daycare', amount, miles, hours, overnight, kids:[names]}
+let data={children:[],records:[],contacts:[],carer:'',diaries:{},household:{adults:[]},handovers:{},reminders:[],rota:[],settings:{diaryEvery:'monthly',invoiceDay:1,payDay:28},rates:JSON.parse(JSON.stringify(DEFAULT_RATES))};
+let mem=false, view='capture', tab='all', erange='7d', pending=[], busy=false;
+const $=s=>document.querySelector(s);
+const today=()=>new Date().toISOString().slice(0,10);
+const ERANGES=[['7d','Last 7 days'],['30d','Last 30 days'],['month','This month'],['all','All time'],['custom','Choose exact dates…']];
+function inRange(d,range){if(range==='all'||!d)return true;if(range==='month')return d.slice(0,7)===today().slice(0,7);
+  if(range==='custom'){const from=window._efrom||'',to=window._eto||'';if(from&&d<from)return false;if(to&&d>to)return false;return true}
+  const days=range==='7d'?6:29;const cutoff=new Date(Date.now()-days*24*60*60*1000).toISOString().slice(0,10);return d>=cutoff}
+const fmt=(iso,o={day:'numeric',month:'short'})=>new Date(iso+'T12:00').toLocaleDateString('en-GB',o);
+const gbp=n=>'£'+Number(n||0).toFixed(2);
+const names=()=>data.children.map(c=>c.name);
+function ageOf(c,on=new Date()){if(!c.born)return null;const [y,m]=c.born.split('-').map(Number);let a=on.getFullYear()-y;if(on.getMonth()+1<m)a--;return a}
+function bandOf(c,on){const a=ageOf(c,on);if(a===null)return c.band||'5-10';return a<5?'0-4':a<11?'5-10':a<14?'11-13':'14-18'}
+const familyOf=n=>(data.children.find(c=>c.name===n)||{}).family||'';
+const band=n=>bandOf(data.children.find(c=>c.name===n)||{});
+function bandChange(c){if(!c.born)return '';const now=bandOf(c);for(let i=1;i<=3;i++){const d=new Date();d.setMonth(d.getMonth()+i);if(bandOf(c,d)!==now)return `moves to ${bandOf(c,d)} in ${d.toLocaleDateString('en-GB',{month:'short'})}`}return ''}
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),1800)}
+
+function applyData(raw){if(!raw)return;const d=JSON.parse(raw);data={...data,...d};if(!data.rates)data.rates=JSON.parse(JSON.stringify(DEFAULT_RATES));if(!data.contacts)data.contacts=[];if(!data.diaries)data.diaries={};if(!data.training)data.training={};if(!data.household)data.household={};if(!data.household.adults)data.household.adults=[];if(!data.household.sswName){const donor=data.household.adults.find(a=>a.sswName);if(donor){data.household.sswName=donor.sswName;data.household.sswPhone=donor.sswPhone||'';data.household.sswEmail=donor.sswEmail||'';data.household.sswManagerName=donor.sswManagerName||'';data.household.sswManagerPhone=donor.sswManagerPhone||'';data.household.sswManagerEmail=donor.sswManagerEmail||'';data.household.sswStart=donor.sswStart||''}}if(!data.handovers)data.handovers={};if(!data.reminders)data.reminders=[];if(data.seeded!==4){seedProfiles();data.seeded=4}if(!data.rota||!data.rota.length)data.rota=SEED_ROTA.slice();else{const have=new Set(data.rota.map(r=>r.d));SEED_ROTA.forEach(r=>{if(!have.has(r.d))data.rota.push(r)});data.rota.sort((a,b)=>a.d.localeCompare(b.d))}if(!data.settings)data.settings={diaryEvery:'monthly',invoiceDay:1,payDay:28};if(!data.settings.payDay)data.settings.payDay=28}
+function hasLS(){try{localStorage.setItem('_t','1');localStorage.removeItem('_t');return true}catch(e){return false}}
+async function load(){
+  let raw=null;
+  try{const r=await window.storage.get(KEY,false);if(r&&r.value)raw=r.value}catch(e){}
+  if(!raw&&hasLS()){try{raw=localStorage.getItem(KEY)}catch(e){}}
+  try{applyData(raw)}catch(e){}
+  if(data.seeded!==4){seedProfiles();data.seeded=4;save()}
+  if(rescanRecords())save();
+}
+let undoStack=[];
+function pushUndo(label){undoStack.push({label,snapshot:JSON.stringify(data)});if(undoStack.length>15)undoStack.shift()}
+function undoLast(){if(!undoStack.length)return;const last=undoStack.pop();data=JSON.parse(last.snapshot);save();render();toast('Restored: '+last.label)}
+async function save(){
+  const raw=JSON.stringify(data); let ok=false;
+  try{if(window.storage){const r=await window.storage.set(KEY,raw,false);ok=!!r}}catch(e){}
+  if(!ok&&hasLS()){try{localStorage.setItem(KEY,raw);ok=true}catch(e){}}
+  if(!ok&&!mem){mem=true;toast('No storage here — use Backup in Rates to keep your data')}
+}
+function exportData(){const raw=JSON.stringify(data);const el=$('#backup');el.value=raw;el.select();try{navigator.clipboard.writeText(raw);toast('Copied — paste it somewhere safe')}catch(e){toast('Select all and copy')}}
+function importData(){const raw=$('#backup').value.trim();if(!raw)return;try{applyData(raw);save();toast('Restored');render()}catch(e){toast('That doesn’t look like a backup')}}
+
+/* ---------- editing saved entries ---------- */
+function editForm(r){const i=data.records.indexOf(r);const sel=(k,opts)=>`<select onchange="data.records[${i}].${k}=this.value;render()">${opts.map(o=>`<option value="${o[0]}"${r[k]===o[0]?' selected':''}>${o[1]}</option>`).join('')}</select>`;
+  let h=`<div onclick="event.stopPropagation()"><div class="row"><select onchange="data.records[${i}].bucket=this.value;data.records[${i}].alsoIn=[];render()">${Object.entries(BUCKETS).map(([k,l])=>`<option value="${k}"${r.bucket===k?' selected':''}>${l}</option>`).join('')}</select><input type="date" value="${r.date}" onchange="data.records[${i}].date=this.value"><select onchange="data.records[${i}].child=this.value"><option value="">no child</option>${names().map(n=>`<option${r.child===n?' selected':''}>${n}</option>`).join('')}</select></div>
+  ${r.bucket!=='expenses'?alsoInSelectRecord(i,r):''}
+  <textarea rows="4" style="width:100%" onchange="data.records[${i}].text=this.value">${r.text||''}</textarea>`;
+  if(r.bucket==='expenses'){h+=`<div class="row">${sel('kind',[['purchase','purchase'],['mileage','mileage'],['daycare','day care']])}`;
+    if(r.kind==='purchase')h+=`<input type="number" inputmode="decimal" step="0.01" placeholder="£" value="${r.amount||''}" onchange="data.records[${i}].amount=this.value">`;
+    if(r.kind==='mileage')h+=`<input type="number" inputmode="decimal" placeholder="miles" value="${r.miles||''}" onchange="data.records[${i}].miles=this.value">`;
+    h+=`</div>`;
+    if(r.kind==='daycare'){h+=`<div class="row" style="flex-wrap:wrap">${names().map(n=>`<button class="chip${(r.kids||[]).includes(n)?' on':''}" style="flex:0 0 auto" onclick="const k=data.records[${i}].kids=data.records[${i}].kids||[];const j=k.indexOf('${n}');j<0?k.push('${n}'):k.splice(j,1);render()">${n}</button>`).join('')}</div>
+      <div class="row"><input type="time" value="${r.from||''}" onchange="data.records[${i}].from=this.value;render()"><input type="time" value="${r.to||''}" onchange="data.records[${i}].to=this.value;render()"><input type="number" inputmode="decimal" step="0.25" placeholder="or hrs" style="flex:0 0 70px" value="${r.hours||''}" onchange="data.records[${i}].hours=this.value;render()"><label style="margin:0;display:flex;align-items:center;gap:6px"><input type="checkbox" style="width:auto" ${r.overnight?'checked':''} onchange="data.records[${i}].overnight=this.checked;render()">overnight</label></div>
+      <div class="row"><select onchange="data.records[${i}].reason=this.value" style="flex:1"><option value="">Reason for day care…</option>${['Carer respite','Carer appointment','Carer training','Carer work','Sibling contact','Emergency','Other'].map(o=>`<option${r.reason===o?' selected':''}>${o}</option>`).join('')}</select></div><div class="calc">${gbp(daycareAmount(r))}</div>`}}
+  h+=`<div class="row" style="align-items:center;margin-top:4px"><span class="muted" style="flex:0 0 auto">⚠ Follow-up</span><select style="flex:1" onchange="data.records[${i}].flag=this.value;data.records[${i}].flagDone=false;data.records[${i}].flagCleared=!this.value;data.records[${i}].trainingNote='';attachTrainingSuggestion([data.records[${i}]]);render()"><option value="">None</option>${Object.entries(FLAGS).map(([k,f])=>`<option value="${k}"${r.flag===k?' selected':''}>${f.label}</option>`).join('')}</select></div>
+  ${r.flag?(['reminder','training'].includes(r.flag)?`<textarea placeholder="${r.flag==='training'?'Suggested course — edit if needed':'What to remind you to do'}" onchange="data.records[${i}].flagNote=this.value">${r.flagNote||''}</textarea>${r.flag==='training'&&r.flagNote?(()=>{const c=findCourse(r.flagNote.split(' — ')[0]);const u=c?platUrl(c[2]):'';return u?`<a class="chip" href="${u}" target="_blank" rel="noopener">Open ↗</a>`:''})():''}`:`<div class="note">${esc(FLAGS[r.flag].guidance)}</div>`):''}
+  <div class="row"><span class="muted">📷</span><input type="file" accept="image/*" style="flex:1;padding:6px;font-size:14px" onchange="addPhotoRec(${i},this)"></div>
+  <div class="row"><button class="btn" style="flex:1" onclick="data.records[${i}].edited=new Date().toISOString();save();window._edit=null;render();toast('Updated')">Done</button></div></div>`;return h}
+function addPhotoRec(i,input){const file=input.files&&input.files[0];if(!file)return;const img=new Image();const url=URL.createObjectURL(file);
+  img.onload=()=>{const max=1000;let w=img.width,h=img.height;if(w>h&&w>max){h=h*max/w;w=max}else if(h>max){w=w*max/h;h=max}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);(data.records[i].photos=data.records[i].photos||[]).push(c.toDataURL('image/jpeg',0.72));URL.revokeObjectURL(url);save();render()};img.src=url}
+/* ---------- photos ---------- */
+function addPhoto(i,input){const file=input.files&&input.files[0];if(!file)return;const img=new Image();const url=URL.createObjectURL(file);
+  img.onload=()=>{const max=1000;let w=img.width,h=img.height;if(w>h&&w>max){h=h*max/w;w=max}else if(h>max){w=w*max/h;h=max}
+    const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);
+    const d=c.toDataURL('image/jpeg',0.72);URL.revokeObjectURL(url);(pending[i].photos=pending[i].photos||[]).push(d);render()};
+  img.onerror=()=>toast('Couldn’t read that photo');img.src=url}
+function photoStrip(list,editIdx){if(!(list||[]).length)return '';return `<div class="photos">${list.map((d,j)=>`<span class="ph"><img src="${d}" onclick="event.stopPropagation();showPhoto(${JSON.stringify(d).replace(/"/g,'&quot;')})">${editIdx!=null?`<button onclick="pending[${editIdx}].photos.splice(${j},1);render()">×</button>`:''}</span>`).join('')}</div>`}
+function showPhoto(d){const lb=$('#lightbox');lb.querySelector('img').src=d;lb.style.display='flex'}
+/* ---------- Out-of-hours rota ---------- */
+const SEED_ROTA=[{d:'2026-08-13',n:'Mary Aquino',p:'07870 371164'},{d:'2026-08-14',n:'Hafsah',p:'07971 091 442'},{d:'2026-08-15',n:'Juliette Wales',p:'07811 038 004'},{d:'2026-08-16',n:'Hafsah',p:'07971 091 442'},{d:'2026-08-20',n:'Juliette Wales',p:'07811 038 004'},{d:'2026-08-21',n:'Marigold Sibanda',p:'07773 660273'},{d:'2026-08-22',n:'Mary Aquino',p:'07870 371164'},{d:'2026-08-23',n:'Hafsah',p:'07971 091 442'},{d:'2026-08-27',n:'Marigold Sibanda',p:'07773 660273'},{d:'2026-08-28',n:'Brenda Jones',p:'07929 785 308'},{d:'2026-08-29',n:'Mary Aquino',p:'07870 371164'},{d:'2026-08-30',n:'Marigold Sibanda',p:'07773 660273'},{d:'2026-09-01',n:'Mary Aquino',p:'07870 371164'},{d:'2026-09-02',n:'Mary Aquino',p:'07870 371164'},{d:'2026-09-03',n:'Marigold Sibanda',p:'07773 660273'},{d:'2026-09-04',n:'Mary Aquino',p:'07870 371164'},{d:'2026-09-05',n:'Mary Aquino',p:'07870 371164'},{d:'2026-09-06',n:'Marigold Sibanda',p:'07773 660273'},{d:'2026-09-07',n:'Juliette Wales',p:'07811 038 004'},{d:'2026-09-08',n:'Brenda Jones',p:'07929 785 308'},{d:'2026-09-09',n:'Juliette Wales',p:'07811 038 004'},{d:'2026-09-10',n:'Brenda Jones',p:'07929 785 308'},{d:'2026-09-11',n:'Hafsah',p:'07971 091 442'},{d:'2026-09-12',n:'Mary Aquino',p:'07870 371164'},{d:'2026-09-13',n:'Hafsah',p:'07971 091 442'},{d:'2026-09-14',n:'Brenda Jones',p:'07929 785 308'},{d:'2026-09-15',n:'Marigold Sibanda',p:'07773 660273'},{d:'2026-09-16',n:'Juliette Wales',p:'07811 038 004'},{d:'2026-09-17',n:'Brenda Jones',p:'07929 785 308'},{d:'2026-09-18',n:'Mary Aquino',p:'07870 371164'},{d:'2026-09-19',n:'Hafsah',p:'07971 091 442'},{d:'2026-09-20',n:'Brenda Jones',p:'07929 785 308'},{d:'2026-09-21',n:'Brenda Jones',p:'07929 785 308'},{d:'2026-09-22',n:'Mary Aquino',p:'07870 371164'},{d:'2026-09-23',n:'Juliette Wales',p:'07811 038 004'},{d:'2026-09-24',n:'Marigold Sibanda',p:'07773 660273'},{d:'2026-09-25',n:'Hafsah',p:'07971 091 442'},{d:'2026-09-26',n:'Juliette Wales',p:'07811 038 004'},{d:'2026-09-27',n:'Hafsah',p:'07971 091 442'},{d:'2026-09-28',n:'Marigold Sibanda',p:'07773 660273'},{d:'2026-09-29',n:'Mary Aquino',p:'07870 371164'},{d:'2026-09-30',n:'Brenda Jones',p:'07929 785 308'}];
+function oohToday(){const t=today();return data.rota.find(r=>r.d===t)}
+function oohCard(){const r=oohToday();const wk=[0,6].includes(new Date().getDay());
+  return `<div class="card" style="padding:10px 14px;display:flex;align-items:center;gap:10px"><span style="font-size:22px">📞</span><div style="flex:1"><b>Out of hours tonight</b><br>${r?`${r.n} — <a href="tel:${r.p.replace(/\s/g,'')}">${r.p}</a>`:'<span class="muted">no rota loaded for today — paste the month\'s rota in Rates</span>'}<br><small class="muted">${wk?'10am–11pm':'6pm–11pm'} · log every call on the OOH Record of Contact sheet</small></div></div>`}
+function importRota(){const txt=$('#rotaTxt').value;const m=txt.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/i);if(!m){toast('Couldn’t find the month and year in the text');return}
+  const mon=['january','february','march','april','may','june','july','august','september','october','november','december'].indexOf(m[1].toLowerCase())+1,yr=m[2];
+  const re=/(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+(\d{1,2})(?:st|nd|rd|th)?[\s\/|]*([A-Za-z][A-Za-z .'-]+?)[\s\/|]*(0\d[\d ]{8,12})/g;let x,n=0;
+  const keep=data.rota.filter(r=>!r.d.startsWith(`${yr}-${String(mon).padStart(2,'0')}`));
+  while((x=re.exec(txt))){keep.push({d:`${yr}-${String(mon).padStart(2,'0')}-${x[1].padStart(2,'0')}`,n:x[2].trim(),p:x[3].trim()});n++}
+  if(!n){toast('No days found — check the text');return}
+  data.rota=keep.sort((a,b)=>a.d.localeCompare(b.d));save();render();toast(`Loaded ${n} days for ${m[1]} ${yr}`)}
+/* ---------- Reminders ---------- */
+function reminderIcon(k){if(k==='inc')return '⚠';if(k==='inv'||k==='inv2'||k==='band')return '💷';if(k==='diary')return '📝';if(k==='train')return '🎓';if((k||'').startsWith('nums-'))return '📞';if(k==='edt')return '☎️';if(k==='hubnum')return '👥';if(k==='custom')return '🔔';return ''}
+function dueList(){const out=[];const now=new Date();const t=today();
+  // incidents not yet reported
+  data.records.filter(r=>r.bucket==='incident'&&!r.reported).forEach(r=>{const h=(now-new Date(r.created))/36e5;out.push({k:'inc',urgent:true,text:`Incident not yet reported${h>24?' — over 24 hours':' — '+Math.max(0,Math.round(24-h))+' hrs left'}: ${r.text.slice(0,60)}…`,go:'incident',id:r.id})});
+  // invoice / expenses
+  const d=now.getDate();const last=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+  if(d>=last-3)out.push({k:'inv',text:'Month end in '+(last-d)+' day'+(last-d===1?'':'s')+' — check expenses & day-care reasons before invoicing',go:'month'});
+  if(d<=Number(data.settings.invoiceDay||1)+2)out.push({k:'inv2',text:'Send last month\'s expenses claim to Surrey',go:'month'});
+  if(Math.abs(d-Number(data.settings.payDay||28))<=1&&data.records.some(r=>r.bucket==='expenses'&&r.claimed&&!r.paid))out.push({k:'payday',text:'Payday around now — check claimed expenses have actually been paid',go:'docs',doc:'expenses'});
+  // diary due
+  const ev=data.settings.diaryEvery||'monthly';const lastDiary=Object.keys(data.diaries).map(k=>k.split('|')[2]).filter(Boolean).sort().pop();
+  const gap=lastDiary?(now-new Date(lastDiary))/864e5:99;if((ev==='weekly'&&gap>=7)||(ev==='monthly'&&gap>=28))out.push({k:'diary',text:`Diary for social worker due (${ev}${lastDiary?', last one to '+fmt(lastDiary):''})`,go:'docs',doc:'diary'});
+  // band changes
+  data.children.forEach(c=>{const b=bandChange(c);if(b)out.push({k:'band',text:`${c.name} ${b} — day-care rate changes`,go:'settings'})});
+  // training renewals
+  TRAINING.filter(x=>x[0]==='3yr').forEach(([g,_,rows])=>rows.forEach(([t])=>{const st=trainStatus(g,t);if(st.s==='over'||st.s==='soon')out.push({k:'train',urgent:st.s==='over',text:`Training: ${t} — ${st.l}`,go:'training'})}));
+  // essential phone numbers missing
+  const ESSENTIAL=[['ssw','SSW'],['csw',"CSW"],['sswm',"SSW's manager"],['duty','Team duty line'],['gp','GP']];
+  data.children.forEach(c=>{const b=c.basics||{};const miss=ESSENTIAL.filter(([k])=>!(b[k]||'').trim()).map(([,l])=>l);if(miss.length)out.push({k:'nums-'+c.name,text:`${c.name}: add ${miss.join(', ')} — About us`,go:'about'})});
+  if(!(data.household.edt||'').trim())out.push({k:'edt',text:'Add the Emergency Duty Team (out-of-hours) number — Docs → Handover',go:'docs',doc:'handover'});
+  if(!hubCarers().length)out.push({k:'hubnum',text:'Add yourself (and any other hub carer) as a contact labelled "Hub carer" — Rates → Contacts',go:'settings'});
+  // custom
+  data.reminders.filter(r=>!r.done).forEach(r=>{if(r.date<=t)out.push({k:'custom',urgent:r.date<t,text:r.text+(r.date<t?' (overdue '+fmt(r.date)+')':''),custom:r.id})});
+  return out}
+function upcoming(){const t=today();return data.reminders.filter(r=>!r.done&&r.date>t).sort((a,b)=>a.date.localeCompare(b.date))}
+function hasFollowUp(r){return (r.flag&&!(r.flag==='training'&&!(r.flagNote||'').trim()))||!!r.trainingNote}
+function openFlags(){return data.records.filter(r=>!r.flagDone&&hasFollowUp(r)).sort((a,b)=>((FLAGS[b.flag]||{}).urgent?1:0)-((FLAGS[a.flag]||{}).urgent?1:0)||b.created.localeCompare(a.created))}
+function recordHasRealFlag(r){return !!(r.flag&&!(r.flag==='training'&&!(r.flagNote||'').trim()))}
+function renderFlagItem(r,opts){opts=opts||{};const showFlag=opts.showFlag!==false;const showTraining=opts.showTraining!==false;
+  const hasFlag=showFlag&&recordHasRealFlag(r);
+  const f=hasFlag?(FLAGS[r.flag]||{label:r.flag}):null;const open=window._flagOpen==='fu-'+r.id;
+  const flagPart=hasFlag?`<div class="rec" style="${f.urgent?'color:#c0392b':''}" onclick="window._flagOpen=window._flagOpen==='fu-${r.id}'?null:'fu-${r.id}';render()">
+    <b>${flagIcon(r)} ${esc(f.label)}</b>${r.flag==='training'?' · '+courseTitle(r.flagNote):r.flag==='reminder'?'':(r.child?' · '+esc(r.child):'')} <small class="muted">${open?'':'— tap for details'}</small>
+    ${open?`<div class="muted" style="margin:4px 0">${esc(r.text)}</div><div class="note">${esc(flagGuidance(r))}</div><button class="chip on" onclick="event.stopPropagation();markFlagDone('${r.id}')">Mark done</button> <button class="chip" onclick="event.stopPropagation();view='buckets';tab='${r.bucket}';render()">Open entry</button>${r.flag==='training'?(()=>{const c=findCourse((r.flagNote||'').split(' — ')[0]);const u=c?platUrl(c[2]):'';return u?` <a class="chip" href="${u}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Open ↗</a>`:''})():''}`:''}</div>`:'';
+  const trainingPart=(showTraining&&r.trainingNote&&r.flag!=='training')?trainingRow(r,r.trainingNote,'fu-'):'';
+  return flagPart+trainingPart}
+function flagCategory(r){if(r.flag==='training')return 'training';if(r.flag==='reminder')return 'reminder';const f=FLAGS[r.flag]||{};return f.urgent?'safeguarding':'welfare'}
+const FLAG_CATEGORY_LABELS={safeguarding:'Safeguarding',welfare:'Welfare',training:'Training suggestions',reminder:'Reminders'};
+function isTrainingOnly(r){return !recordHasRealFlag(r)&&!!(r.trainingNote&&r.trainingNote.trim())}
+function completedItems(){const doneFlags=data.records.filter(r=>r.flagDone&&recordHasRealFlag(r)).map(r=>({kind:'flag',id:r.id,text:(FLAGS[r.flag]||{label:r.flag}).label+(r.child?' — '+r.child:''),at:r.flagDoneAt||''}));
+  const doneRems=data.reminders.filter(r=>r.done).map(r=>({kind:'rem',id:r.id,text:r.text,at:r.doneAt||''}));
+  return doneFlags.concat(doneRems).sort((a,b)=>(b.at||'').localeCompare(a.at||''))}
+function reopenRem(id){const r=data.reminders.find(x=>x.id===id);if(r){r.done=false;r.doneAt='';save();render()}}
+function thingsToDoCard(){const due=dueList(),up=upcoming();
+  const fl=openFlags().filter(r=>!isTrainingOnly(r));
+  const done=completedItems();
+  if(!due.length&&!up.length&&!fl.length&&!done.length)return '';
+  const cutoff=new Date(Date.now()-24*60*60*1000).toISOString();
+  const fresh=fl.filter(r=>r.created>=cutoff),older=fl.filter(r=>r.created<cutoff);
+  const anyUrgent=due.some(x=>x.urgent)||fl.some(r=>r.flag&&(FLAGS[r.flag]||{}).urgent);
+  let h=`<div class="card" style="border-left:4px solid ${anyUrgent?'#c0392b':'#e0a800'}"><h3>Things to do${anyUrgent?' ⚠':''}</h3>`;
+  if(due.length||up.length){
+    h+=due.map(x=>`<div class="rec" style="${x.urgent?'color:#c0392b':''}" onclick="${x.custom?`doneRem('${x.custom}')`:`view='${x.go}';${x.doc?`window._doc='${x.doc}';`:''}${x.go==='incident'?"view='buckets';tab='incident';":''}render()`}">${reminderIcon(x.k)?reminderIcon(x.k)+' ':''}${x.text}${x.custom?' <small>(tap when done)</small>':''}</div>`).join('');
+    h+=up.slice(0,3).map(x=>`<div class="rec" style="opacity:.7">${fmt(x.date)} — ${x.text}</div>`).join('');
+    h+=`<div class="row"><input id="remT" placeholder="Add a reminder (e.g. CLA review, meds, training renewal)"><input id="remD" type="date" style="flex:0 0 140px"><button class="chip" style="flex:0 0 auto" onclick="addRem()">Add</button></div>
+    <p class="muted">Tap a reminder to add it to your phone calendar for an alert: <button class="chip" onclick="icsAll()">calendar file</button></p>`;
+  }
+  if(fresh.length)h+=fresh.map(r=>renderFlagItem(r,{showTraining:false})).join('');
+  if(older.length){
+    const byCat={};older.forEach(r=>{const c=flagCategory(r);(byCat[c]=byCat[c]||[]).push(r)});
+    const cats=Object.keys(byCat);
+    const sel=cats.includes(window._olderFlagsCat)?window._olderFlagsCat:'';
+    h+=`<p class="hint" style="margin-top:10px">${older.length} earlier follow-up${older.length===1?'':'s'}</p>
+    <select onchange="window._olderFlagsCat=this.value;render()"><option value=""${sel===''?' selected':''}>— choose a category to show —</option>${cats.map(c=>`<option value="${c}"${sel===c?' selected':''}>${FLAG_CATEGORY_LABELS[c]||c} (${byCat[c].length})</option>`).join('')}</select>`;
+    if(sel)h+=byCat[sel].map(r=>renderFlagItem(r,{showTraining:false})).join('');
+  }
+  if(done.length){
+    const open=!!window._completedOpen;
+    h+=`<p class="hint" style="margin-top:10px;cursor:pointer" onclick="window._completedOpen=!window._completedOpen;render()">${open?'▾':'▸'} ✓ ${done.length} completed — tap to ${open?'hide':'show'}</p>`;
+    if(open)h+=done.map(d=>`<div class="rec" style="opacity:.75">${esc(d.text)}${d.at?' — '+new Date(d.at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):''} <button class="chip" onclick="${d.kind==='flag'?`reopenFlag('${d.id}')`:`reopenRem('${d.id}')`}">Reopen</button></div>`).join('');
+  }
+  return h+'</div>'}
+function addRem(){const t=$('#remT').value.trim(),d=$('#remD').value;if(!t||!d){toast('Need text and a date');return}data.reminders.push({id:Date.now()+'',text:t,date:d});save();render()}
+function doneRem(id){const r=data.reminders.find(x=>x.id===id);if(r){r.done=true;r.doneAt=new Date().toISOString();save();render()}}
+function icsAll(){const rs=data.reminders.filter(r=>!r.done);if(!rs.length){toast('No reminders to export');return}
+  const ics='BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//MB5 Day Book//EN\r\n'+rs.map(r=>`BEGIN:VEVENT\r\nUID:${r.id}@mb5\r\nDTSTART;VALUE=DATE:${r.date.replace(/-/g,'')}\r\nSUMMARY:${r.text}\r\nBEGIN:VALARM\r\nTRIGGER:-PT9H\r\nACTION:DISPLAY\r\nDESCRIPTION:${r.text}\r\nEND:VALARM\r\nEND:VEVENT`).join('\r\n')+'\r\nEND:VCALENDAR\r\n';
+  const blob=new Blob([ics],{type:'text/calendar'});try{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='mb5-reminders.ics';document.body.appendChild(a);a.click();a.remove();toast('Open the file to add to your calendar')}catch(e){toast('Couldn’t save here — open the app in Safari or Chrome')}}
+/* ---------- Training ---------- */
+const PLATFORMS={'MyLearning':'https://learning.openelms.com/surrey/login/surreychildrensacademy','Training Hub':'https://thefostercaretraininghub.com/en/course-cat/online','SharePoint L&D page':'https://orbispartnerships.sharepoint.com/sites/surrey_fostering/SitePages/Learning-%26-Development.aspx','Assessing SSW / MyLearning':'https://learning.openelms.com/surrey/login/surreychildrensacademy','Link from Skills team':''};
+const TRAINING=[
+ ['pre','Before approval (or one-off if added since)',[
+  ['Skills to Foster','Either','Assessing SSW / MyLearning'],['Recording','Online','Link from Skills team'],['Prevent','Online','MyLearning'],['Working Together to Safeguard Children (pre-approval)','Online','Link from Skills team']]],
+ ['once','Mandatory — once',[
+  ['Equality, Diversity & Cultural Competence','Online','Training Hub'],['Our Shoes — respect','Either','MyLearning'],['Understanding behaviour of children & young people','Online','MyLearning']]],
+ ['3yr','Mandatory — every 3 years',[
+  ['First Aid for children\'s workforce & foster carers','In person','MyLearning'],['Medication Level 2 (foster carer, England)','Online','Training Hub'],['Working Together to Safeguard Children','Online','MyLearning'],['Risk Management & Safer Caring','Online','Training Hub'],['Safeguarding disabled children (where relevant)','Online','MyLearning']]],
+ ['next','Next steps (suggested)',[
+  ['Virtual School e-PEP','Online','MyLearning'],['Therapeutic Parenting intro video','Online','SharePoint L&D page'],['Working with birth parents','Online','Training Hub'],['Coping with the emotional demands of fostering','Either','MyLearning'],['Internet Safety','Online','Training Hub'],['PACE','Online','Training Hub'],['Managing allegations against adults (SCSA)','Either','MyLearning'],['Sexual Health','In person','MyLearning'],['De-escalation','In person','MyLearning'],['Compassion Fatigue','In person','MyLearning'],['Equality, Diversity & Inclusion in Fostering (2 hrs)','Either','MyLearning'],['VR headsets — insight into trauma','In person','MyLearning'],['Intro to harmful sexual behaviour (6 hrs)','In person','MyLearning'],['Child Exploitation workshop (2 hrs)','Online','MyLearning']]]];
+function trainStatus(g,t){const d=(data.training||{})[t];if(!d)return {s:'todo',l:g==='next'?'':'Not done'};if(g!=='3yr')return {s:'ok',l:'Done '+fmt(d)};const due=new Date(d);due.setFullYear(due.getFullYear()+3);const dd=due.toISOString().slice(0,10);const days=(new Date(dd)-new Date(today()))/864e5;return {s:days<0?'over':days<90?'soon':'ok',l:(days<0?'Expired ':'Renew by ')+fmt(dd),due:dd}}
+function platUrl(p){return (data.settings.platformLinks||{})[p]||PLATFORMS[p]||''}
+function trainingSuggestionsCard(){const items=data.records.filter(r=>!r.flagDone&&r.trainingNote&&r.trainingNote.trim());
+  if(!items.length)return '';
+  const groups={};
+  items.forEach(r=>{const idx=r.trainingNote.indexOf(' — ');const course=idx>-1?r.trainingNote.slice(0,idx):r.trainingNote;(groups[course]=groups[course]||[]).push(r)});
+  const sorted=Object.entries(groups).sort((a,b)=>b[1].length-a[1].length||b[1][0].created.localeCompare(a[1][0].created));
+  return `<div class="card" style="border-left:4px solid #e0a800"><h3>💡 Suggested from your entries</h3>
+  ${sorted.map(([course,recs],idx)=>{
+    recs.sort((a,b)=>b.created.localeCompare(a.created));
+    const open=window._trainOpen===idx;
+    const c=findCourse(course);const url=c?platUrl(c[2]):'';
+    return `<div class="rec" onclick="window._trainOpen=window._trainOpen===${idx}?null:${idx};render()">
+      <b>${esc(course)}</b>${recs.length>1?' · needed '+recs.length+' times':''} <small class="muted">${open?'':'— tap for details'}</small>
+      ${open?recs.map(r=>{const why=r.trainingNote.slice(r.trainingNote.indexOf(' — ')+3);
+        return `<div class="note" style="margin-top:6px" onclick="event.stopPropagation()">${fmt(r.date)}${r.child?' · '+esc(r.child):''}: ${esc(why)} <button class="chip" onclick="event.stopPropagation();markFlagDone('${r.id}')">Dismiss this one</button> <button class="chip" onclick="event.stopPropagation();view='buckets';tab='${r.bucket}';render()">Open entry</button></div>`}).join('')
+      +(url?`<a class="chip" style="margin-top:6px" href="${url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Open ↗</a>`:''):''}
+    </div>`}).join('')}
+  </div>`}
+function training(el){el.innerHTML=trainingSuggestionsCard()+`<div class="card"><h3>Training</h3><p class="note">Surrey's Foster Carer Training Pathway 2026 (v3, reviewed Feb 2027). Enter the date you completed each course; 3-yearly ones go on your reminders 90 days before they lapse. These links open the platform's login or catalogue page — they can't jump straight to one course, so search or browse for the title once you're in. Credits and platform help: <a href="${PLATFORMS['SharePoint L&D page']}" target="_blank" rel="noopener">Learning & Development page on SharePoint ↗</a>; MyLearning support <a href="mailto:surreychildrens.academy@surreycc.gov.uk">surreychildrens.academy@surreycc.gov.uk</a>.</p>
+ <div class="chips"><a class="chip" href="${PLATFORMS['MyLearning']}" target="_blank" rel="noopener">Open MyLearning ↗</a><a class="chip" href="${PLATFORMS['Training Hub']}" target="_blank" rel="noopener">Open Training Hub ↗</a><a class="chip" href="${PLATFORMS['SharePoint L&D page']}" target="_blank" rel="noopener">SharePoint L&D ↗</a></div></div>`+
+ TRAINING.map(([g,title,rows])=>`<div class="card"><h3>${title}</h3>${rows.map(([t,how,plat])=>{const st=trainStatus(g,t);const url=platUrl(plat);return `<div class="row" style="align-items:center;border-bottom:1px solid #eee;padding:6px 0"><div style="flex:1"><b>${t}</b><br><small class="muted">${how} · ${plat}</small>${st.l?`<br><small style="color:${st.s==='over'?'#c0392b':st.s==='soon'?'#b36b00':st.s==='ok'?'var(--pine)':'var(--grey)'}">${st.l}</small>`:''}</div>${url?`<a class="chip" style="flex:0 0 auto" href="${url}" target="_blank" rel="noopener">Open ↗</a>`:''}<input type="date" style="flex:0 0 130px" value="${(data.training||{})[t]||''}" onchange="data.training['${t.replace(/'/g,"\\'")}']=this.value;save();render()"></div>`}).join('')}</div>`).join('')}
+/* ---------- Docs hub ---------- */
+function docs(el){if(window._doc==='training'||window._doc==='kids')window._doc='diary';const sub=window._doc||'diary';const tabs=[['month','Month'],['expenses','Expenses'],['meds','Medication'],['diary','Diary for SW'],['handover','Handover']];
+  el.innerHTML=`<div class="tabs">${tabs.map(([k,l])=>`<button class="${sub===k?'on':''}" onclick="window._doc='${k}';render()">${l}</button>`).join('')}</div><div id="sub"></div>`;
+  ({month,expenses:expensesDoc,meds:medsDoc,diary,handover})[sub]($('#sub'))}
+/* ---------- Placement basics ---------- */
+const LEGAL_STATUS_OPTIONS=['Section 20 (voluntary)','Interim Care Order (ICO)','Full Care Order','Emergency Protection Order (EPO)','Police Protection','Placement Order','Other'];
+const BASICS=[
+ ['Placement',[['status','Legal status','',null,'select'],['start','Placement started',''],['type','Placement type','long-term / short-term / respite / emergency'],['la','Placing authority','']]],
+ ['Social work team',[['csw','Children\'s social worker','',null,'contact'],['cswm','CSW\'s manager','',null,'contact'],['iro','IRO (Independent Reviewing Officer)','',null,'contact'],['ssw','Supervising social worker','',null,'contact'],['sswm','SSW\'s manager','',null,'contact'],['duty','Team duty line','phone']]],
+ ['Health',[['gp','GP practice','',null,'contact2'],['nhs','NHS number','where it is kept, or the number if you\'re happy to hold it here'],['allergies','Allergies & medication','say "none" if none'],['dentist','Dentist / optician','name · last visit'],['laceh','CLA health assessment','last · next due']]],
+ ['Education',[['school','School & year','name · phone · year · class'],['teacher','Key contact at school','teacher / TA / designated teacher'],['pep','PEP','last · next due'],['send','SEND / EHCP','']]],
+ ['Family & contact',[['contact','Contact arrangements','who · how often · supervised? · where'],['nocontact','Must NOT have contact',''],['family','Family / important people','']]],
+ ['Key dates',[['review','CLA review','last · next'],['visit','SW statutory visit','last · next (6-weekly)'],['other','Other dates','court, therapy, assessments']]],
+ ['Authority',[['delegated','Delegated authority','what you can consent to'],['photos','Photo / social media consent',''],['notes','Anything else at a glance','']]]];
+function basics(n){const c=data.children.find(x=>x.name===n);if(!c.basics)c.basics={};return c.basics}
+function linkify(v){return esc(v).replace(/(0\d[\d ]{8,12})/g,m=>`<a href="tel:${m.replace(/\s/g,'')}">${m}</a>`).replace(/([\w.+-]+@[\w-]+\.[\w.]+)/g,m=>`<a href="mailto:${m}">${m}</a>`)}
+function extractPhone(s){const m=(s||'').match(/(0\d[\d ]{8,12})/);return m?m[1].replace(/\s/g,''):''}
+function extractEmail(s){const m=(s||'').match(/([\w.+-]+@[\w-]+\.[\w.]+)/);return m?m[0]:''}
+function quickPhoneList(){const out=[];const h=data.household;const r=oohToday();
+  if(r)out.push(['Out of hours tonight',r.n,r.p.replace(/\s/g,'')]);
+  const sswP=h.sswPhone||extractPhone(h.ssw);if(sswP)out.push(['SSW',h.sswName||'',sswP]);
+  if(h.sswManagerPhone)out.push(["SSW's manager",h.sswManagerName||'',h.sswManagerPhone]);
+  const edtP=extractPhone(h.edt);if(edtP)out.push(['Emergency Duty Team','',edtP]);
+  data.children.forEach(c=>{const b=basics(c.name);const p=b.cswPhone||extractPhone(b.csw);if(p)out.push([c.name+"'s CSW",b.cswName||'',p])});
+  data.contacts.filter(x=>/hub/i.test(x.label||'')&&(x.phone||'').trim()).forEach(x=>out.push(['Hub carer',x.name||'',x.phone.trim()]));
+  return out}
+function quickEmailList(){const out=[];const h=data.household;
+  const sswE=h.sswEmail||extractEmail(h.ssw);if(sswE)out.push(['SSW',h.sswName||'',sswE]);
+  if(h.sswManagerEmail)out.push(["SSW's manager",h.sswManagerName||'',h.sswManagerEmail]);
+  data.children.forEach(c=>{const b=basics(c.name);const e=b.cswEmail||extractEmail(b.csw);if(e)out.push([c.name+"'s CSW",b.cswName||'',e])});
+  const seen=new Set(out.map(x=>x[2].toLowerCase()));
+  data.contacts.filter(x=>x.email&&!seen.has(x.email.toLowerCase())).forEach(x=>{out.push([x.label||'Contact',x.name||'',x.email]);seen.add(x.email.toLowerCase())});
+  return out}
+function openComposeFromAnywhere(){const p=$('#qaPanel');p.classList.remove('show');window._qaKind=null;
+  view='buckets';tab=tab||'diary';window._composing=true;window._compose={to:[],kids:[],entryIds:[],other:'',note:'',tone:'',otherOn:false,otherRecipientOn:false,otherRecipient:{name:'',email:''}};render()}
+function toggleQuickPanel(kind){const p=$('#qaPanel');
+  if(p.classList.contains('show')&&window._qaKind===kind){p.classList.remove('show');window._qaKind=null;return}
+  window._qaKind=kind;const items=kind==='phone'?quickPhoneList():quickEmailList();
+  p.innerHTML=items.length?items.map(([label,name,val])=>`<div class="qi"><b>${esc(label)}</b>${name?' — '+esc(name):''}<br><a href="${kind==='phone'?'tel:':'mailto:'}${esc(val)}" onclick="event.stopPropagation()">${esc(val)}</a></div>`).join(''):'<p class="empty">Nothing set yet — add SSW / CSW details in About us or Docs → Children.</p>';
+  p.classList.add('show')}
+function fieldHasData(b,k,type){if(type==='contact')return !!((b[k+'Name']||b[k+'Phone']||b[k+'Email']||b[k])||'').trim();if(type==='contact2')return !!((b[k+'Name']||b[k+'Phone']||b[k])||'').trim();return !!(b[k]||'').trim()}
+function basicField(n,b,k,t,hint,type,ed){
+  if(type==='select'){
+    const cur=b[k]||'';const known=LEGAL_STATUS_OPTIONS.includes(cur);
+    if(!ed)return cur?`<div style="margin:4px 0"><b>${t}:</b> ${esc(cur)}</div>`:'';
+    return `<b>${t}</b><select style="width:100%" onchange="basics('${n}').${k}=this.value==='Other'?(basics('${n}').${k}==='Other'?'':'Other'):this.value;render()"><option value=""${!cur?' selected':''}>— not set —</option>${LEGAL_STATUS_OPTIONS.map(o=>`<option${cur===o?' selected':''}>${o}</option>`).join('')}</select>${(cur==='Other'||(!known&&cur))?`<input placeholder="Type the legal status" value="${known?'':esc(cur)}" onchange="basics('${n}').${k}=this.value.trim()||'Other';save()">`:''}`;
+  }
+  if(type==='contact'||type==='contact2'){
+    const nm=b[k+'Name']||'',ph=b[k+'Phone']||'',em=b[k+'Email']||'',legacy=b[k]||'';
+    if(!ed){
+      if(nm||ph||em)return `<div style="margin:4px 0"><b>${t}:</b> ${esc(nm||'—')}${ph?' · <a href="tel:'+esc(ph)+'">'+esc(ph)+'</a>':''}${em?' · <a href="mailto:'+esc(em)+'">'+esc(em)+'</a>':''}</div>`;
+      return legacy?`<div style="margin:4px 0"><b>${t}:</b> ${linkify(legacy)}</div>`:'';
+    }
+    return `<b>${t}</b>${legacy&&!nm&&!ph&&!em?`<p class="note" style="margin:2px 0">Previously: ${linkify(legacy)} — enter into the boxes below to make it tappable</p>`:''}
+    <input placeholder="Name" value="${esc(nm)}" onchange="basics('${n}').${k}Name=this.value.trim();save()">
+    <input type="tel" placeholder="Phone" value="${esc(ph)}" onchange="basics('${n}').${k}Phone=this.value.trim();save()">
+    ${type==='contact'?`<input type="email" placeholder="Email" value="${esc(em)}" onchange="basics('${n}').${k}Email=this.value.trim();save()">`:''}`;
+  }
+  return ed?`<b>${t}</b><p class="muted" style="margin:0 0 2px">${hint}</p><textarea rows="2" style="width:100%" onchange="basics('${n}')['${k}']=this.value;save()">${b[k]||''}</textarea>`:`<div style="margin:4px 0"><b>${t}:</b> ${linkify(b[k])}</div>`;
+}
+function placementOpen(n){return window._placementOpen===n}
+function togglePlacement(n){window._placementOpen=placementOpen(n)?null:n;render()}
+function placementEdit(n){return !!(window._placementEdit&&window._placementEdit[n])}
+function togglePlacementEdit(n){window._placementEdit=window._placementEdit||{};window._placementEdit[n]=!placementEdit(n);render()}
+function placementBasicsBlock(n){const b=basics(n);const ed=placementEdit(n);
+  return `<div style="margin-top:8px"><div class="row" style="justify-content:flex-end"><button class="chip" onclick="togglePlacementEdit('${n}')">${ed?'Done':'Edit'}</button></div>
+  ${BASICS.map(([grp,fields])=>{const shown=fields.filter(([k,,,,type])=>ed||fieldHasData(b,k,type));if(!shown.length)return '';return `<h4 style="margin:14px 0 4px;color:var(--accent)">${grp}</h4>`+shown.map(([k,t,hint,_,type])=>basicField(n,b,k,t,hint,type,ed)).join('')}).join('')}
+  ${!ed&&!BASICS.some(([,f])=>f.some(([k])=>(b[k]||'').trim()))?'<p class="empty">Nothing recorded yet — tap Edit.</p>':''}
+  ${!ed?`<p class="note" style="margin-top:12px">Missing: ${BASICS.flatMap(([,f])=>f).filter(([k])=>!(b[k]||'').trim()).map(x=>x[1]).join(', ')||'nothing'}</p>`:''}
+  ${!ed?`<button class="btn quiet" onclick="navigator.clipboard.writeText(basicsText('${n}')).then(()=>toast('Copied'))">Copy</button>`:''}</div>`}
+function basicFieldText(b,k,type){
+  if(type==='contact'||type==='contact2'){const nm=b[k+'Name']||'',ph=b[k+'Phone']||'',em=b[k+'Email']||'',legacy=b[k]||'';
+    if(nm||ph||em)return [nm,ph,em].filter(Boolean).join(' · ');
+    return legacy||'';}
+  return b[k]||''}
+function basicsText(n){const b=basics(n);return `${n} — placement basics\n`+BASICS.map(([g,f])=>`\n${g}\n`+f.filter(([k,,,,type])=>fieldHasData(b,k,type)).map(([k,t,,,type])=>`  ${t}: ${basicFieldText(b,k,type)}`).join('\n')).join('\n')}
+/* ---------- Handover plan ---------- */
+const SEED_PROFILES={
+ 'Ruby':{
+  about:"Loves one-to-one attention — having her hair done, playing, helping with tidying, cooking or organising. Very active; enjoys the swings.",
+  routine:"Wakes around 6am. Breakfast before getting dressed. Suncream every morning and again on return. Bedtime 8pm; story time (read aloud or David Walliams on Audible) and an adult stays in the room until asleep — usually by 8.30pm.",
+  food:"Breakfast: toast with butter and jam (bacon sandwiches also popular). Dinner favourites: lasagne, hot dogs, mild sweet curries, bolognese, pasta, chips and mash. Doesn't eat meat in burgers (egg or sausage instead) and doesn't like pizza. Healthy snack and water bottle for school; has school lunches.",
+  school:"Drop-off 8.30am precisely, at the bottom of the stairs at the back of the playground on the left; Miss Davies (TA) or occasionally Miss Framp (teacher) collects her. Pick-up varies with clubs — check the week. She won't talk at school (may whisper in the playground) but chats freely once in the car or off school grounds.",
+  toilet:"Wears a nappy at night (carer supplies). Remind her to drink a big glass of water every hour or so — not sips from a bottle — to help train her bladder. No drinks after 7pm.",
+  sleep:"Shares bedtime routine with Rubynn; adult stays until asleep.",
+  health:"GP: Moat House Surgery 01737 642207. No medication. No allergies.",
+  emotions:"Settles well with attention and a job to do.",
+  contact:"",screens:"",told:"",nogo:"",
+  pack:"School uniform (skirt, shirt, socks, shoes), nappies, suncream, toiletries, swim kit if needed. Pocket-money card — hand over PIN in person, never in writing."
+ },
+ 'Rubynn':{
+  about:"Responds really well to one-to-one attention — Lego, drawing, or chatting about his football cards. Storytelling helps him process things: a story at the table about 'someone else' in a similar situation, how they handled it and what happened next. He takes it in and often brings the story back up days later.",
+  routine:"Wakes any time from 6am, or needs waking at 7am. Breakfast before getting dressed. Suncream every morning and on return. Bedtime 8pm; story time (read aloud or David Walliams on Audible), adult stays until asleep. Has been struggling to settle lately — expect around 9pm.",
+  food:"Breakfast: toast with lemon curd (also likes peanut butter), or bacon sandwiches. Dinner: lasagne, burgers, pizza, hot dogs, mild sweet curries, bolognese, pasta. Doesn't like potatoes of any kind. Healthy snack and water bottle for school; has school lunches.",
+  school:"Dropped off with Ruby at the bottom of the stairs, 8.30am. Sometimes waits for Miss Davies, sometimes goes up with his friends. Pick-up varies with clubs — check the week.",
+  toilet:"",
+  sleep:"Shares bedtime routine with Ruby; adult stays until asleep. Heat makes settling harder.",
+  health:"GP: Moat House Surgery 01737 642207. No regular medication, no allergies. Has an asthma pump as a precaution — pack it. Gets blisters badly as soon as he does any walking — avoid long walks; bike is available to lend. Blister plasters in his bag.",
+  emotions:"Needs emotional support: has been struggling with friendships and big emotions at school and with friends. Will say he's had a bad day or that friends made him cry, but doesn't want to go into detail — don't press. May get angry, usually when arguing with Ruby or when something feels unfair. Benefits from a bit of time alone with regular check-ins rather than immediate intervention.",
+  contact:"",screens:"",told:"",nogo:"",
+  pack:"School uniform (trousers, shirt, socks, shoes), asthma pump, blister plasters, suncream, toiletries, swim kit if needed. Pocket-money card — hand over PIN in person, never in writing."
+ }};
+const SEED_HOUSE={
+ ssw:"Laura Hollister — laura.hollister@surreycc.gov.uk — 07815 493 903",
+ csw:"Rhodri (Ruby & Rubynn) — 07812 475344 — rgthomas@carmatheshire.gov.uk",
+ edt:"",gp:"Moat House Surgery — 01737 642207",hub:"",
+ school_contact:"Tell the school office who is collecting and give them that carer's number; Miss Davies (TA) is the usual contact at drop-off.",
+ delegated:"",carseat:"Rubynn — avoid long walks (blisters)."};
+const SEED_BASICS={csw:"Rhodri · 07812 475344 · rgthomas@carmatheshire.gov.uk",iro:"Ruth Ambrose · 07900 570423 · Rambrose@carmarthenshire.gov.uk",ssw:"Laura Hollister · 07815 493 903 · laura.hollister@surreycc.gov.uk",sswm:"Gianna Forward · 07583 037373 · gianna.forward@surreycc.gov.uk",gp:"Moat House Surgery · 01737 642207",la:"Carmarthenshire County Council"};
+function seedProfiles(){if(!data.contacts.some(c=>/gianna/i.test(c.email)))data.contacts.push({label:"SSW manager",name:"Gianna Forward",email:"gianna.forward@surreycc.gov.uk",child:""});if(!data.contacts.some(c=>/hollister/i.test(c.email)))data.contacts.push({label:"SSW",name:"Laura Hollister",email:"laura.hollister@surreycc.gov.uk",child:""});if(!data.contacts.some(c=>/ambrose/i.test(c.email)))data.contacts.push({label:"IRO",name:"Ruth Ambrose",email:"Rambrose@carmarthenshire.gov.uk",child:""});Object.keys(SEED_PROFILES).forEach(n=>{const c=data.children.find(x=>x.name===n)||{};});Object.entries(SEED_PROFILES).forEach(([n,p])=>{let c=data.children.find(x=>x.name===n);if(!c){c={name:n,born:'',family:'Ruby & Rubynn'};data.children.push(c)}c.profile=c.profile||{};Object.entries(p).forEach(([k,v])=>{if(!(c.profile[k]||'').trim()&&v)c.profile[k]=v});c.basics=c.basics||{};Object.entries(SEED_BASICS).forEach(([k,v])=>{if(!(c.basics[k]||'').trim())c.basics[k]=v});if(n==='Rubynn'&&!(c.basics.allergies||'').trim())c.basics.allergies='No allergies. No regular medication; asthma pump as a precaution.';if(n==='Ruby'&&!(c.basics.allergies||'').trim())c.basics.allergies='None. No medication.'});
+  Object.entries(SEED_HOUSE).forEach(([k,v])=>{if(!(data.household[k]||'').trim()&&v)data.household[k]=v})}
+
+// Per-child profile fields (kept in the app, reused every time)
+const PROFILE=[
+ ['about','About them & what works','one-to-one attention, favourite activities, how to connect'],
+ ['routine','Daily routine','wake time, breakfast before dressing, bedtime, story, who stays until asleep'],
+ ['food','Food','favourites, dislikes, portions, snacks, no drinks after…'],
+ ['school','School / nursery','drop-off time & exact spot, who collects, clubs, pick-up times'],
+ ['toilet','Toileting / night','nappies, reminders, bedwetting plan'],
+ ['sleep','Sleep','where they sleep, comfort items, night-time fears, what to do if they wake'],
+ ['health','Health & medication','GP, allergies (say "none" if none), meds & when, inhalers, known issues'],
+ ['emotions','Behaviour & emotional support','triggers, warning signs, what helps, what makes it worse, time alone vs company'],
+ ['contact','Family time & contact during the stay','who they may/may not see or phone, arrangements, how they are afterwards'],
+ ['screens','Screens, phones & money','devices, time limits, apps, pocket money'],
+ ['told','What the child has been told','why they are staying, for how long, when you\'ll be back'],
+ ['nogo','Things not to do / safeguarding','anyone who must not have contact, places to avoid, photos on social media'],
+ ['pack','Packing list','uniform, meds, comfort toy, chargers, swim kit']];
+// Household-level fields (same every stay)
+const HOUSE=[
+ ['ssw','Supervising social worker','name, email, phone'],
+ ['csw','Children\'s social worker(s)','name, email, phone — per child if different'],
+ ['edt','Out of hours / EDT','Surrey emergency duty team number'],
+ ['gp','GP practice','name & phone'],
+ ['hub','Mockingbird hub carer','name & phone'],
+ ['school_contact','School office','phone; who has been told about the stay'],
+ ['delegated','Delegated authority & consents','what the receiving carer may consent to (medical treatment, haircuts, trips), and where the signed forms are'],
+ ['carseat','Transport','car seats needed, who insured to drive them, walking limits']];
+function prof(n){const c=data.children.find(x=>x.name===n);if(!c.profile)c.profile={};return c.profile}
+function hoKey(){return (window._hcs||[]).slice().sort().join('+')+'|'+(window._hf||'')}
+function hoGet(){return data.handovers[hoKey()]||{}}
+function hoSet(k,v){const d=data.handovers[hoKey()]||{};d[k]=v;data.handovers[hoKey()]=d;save()}
+function toggleHc(n){const a=window._hcs||[];const i=a.indexOf(n);i<0?a.push(n):a.splice(i,1);window._hcs=a;render()}
+function ta(v,ph,on){return `<textarea rows="3" style="width:100%" placeholder="${ph}" onchange="${on}">${v||''}</textarea>`}
+function handover(el){
+  const cs=window._hcs||[];const h=hoGet();const H=data.household;
+  const empty=[];cs.forEach(n=>PROFILE.forEach(([k,t])=>{if(!(prof(n)[k]||'').trim())empty.push(n+': '+t)}));HOUSE.forEach(([k,t])=>{if(!(H[k]||'').trim())empty.push(t)});
+  el.innerHTML=`<div class="card"><h3>Handover / sleepover plan</h3>
+  <div class="row" style="flex-wrap:wrap">${names().map(n=>`<button class="chip${cs.includes(n)?' on':''}" style="flex:0 0 auto" onclick="toggleHc('${n}')">${n}</button>`).join('')}<span class="muted" style="align-self:center">who is going</span></div>
+  <div class="row"><input type="date" value="${window._hf||''}" onchange="window._hf=this.value;render()"><span class="muted">to</span><input type="date" value="${h.to||''}" onchange="hoSet('to',this.value)"></div>
+  <input placeholder="Receiving carer(s), relationship, phone, address" value="${h.who||''}" onchange="hoSet('who',this.value)">
+  ${ta(h.notes,'Anything special about THIS stay — end-of-term events, clubs, what they\'re looking forward to or worried about','hoSet(\'notes\',this.value)')}
+  ${ta(h.return,'Return arrangements — when, where, who collects; how you\'d like updates (text at bedtime?)','hoSet(\'return\',this.value)')}
+  <p class="note">Child and household details below are saved once and reused for every plan — update them as things change.</p></div>
+  ${cs.map(n=>`<div class="card"><h3>${n}</h3>${PROFILE.map(([k,t,hint])=>`<b>${t}</b><p class="muted" style="margin:0 0 4px">${hint}</p>${ta(prof(n)[k],'Nothing yet — '+hint,`prof('${n}')['${k}']=this.value;save();render()`)}`).join('')}</div>`).join('')}
+  <div class="card"><h3>Household & contacts</h3>${HOUSE.map(([k,t,hint])=>`<b>${t}</b><p class="muted" style="margin:0 0 4px">${hint}</p>${ta(H[k],'Nothing yet — '+hint,`data.household['${k}']=this.value;save();render()`)}`).join('')}</div>
+  <div class="card">${empty.length?`<p class="note" style="color:#a66d00">⚠ ${empty.length} gap${empty.length>1?'s':''}: ${empty.slice(0,8).join('; ')}${empty.length>8?'…':''}</p>`:'<p class="note">Nothing missing.</p>'}
+  <p class="note">Never put card PINs, passwords or full dates of birth in a plan that leaves the house — give those in person.</p>
+  <button class="btn" ${cs.length?'':'disabled'} onclick="exportHandover()">Save as Word document</button><button class="btn quiet" ${cs.length?'':'disabled'} onclick="sendText(hoTitle(),hoText(),'')">Send…</button>${sendPanel()}</div>`}
+function hoTitle(){return `Sleepover plan - ${(window._hcs||[]).join(' & ')} - ${fmt(window._hf||today())}`}
+function hoText(){const h=hoGet();const cs=window._hcs||[];let o=`Holiday / sleepover plan\nCarer: ${data.carer||''}\nChildren: ${cs.join(' & ')}\nDates: ${fmt(window._hf||'')} to ${fmt(h.to||'')}\nPrepared: ${fmt(today())}\n\n1. Care arrangements\n${h.who||''}\n\nThis stay\n${h.notes||''}\n\nReturn & updates\n${h.return||''}\n`;
+  cs.forEach(n=>{o+=`\n2. ${n}\n`;PROFILE.forEach(([k,t])=>{o+=`${t}: ${(prof(n)[k]||'').trim()||'—'}\n`})});
+  o+=`\n3. Contacts, health & consents\n`;HOUSE.forEach(([k,t])=>{o+=`${t}: ${(data.household[k]||'').trim()||'—'}\n`});return o}
+function exportHandover(){const h=hoGet();const cs=window._hcs||[];
+  const sec=(t,b)=>`<h3>${t}</h3><table>${b}</table>`;const row=(t,v,hint)=>`<tr><td class="h" style="width:32%">${t}<br><span class="hint">${hint||''}</span></td><td>${esc((v||'').trim()||'—')}</td></tr>`;
+  const html=`<html><head><meta charset="utf-8"><style>body{font-family:Arial;font-size:11pt}table{border-collapse:collapse;width:100%;margin-bottom:12px}td{border:1px solid #000;padding:6px;vertical-align:top}.h{background:#d9e2f3;font-weight:bold}.hint{font-weight:normal;font-style:italic;font-size:9pt}h2,h3{margin:14px 0 6px}</style></head><body>
+  <h2>Holiday / sleepover plan</h2><table>${row('Carer',data.carer)}${row('Children',cs.join(' & '))}${row('Dates',fmt(window._hf||'')+' to '+fmt(h.to||''))}${row('Prepared',fmt(today()))}</table>
+  ${sec('1. Care arrangements',row('Receiving carer(s)',h.who)+row('This stay',h.notes)+row('Return & updates',h.return))}
+  ${cs.map(n=>sec('2. '+n+' — needs & routines',PROFILE.map(([k,t,hint])=>row(t,prof(n)[k],hint)).join(''))).join('')}
+  ${sec('3. Contacts, health & consents',HOUSE.map(([k,t,hint])=>row(t,data.household[k],hint)).join(''))}
+  <p><i>Do not include card PINs, passwords or full dates of birth — hand these over in person.</i></p></body></html>`;
+  const name=hoTitle().replace(/[^a-z0-9]+/gi,'-')+'.doc';const blob=new Blob(['\ufeff'+html],{type:'application/msword'});
+  try{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();toast('Saved '+name)}catch(e){toast('Couldn’t save here — open the app in Safari or Chrome')}}
+/* ---------- SW diary (Surrey electronic diary format) ---------- */
+const DIARY_SECTIONS=[
+ ['comments','Comments on the week/month','can include details of activities undertaken, routines, wellbeing of the child etc'],
+ ['achievements','Achievements','developmental, educational, any achievement, big or small'],
+ ['good','Good things this week/month','emotional, behavioural, educational / specific positives'],
+ ['worries','Worries or challenges','incidents/health/education/missing episodes/child sexual exploitation'],
+ ['views','Views of the child','they can add comments here if they wish, or carer can comment on how they are feeling/what they enjoy'],
+ ['appointments','Appointments','social worker / supervising social worker / other professionals'],
+ ['family','Time with Family','positive / missed / concerns'],
+ ['health','Health including medication','list medical appointments / medication / bumps / bruises etc here']];
+function dcs(){return window._dcs||[]}
+function dcLabel(){return dcs().join(' & ')}
+function toggleDc(n){const a=dcs();const i=a.indexOf(n);i<0?a.push(n):a.splice(i,1);window._dcs=a;render()}
+function dKey(){return dcs().slice().sort().join('+')+'|'+(window._df||'')+'|'+(window._dt||'')}
+function dGet(){return data.diaries[dKey()]||{}}
+function dSet(k,v){const d=data.diaries[dKey()]||{};d[k]=v;data.diaries[dKey()]=d;save()}
+function diaryRecs(){const cs=dcs(),f=window._df,t=window._dt;return data.records.filter(r=>r.bucket!=='expenses'&&r.bucket!=='scratch'&&(!cs.length||!r.child||cs.includes(r.child))&&(!f||r.date>=f)&&(!t||r.date<=t)).sort((a,b)=>a.date.localeCompare(b.date))}
+async function draftDiary(){
+  const recs=diaryRecs(); if(!recs.length){toast('No entries in that range');return}
+  const c=dcLabel()||'the child';
+  const src=recs.map(r=>`[${r.date}] [${r.bucket}]${r.child?' ['+r.child+']':''} ${r.text}`).join('\n');
+  const sys=`You draft a UK foster carer's weekly/monthly electronic diary for ${c}${dcs().length>1?' (siblings covered in one diary — name which child each point is about, as in "Ruby - you…", and write about them together where it happened together)':''}, written TO the child in the second person ("You came to us…", "You loved…"), warm, plain, honest and factual, in British English, from the carer's raw notes. Group by date where helpful. Use only what is in the notes — never invent events. Anything serious (incidents, disclosures, injuries) goes in "worries" and "health" and must keep the carer's factual wording. Return ONLY JSON with keys: ${DIARY_SECTIONS.map(x=>x[0]).join(', ')}. Use an empty string for a section with nothing relevant.`;
+  window._dbusy=true;render();
+  try{const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2500,system:sys,messages:[{role:'user',content:src}]})});
+    const d=await r.json(); if(d.error)throw new Error(d.error.message); const out=d.content.map(x=>x.text||'').join('');const m=out.match(/\{[\s\S]*\}/);const j=JSON.parse(m[0]);
+    const cur=dGet(); DIARY_SECTIONS.forEach(([k])=>{if(j[k]&&!cur[k])dSet(k,j[k])}); toast('Drafted — now check every box')}
+  catch(e){toast('Couldn’t draft: '+e.message)}
+  window._dbusy=false;render()}
+function diary(el){
+  const f=window._df||'',t=window._dt||'';const d=dGet();
+  const missing=DIARY_SECTIONS.filter(([k])=>!(d[k]||'').trim());
+  el.innerHTML=`<div class="card"><h3>Diary for social worker</h3>
+  <div class="row" style="flex-wrap:wrap">${names().map(n=>`<button class="chip${dcs().includes(n)?' on':''}" style="flex:0 0 auto" onclick="toggleDc('${n}')">${n}</button>`).join('')}<span class="muted" style="align-self:center">tap all who this diary covers</span></div>
+  <div class="row"><input type="date" value="${f}" onchange="window._df=this.value;render()"><span class="muted">to</span><input type="date" value="${t}" onchange="window._dt=this.value;render()"></div>
+  <div class="row"><input placeholder="Social worker's name" value="${d.sw||''}" onchange="dSet('sw',this.value)"><input placeholder="Your name / initials" value="${data.carer||''}" onchange="data.carer=this.value;save()"></div>
+  <button class="btn" ${window._dbusy?'disabled':''} onclick="draftDiary()">${window._dbusy?'Drafting…':'Draft from my entries'}</button>
+  <p class="note">${diaryRecs().length} diary / SW / incident / supervision entries in this range. Drafting fills empty boxes only — it never overwrites what you've written.</p></div>
+  ${DIARY_SECTIONS.map(([k,h,hint])=>`<div class="card" style="${(d[k]||'').trim()?'':'border-left:4px solid #e0a800'}"><h3>${h}</h3><p class="muted">${hint}</p>
+    <textarea rows="4" style="width:100%" placeholder="${(d[k]||'').trim()?'':'Nothing here yet — write something, or put N/a if there is genuinely nothing to report'}" onchange="dSet('${k}',this.value);render()">${d[k]||''}</textarea></div>`).join('')}
+  <div class="card">${missing.length?`<p class="note" style="color:#a66d00">⚠ ${missing.length} box${missing.length>1?'es':''} still empty: ${missing.map(x=>x[1]).join(', ')}. Surrey expects every box filled — N/a is fine where it's true.</p>`:'<p class="note">All boxes filled.</p>'}
+  <button class="btn" onclick="exportDiary()">Save as Word document</button><button class="btn quiet" onclick="sendText(diaryTitle(),diaryText(),dcs()[0]||'')">Send…</button>${sendPanel()}
+  <p class="muted">Photos: Surrey asks for a photo of the child at least monthly for their life story — attach it to the email separately.</p></div>`}
+function diaryTitle(){return `Foster Carer Diary - ${dcLabel()||'child'} - ${fmt(window._df||today())} to ${fmt(window._dt||today())}`}
+function diaryText(){const d=dGet();return `Foster Carer Electronic Diary\nDates: ${fmt(window._df||'')} to ${fmt(window._dt||'')}\nChild: ${dcLabel()}\nSocial worker: ${d.sw||''}\nFoster carer: ${data.carer||''}\n\n`+DIARY_SECTIONS.map(([k,h])=>`${h}\n${(d[k]||'').trim()||'N/a'}\n`).join('\n')}
+function esc(x){return String(x||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g,'<br>')}
+function exportDiary(){const d=dGet();
+  const html=`<html><head><meta charset="utf-8"><style>body{font-family:Arial;font-size:11pt}table{border-collapse:collapse;width:100%}td{border:1px solid #000;padding:6px;vertical-align:top}.h{background:#d9e2f3;font-weight:bold}.hint{font-weight:normal;font-style:italic;font-size:9pt}</style></head><body>
+  <p><b>Foster Carer Electronic Diary</b></p><p><i>Once per month at least, include a photo of the child to be inputted into their records and added into their life story</i></p>
+  <table><tr class="h"><td>Dates<br>From/To</td><td>Child’s Name</td><td>Social Worker’s Name</td><td>Foster Carer’s Name</td></tr>
+  <tr><td>${esc(fmt(window._df||''))} to ${esc(fmt(window._dt||''))}</td><td>${esc(dcLabel())}</td><td>${esc(d.sw)}</td><td>${esc(data.carer)}</td></tr>
+  ${DIARY_SECTIONS.map(([k,h,hint])=>`<tr class="h"><td colspan="4">${h}<br><span class="hint">(${hint})</span></td></tr><tr><td colspan="4">${esc((d[k]||'').trim()||'N/a')}</td></tr>`).join('')}
+  </table></body></html>`;
+  const name=diaryTitle().replace(/[^a-z0-9]+/gi,'-')+'.doc';const blob=new Blob(['\ufeff'+html],{type:'application/msword'});
+  try{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();toast('Saved '+name)}catch(e){toast('Couldn’t save here — open the app in Safari or Chrome')}}
+/* ---------- sending ---------- */
+function hubCarers(){return data.contacts.filter(c=>c.email&&/hub/i.test(c.label||''))}
+function ccList(){const on=window._send&&window._send.cc||[];return on}
+function toggleCc(e){const w=window._send;w.cc=w.cc||[];w.cc.includes(e)?w.cc=w.cc.filter(x=>x!==e):w.cc.push(e);render()}
+function sendNote(kid,ids){const rs=data.records.filter(r=>ids.includes(r.id)).sort((a,b)=>a.date.localeCompare(b.date));
+  const body=`Hi,\n\nA quick note from ${data.carer||'me'} about ${kid}'s time with us${rs.length>1?' this month':''}:\n\n`+rs.map(r=>`${fmt(r.date)}${r.bucket==='incident'?' (INCIDENT — please make sure this reaches '+kid+'\'s social worker)':''}: ${r.text}`).join('\n\n')+`\n\nPlease copy into ${kid}'s diary as you see fit.\n\n${data.carer||''}`;
+  sendText(`${kid} — note from hub carer ${fmt(rs[0].date)}`,body,kid)}
+function sendText(subject,body,child){
+  window._send={subject,body,child:child||'',cc:hubCarers().map(c=>c.email)};render();
+}
+function sendPanel(){if(!window._send)return '';const {subject,body,child}=window._send;const cs=data.contacts.filter(c=>c.email).sort((a,b)=>(b.child===child&&child?1:0)-(a.child===child&&child?1:0));
+  return `<div class="card" style="border:2px solid var(--accent)"><h3>Send to…</h3>
+  <div class="chips">${cs.length?'':'<span class="muted">No email contacts yet — add them in Rates.</span>'}${cs.map(c=>`<a class="chip${c.child===child&&child?' on':''}" href="mailto:${encodeURIComponent(c.email)}?${ccList().filter(x=>x!==c.email).length?'cc='+encodeURIComponent(ccList().filter(x=>x!==c.email).join(','))+'&':''}subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}" target="_blank" rel="noopener" onclick="window._send.to='${c.email}';copySend()">${c.label}${c.name?' — '+c.name:''}${c.child?' ('+c.child+')':''}</a>`).join('')}</div>
+  ${hubCarers().length?`<p class="note" style="margin:8px 0 4px"><b>Copy in</b> (Mockingbird hub carers)</p><div class="chips">${hubCarers().map(c=>`<button class="chip${ccList().includes(c.email)?' on':''}" onclick="toggleCc('${c.email}')">${ccList().includes(c.email)?'✓ ':''}${c.name||c.email}</button>`).join('')}</div>`:`<p class="note">Add yourself and any other hub carers in Rates → Contacts with a label containing "hub" to get a copy-in option here.</p>`}
+  <button class="chip" onclick="egressFile(window._send.subject,window._send.body)">Egress-ready file</button><button class="chip" onclick="copySend()">Copy email text</button>
+  <p class="note">If tapping a contact doesn't open your mail app (it can't from inside the Claude app), the address, subject and text are copied — open a new email and paste. Egress-ready file saves the text as a document you can attach in Egress on a laptop (or share it to your laptop from a phone). The contacts above open in your mail app. Child information must go by Egress secure email — send from your Egress-protected account, or paste into Egress if your mail app doesn't have it. Check the text before you press send.</p>
+  <button class="btn quiet" onclick="window._send=null;render()">Cancel</button></div>`}
+function egressFile(subject,body){
+  const stamp=new Date().toLocaleString('en-GB');
+  const cc=ccList();const text=`${subject}\n${cc.length?"Copy to: "+cc.join(", ")+"\\n":""}Prepared ${stamp} from MB5 Day Book — for secure (Egress) transfer only\n${'-'.repeat(50)}\n\n${body}\n`;
+  const name=subject.replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()+'.txt';
+  const blob=new Blob([text],{type:'text/plain;charset=utf-8'});
+  let done=false;
+  try{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.target='_blank';document.body.appendChild(a);a.click();a.remove();done=true}catch(e){}
+  if(navigator.share){try{const file=new File([text],name,{type:'text/plain'});const p=navigator.canShare&&navigator.canShare({files:[file]})?{files:[file],title:subject,text:text}:{title:subject,text:text};navigator.share(p).catch(()=>{})}catch(e){}}
+  if(!done)toast('Couldn’t save the file here — open the app in Safari or Chrome');
+}
+function copySend(){const {subject,body,to}=window._send;const cc=ccList().filter(x=>x!==to);const t=(to?'To: '+to+'\n':'')+(cc.length?'Cc: '+cc.join(', ')+'\n':'')+'Subject: '+subject+'\n\n'+body;navigator.clipboard.writeText(t).then(()=>toast('Copied — paste into a new email'),()=>toast('Couldn’t copy'))}
+function sendBucket(tab,recs){const m=new Date().toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+  const body=recs.slice().sort((a,b)=>a.created.localeCompare(b.created)).map(r=>`${fmt(r.date)}${r.child?' ('+r.child+')':''}: ${r.bucket==='expenses'?describe(r):r.bucket==='meds'?describeMeds(r):r.text}`).join('\n');
+  sendText(`${BUCKETS[tab]} — ${m}`,body)}
+const TONE_OPTIONS=['Warm and friendly','Professional and formal','Brief and factual','Firm and assertive','Warm but concerned'];
+function isStructuralLabel(l){l=(l||'').trim().toLowerCase();return l==='ssw'||l==="ssw's manager"||l==='ssw manager'||l==='csw'||/'s csw$/.test(l)}
+function tidyStructuralContacts(){const removed=data.contacts.filter(x=>isStructuralLabel(x.label));if(!removed.length){toast('Nothing to tidy — no duplicate SSW/CSW contacts found');return}
+  pushUndo(removed.length+' duplicate SSW/CSW contact'+(removed.length===1?'':'s')+' removed');
+  data.contacts=data.contacts.filter(x=>!isStructuralLabel(x.label));save();render();toast(removed.length+' removed — tap Undo above if that wasn\u2019t right')}
+function recipientOptions(){const out=[];
+  data.contacts.forEach((x,i)=>{if(!isStructuralLabel(x.label))out.push({key:'c:'+i,label:x.label||'Contact',name:x.name||'',email:x.email||''})});
+  const h=data.household;
+  if((h.sswName||'').trim())out.push({key:'h:ssw',label:'SSW',name:h.sswName,email:h.sswEmail||''});
+  if((h.sswManagerName||'').trim())out.push({key:'h:sswm',label:"SSW's manager",name:h.sswManagerName,email:h.sswManagerEmail||''});
+  data.children.forEach(c=>{const b=basics(c.name);if((b.cswName||'').trim())out.push({key:'csw:'+c.name,label:c.name+"'s CSW",name:b.cswName,email:b.cswEmail||''})});
+  const seen=new Set();return out.filter(o=>{const k=(o.label+':'+o.name).toLowerCase();if(seen.has(k))return false;seen.add(k);return true})}
+function toggleComposeTo(key){const c=window._compose;c.to.includes(key)?c.to=c.to.filter(x=>x!==key):c.to.push(key);render()}
+function toggleComposeKid(n){const c=window._compose;c.kids.includes(n)?c.kids=c.kids.filter(x=>x!==n):c.kids.push(n);render()}
+function toggleComposeEntry(id){const c=window._compose;c.entryIds.includes(id)?c.entryIds=c.entryIds.filter(x=>x!==id):c.entryIds.push(id);render()}
+function composeView(){const c=window._compose;const opts=recipientOptions();
+  const relevantRecs=c.kids.length?data.records.filter(r=>c.kids.some(k=>r.child===k||(r.kids||[]).includes(k))).sort((a,b)=>b.created.localeCompare(a.created)):[];
+  let h=`<div class="card"><div class="row" style="align-items:center"><h3 style="flex:1;margin:0">Compose email</h3><button class="x" onclick="window._composing=false;window._compose=null;render()">×</button></div>
+  <h4 style="margin:14px 0 4px;color:var(--accent)">Who to</h4>
+  <div class="chips">${opts.length?opts.map(o=>`<button class="chip${c.to.includes(o.key)?' on':''}" onclick="toggleComposeTo('${o.key}')">${esc(o.label)}${o.name?' — '+esc(o.name):''}${!o.email?' (no email yet)':''}</button>`).join(''):'<span class="muted">No contacts yet — add them in Rates → Contacts, or use Other below.</span>'}</div>
+  <label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;margin-top:4px"><input type="checkbox" ${c.otherRecipientOn?'checked':''} onchange="window._compose.otherRecipientOn=this.checked;render()" style="flex:0 0 auto"><span>Other — someone not listed</span></label>
+  ${c.otherRecipientOn?`<div class="row"><input placeholder="Name" value="${esc(c.otherRecipient.name||'')}" onchange="window._compose.otherRecipient.name=this.value.trim()"><input type="email" placeholder="Email (if known)" value="${esc(c.otherRecipient.email||'')}" onchange="window._compose.otherRecipient.email=this.value.trim()"></div>`:''}
+  <h4 style="margin:14px 0 4px;color:var(--accent)">Who's this about?</h4>
+  <div class="chips">${names().map(n=>`<button class="chip${c.kids.includes(n)?' on':''}" onclick="toggleComposeKid('${n}')">${n}</button>`).join('')}</div>`;
+  if(c.kids.length){
+    h+=`<h4 style="margin:14px 0 4px;color:var(--accent)">Which entries to draw on</h4>
+    ${relevantRecs.length?relevantRecs.map(r=>`<label style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;cursor:pointer"><input type="checkbox" ${c.entryIds.includes(r.id)?'checked':''} onchange="toggleComposeEntry('${r.id}')" style="margin-top:4px;flex:0 0 auto"><span style="flex:1"><small class="muted">${fmt(r.date)} · ${BUCKETS[r.bucket]}</small><br>${esc(r.text.slice(0,110))}</span></label>`).join(''):'<p class="empty">No entries for them yet.</p>'}
+    <label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;margin-top:4px"><input type="checkbox" ${c.otherOn?'checked':''} onchange="window._compose.otherOn=this.checked;render()" style="flex:0 0 auto"><span>Other — something not in an entry</span></label>
+    ${c.otherOn?`<textarea placeholder="What else should go in?" onchange="window._compose.other=this.value">${c.other||''}</textarea>`:''}`;
+  }
+  h+=`<h4 style="margin:14px 0 4px;color:var(--accent)">Roughly what you want to say</h4>
+  <textarea placeholder="A few words is enough — I'll write it up properly" onchange="window._compose.note=this.value">${c.note||''}</textarea>
+  <h4 style="margin:14px 0 4px;color:var(--accent)">Tone</h4>
+  <select onchange="window._compose.tone=this.value">${TONE_OPTIONS.map(t=>`<option${c.tone===t?' selected':''}>${t}</option>`).join('')}</select>
+  <button class="btn" id="draftBtn" onclick="draftComposeEmail()" ${busy?'disabled':''}>${busy?'Drafting…':'Draft email'}</button>
+  </div>${c.subject!==undefined?composeResultView():''}`;
+  return h}
+async function draftComposeEmail(){const c=window._compose;
+  if(!c.note.trim()&&!c.entryIds.length&&!c.other.trim()){toast('Add something to say, or pick an entry, first');return}
+  busy=true;render();
+  const entries=data.records.filter(r=>c.entryIds.includes(r.id)).sort((a,b)=>a.created.localeCompare(b.created));
+  const selected=recipientOptions().filter(o=>c.to.includes(o.key));
+  if(c.otherRecipientOn&&c.otherRecipient.name.trim())selected.push({label:'Other',name:c.otherRecipient.name.trim(),email:c.otherRecipient.email.trim()});
+  const recipients=selected.map(x=>`${x.label}${x.name?' ('+x.name+')':''}`).join(', ')||'not specified';
+  const pronouns=c.kids.map(k=>{const ch=data.children.find(x=>x.name===k);return `${k}: ${ch&&ch.pronoun?ch.pronoun:'not given — avoid he/she, use their name or "they/them"'}`}).join('; ');
+  const sys=`You are helping a UK foster carer draft an email. Recipient(s): ${recipients}. This is about: ${c.kids.join(' and ')||'no child specified'}. Pronouns — use exactly these, never guess from a name: ${pronouns||'no child specified'}. Tone requested: ${c.tone||'warm and friendly, professional'}.
+Source material — use only what's given, never invent details:
+${entries.length?entries.map(r=>`- ${fmt(r.date)} (${BUCKETS[r.bucket]}): ${r.text}`).join('\n'):'(no specific entries selected)'}
+${c.other.trim()?`- Also: ${c.other.trim()}`:''}
+${c.note.trim()?`The carer's own rough note on what they want to say: "${c.note.trim()}"`:''}
+Write a complete, ready-to-send email in the requested tone, in British English, weaving in the source material naturally rather than listing it. Keep it warm but professional regardless of tone chosen, appropriate for someone communicating about a child in their care. Do not sign off with a name, since the carer will add their own. The body is plain text, not HTML — never use tags like <br> or <p>; use a blank line between paragraphs instead. Respond with ONLY this JSON, no prose, no markdown: {"subject":"...","body":"..."}`;
+  try{
+    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1200,system:sys,messages:[{role:'user',content:'Draft the email.'}]})});
+    const d=await r.json();
+    if(d.error)throw new Error(d.error.message||'API error');
+    if(!d.content)throw new Error('Empty reply');
+    const out=d.content.map(x=>x.text||'').join('').replace(/```json|```/g,'').trim();
+    const m=out.match(/\{[\s\S]*\}/); if(!m)throw new Error('Could not read the draft');
+    const parsed=JSON.parse(m[0]);
+    c.subject=parsed.subject||'';c.body=(parsed.body||'').replace(/<br\s*\/?>/gi,'\n').replace(/<\/?p>/gi,'\n').replace(/\n{3,}/g,'\n\n').trim();
+  }catch(e){toast('Couldn’t draft: '+(e&&e.message||e))}
+  busy=false;render()}
+function composeSelected(){const c=window._compose;const sel=recipientOptions().filter(o=>c.to.includes(o.key));
+  if(c.otherRecipientOn&&c.otherRecipient.name.trim())sel.push({label:'Other',name:c.otherRecipient.name.trim(),email:c.otherRecipient.email.trim()});
+  return sel}
+function composeToEmails(){return composeSelected().map(x=>x.email).filter(Boolean)}
+function composeMissingEmail(){return composeSelected().filter(x=>!x.email)}
+function composeResultView(){const c=window._compose;const toEmails=composeToEmails();const missing=composeMissingEmail();
+  return `<div class="card" style="border:2px solid var(--marker)">
+  <p class="note" style="background:#fdf3d9">⚠ This is a first draft, written by AI from what you gave it. Read it fully and personalise it — check names, details and tone — before sending anything.</p>
+  ${missing.length?`<p class="note" style="background:#fdf3d9">No email on file yet for: ${missing.map(x=>esc(x.name||x.label)).join(', ')}. Add it in Rates → Contacts, or send to them separately.</p>`:''}
+  <p class="hint">Subject</p><input value="${esc(c.subject)}" onchange="window._compose.subject=this.value">
+  <p class="hint" style="margin-top:8px">Body — edit freely</p><textarea rows="10" style="width:100%" onchange="window._compose.body=this.value">${esc(c.body)}</textarea>
+  <button class="chip" style="margin-top:8px" onclick="draftComposeEmail()" ${busy?'disabled':''}>${busy?'Redrafting…':'Draft again'}</button>
+  <div style="margin-top:10px">
+  <p class="hint">Send</p>
+  ${toEmails.length?`<a class="chip" href="mailto:${encodeURIComponent(toEmails.join(','))}?${hubCarers().length?'cc='+encodeURIComponent(hubCarers().map(x=>x.email).filter(e=>!toEmails.includes(e)).join(','))+'&':''}subject=${encodeURIComponent(c.subject)}&body=${encodeURIComponent(c.body)}" target="_blank" rel="noopener" onclick="toast('Opening mail app — if nothing happens, use Copy below')">Open in mail app</a>`:'<span class="muted">No email address to send to yet — add one above, or use Copy below.</span>'}
+  <button class="chip" onclick="composeCopy()">Copy email text</button>
+  <button class="chip" onclick="composeEgress()">Egress-ready file</button>
+  </div>
+  <p class="note">If tapping "Open in mail app" doesn't work (it can't from inside the Claude app), use Copy and paste into a new email. Child information must go by Egress secure email.</p>
+  </div>`}
+function composeCopy(){const c=window._compose;const toEmails=composeToEmails();const names=composeSelected().map(x=>x.name||x.label);
+  const cc=hubCarers().map(x=>x.email).filter(e=>!toEmails.includes(e));
+  const t=(names.length?'To: '+names.join(', ')+'\n':'')+(cc.length?'Cc: '+cc.join(', ')+'\n':'')+'Subject: '+c.subject+'\n\n'+c.body;
+  navigator.clipboard.writeText(t).then(()=>toast('Copied — paste into a new email'),()=>toast('Couldn’t copy'))}
+function composeEgress(){const c=window._compose;window._send={subject:c.subject,body:c.body,cc:hubCarers().map(x=>x.email)};egressFile(c.subject,c.body)}
+function matchChild(x){if(!x)return '';x=String(x).trim().toLowerCase();const ns=names();let m=ns.find(n=>n.toLowerCase()===x);if(m)return m;m=ns.find(n=>n.toLowerCase().startsWith(x.slice(0,3))||x.startsWith(n.toLowerCase().slice(0,3)));return m||''}
+function namesInText(text){if(!text)return [];const ns=names();return ns.filter(n=>new RegExp('\\b'+n.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','i').test(text))}
+function linkMentionedChildren(p){const found=namesInText(p.text);if(!found.length)return false;const before=(p.kids||[]).length;const kids=new Set(p.kids||[]);found.forEach(n=>kids.add(n));p.kids=[...kids];if(!p.child&&p.kids.length)p.child=p.kids[0];return p.kids.length>before}
+function syncKid(p){if(!p.kids)p.kids=p.child?[p.child]:[];p.child=p.kids[0]||'';return p}
+/* ---------- money ---------- */
+function hoursOf(r){if(r.from&&r.to){const [a,b]=[r.from,r.to].map(t=>{const [h,m]=t.split(':').map(Number);return h+m/60});let d=b-a;if(d<0)d+=24;return Math.round(d*4)/4}return Number(r.hours||0)}
+function bornOf(k){const c=data.children.find(x=>x.name===k);return c&&c.born?c.born:'9999-99'}
+function eldestOf(kids){return kids.slice().sort((a,b)=>bornOf(a).localeCompare(bornOf(b)))[0]}
+function daycareAmount(r){
+  const R=data.rates, kids=(r.kids||[]).length?r.kids:['?']; let t=0;
+  const byFam={}; kids.forEach(k=>{const fam=familyOf(k)||('solo-'+k);(byFam[fam]=byFam[fam]||[]).push(k)});
+  Object.values(byFam).forEach(group=>{const eldest=eldestOf(group);
+    group.forEach(k=>{const b=band(k), first=(k===eldest);
+      if(r.overnight) t+=R.overnight[b]*(first?1:0.8);
+      else if(hoursOf(r)>=5) t+=first?R.dayFirst[b]:R.dayAdd[b];
+      else t+=hoursOf(r)*(first?R.hourFirst:R.hourAdd);});});
+  return t;
+}
+// Cross-record daycare pricing: expands every daycare/overnight record into one priced event per child,
+// drops a child's daytime hours for a date already covered by their own overnight that date, and gives the
+// first-child (full) rate to whichever child in the family is eldest, applied across separate records for
+// the same date, not just within one record.
+function daycareEvents(recs){
+  const dc=recs.filter(r=>r.kind==='daycare').slice().sort((a,b)=>(a.created||'').localeCompare(b.created||''));
+  const overnightKeys=new Set();
+  dc.filter(r=>r.overnight).forEach(r=>(r.kids||[]).forEach(k=>overnightKeys.add(r.date+'|'+k)));
+  const events=[];
+  dc.forEach(r=>{
+    const kids=(r.kids||[]).length?r.kids:['?'];
+    kids.forEach(k=>{
+      const key=r.date+'|'+k;
+      if(!r.overnight&&overnightKeys.has(key))return;
+      events.push({date:r.date,kid:k,overnight:r.overnight,hours:hoursOf(r),reason:r.reason,text:r.text,recordId:r.id,from:r.from,to:r.to});
+    });
+  });
+  const groups={};
+  events.forEach(e=>{const fam=familyOf(e.kid)||('solo-'+e.kid), key=e.date+'|'+fam;(groups[key]=groups[key]||[]).push(e)});
+  Object.values(groups).forEach(grp=>{const eldest=eldestOf(grp.map(e=>e.kid));grp.forEach(e=>{e.first=(e.kid===eldest)})});
+  events.forEach(e=>{
+    const b=band(e.kid);
+    const R=data.rates;
+    if(e.overnight) e.amount=R.overnight[b]*(e.first?1:0.8);
+    else if(e.hours>=5) e.amount=e.first?R.dayFirst[b]:R.dayAdd[b];
+    else e.amount=e.hours*(e.first?R.hourFirst:R.hourAdd);
+  });
+  return events;
+}
+// mileage is priced per day: total miles that day minus the daily deduction
+function mileageForDay(date, recs){
+  const rs=recs.filter(r=>r.kind==='mileage'&&r.date===date);
+  const miles=rs.reduce((s,r)=>s+Number(r.miles||0),0);
+  return {miles, claimable:Math.max(0,miles-data.rates.dailyDeduct), amount:Math.max(0,miles-data.rates.dailyDeduct)*data.rates.mileage};
+}
+function expenseTotals(recs){
+  let purchase=0,mileage=0; const days=new Set();
+  recs.forEach(r=>{if(r.kind==='mileage')days.add(r.date);else if(r.kind!=='daycare')purchase+=Number(r.amount||0)});
+  days.forEach(d=>mileage+=mileageForDay(d,recs).amount);
+  const daycare=daycareEvents(recs).reduce((s,e)=>s+e.amount,0);
+  return {purchase,daycare,mileage,total:purchase+daycare+mileage};
+}
+function describe(r){
+  if(r.kind==='mileage') return `${r.miles} miles — ${r.text}`;
+  if(r.kind==='daycare') return `${(r.kids||[]).length?(r.kids||[]).join(' & '):'⚠ no child linked — priced as one child, band 5–10'} ${r.overnight?'overnight':(r.from&&r.to?r.from+'–'+r.to+' ('+hoursOf(r)+' hrs)':Number(r.hours)+' hrs')} — ${gbp(daycareAmount(r))}${r.reason?' — '+r.reason:' — ⚠ no reason given'}${r.text?' — '+r.text:''}`;
+  return `${gbp(r.amount)} — ${r.text}`;
+}
+function describeMeds(r){
+  return `${r.medName||'⚠ no medicine named'}${r.dose?' — '+r.dose:''}${r.given?' at '+r.given:''}${r.givenBy?' — given by '+r.givenBy:''}${(r.kids||[]).length?' — '+r.kids.join(' & '):''}${r.text?' — '+r.text:''}`;
+}
+
+/* ---------- render ---------- */
+function render(){
+  $('#hdr').textContent=new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===view||(b.dataset.v==='docs'&&['diary','kids','handover'].includes(view))));
+  ({capture,buckets,month,docs,training,about,settings})[view]($('#view'));
+  if(undoStack.length){const ve=$('#view');ve.innerHTML=`<div class="card" style="border-left:4px solid var(--pine);padding:10px 14px"><button class="chip" onclick="undoLast()">↩ Undo: ${esc(undoStack[undoStack.length-1].label)}</button></div>`+ve.innerHTML}
+}
+function childForm(){return window._adding?`<div style="margin-top:8px"><input id="newChild" placeholder="Initials or first name" style="width:100%;font-size:18px;padding:12px 10px" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" onkeydown="if(event.key==='Enter')confirmChild()">
+  <div class="row" style="margin-top:6px"><input id="newBorn" type="month" style="flex:0 0 150px" title="Month and year of birth"><input id="newFam" placeholder="Household / carer (e.g. Smiths)" style="flex:1" title="Siblings share a household name"><button class="chip" style="flex:0 0 auto" onclick="confirmChild()">Add</button><button class="x" onclick="window._adding=false;render()">×</button></div></div>`:''}
+function addChild(){window._adding=true;render()}
+function confirmChild(){const n=$('#newChild').value.trim();if(!n)return;if(!names().includes(n))data.children.push({name:n,born:$('#newBorn').value||'',family:$('#newFam').value.trim()});window._adding=false;save();render()}
+function kidsSelect(i,p){return `<div class="row" style="flex-wrap:wrap">${names().map(n=>`<button class="chip${(p.kids||[]).includes(n)?' on':''}" style="flex:0 0 auto" onclick="toggleKid(${i},'${n}')">${n}</button>`).join('')}</div>`}
+function toggleKid(i,n){const p=pending[i];p.kids=p.kids||[];p.kids.includes(n)?p.kids=p.kids.filter(k=>k!==n):p.kids.push(n);render()}
+function alsoInOptions(primary){return Object.keys(BUCKETS).filter(k=>k!=='expenses'&&k!=='incident'&&k!==primary)}
+function alsoInSelectPending(i,p){const opts=alsoInOptions(p.bucket);if(!opts.length)return'';return `<div class="row" style="flex-wrap:wrap;align-items:center"><span class="muted" style="flex:0 0 auto">Also file under</span>${opts.map(k=>`<button class="chip${(p.alsoIn||[]).includes(k)?' on':''}" style="flex:0 0 auto" onclick="toggleAlsoInPending(${i},'${k}')">${BUCKETS[k]}</button>`).join('')}</div>`}
+function toggleAlsoInPending(i,k){const p=pending[i];p.alsoIn=p.alsoIn||[];p.alsoIn.includes(k)?p.alsoIn=p.alsoIn.filter(x=>x!==k):p.alsoIn.push(k);render()}
+function alsoInSelectRecord(i,r){const opts=alsoInOptions(r.bucket);if(!opts.length)return'';return `<div class="row" style="flex-wrap:wrap;align-items:center"><span class="muted" style="flex:0 0 auto">Also file under</span>${opts.map(k=>`<button class="chip${(r.alsoIn||[]).includes(k)?' on':''}" style="flex:0 0 auto" onclick="toggleAlsoInRecord(${i},'${k}')">${BUCKETS[k]}</button>`).join('')}</div>`}
+function toggleAlsoInRecord(i,k){const r=data.records[i];r.alsoIn=r.alsoIn||[];r.alsoIn.includes(k)?r.alsoIn=r.alsoIn.filter(x=>x!==k):r.alsoIn.push(k);save();render()}
+
+/* ---------- capture ---------- */
+function capture(v){
+  let h=`<div class="card"><h3>What happened?</h3>
+  <textarea id="cap" placeholder="Tap the mic on your keyboard and talk. Say where things go — ‘diary’, ‘supervision’, ‘expenses’, ‘social worker’, ‘incident’, ‘just record’. Mileage and hours of day care get costed automatically.">${window._cap||''}</textarea>
+  <button class="btn" id="sortBtn" onclick="sortIt()" ${busy?'disabled':''}>${busy?'Sorting…':'Sort it'}</button>
+  ${data.children.filter(bandChange).map(c=>`<p class="note">${c.name} ${bandChange(c)} — day care rate changes then.</p>`).join('')}<p class="hint">Children: ${names().join(', ')||'none yet'} <button class="chip add" onclick="addChild()">+ child</button></p>${childForm()}</div>`;
+  if(pending.length){
+    h+=`<div class="card"><h3>Check before saving</h3>`;
+    pending.forEach((p,i)=>{
+      h+=`<div class="item"><div class="row">
+        <select onchange="pending[${i}].bucket=this.value;pending[${i}].alsoIn=[];render()">${Object.entries(BUCKETS).map(([k,l])=>`<option value="${k}"${p.bucket===k?' selected':''}>${l}</option>`).join('')}</select>`;
+      if(p.bucket==='expenses') h+=`<select onchange="pending[${i}].kind=this.value;render()"><option value="purchase"${p.kind==='purchase'?' selected':''}>Purchase</option><option value="mileage"${p.kind==='mileage'?' selected':''}>Mileage</option><option value="daycare"${p.kind==='daycare'?' selected':''}>Day care</option></select>`;
+      else h+=`</div>${kidsSelect(i,p)}${alsoInSelectPending(i,p)}<div class="row">`;
+      h+=`<button class="x" onclick="pending.splice(${i},1);render()">×</button></div>`;
+      if(p.bucket==='expenses'){
+        if(p.kind==='mileage') h+=`<div class="row"><input type="number" inputmode="decimal" placeholder="miles" value="${p.miles||''}" onchange="pending[${i}].miles=this.value;render()"></div><div class="calc">${p.miles?`${p.miles} miles · first ${data.rates.dailyDeduct} of the day come off · ${gbp(data.rates.mileage)}/mile`:''}</div>`;
+        else if(p.kind==='daycare') h+=`${kidsSelect(i,p)}<div class="row"><input type="time" value="${p.from||''}" onchange="pending[${i}].from=this.value;render()" title="from"><input type="time" value="${p.to||''}" onchange="pending[${i}].to=this.value;render()" title="to"><input type="number" inputmode="decimal" step="0.25" placeholder="or hrs" style="flex:0 0 70px" value="${p.hours||''}" onchange="pending[${i}].hours=this.value;render()"><label style="margin:0;display:flex;align-items:center;gap:6px"><input type="checkbox" style="width:auto" ${p.overnight?'checked':''} onchange="pending[${i}].overnight=this.checked;render()">overnight</label></div><div class="row"><select onchange="pending[${i}].reason=this.value" style="flex:1"><option value="">Reason for day care (needed for invoice)…</option>${['Carer respite', 'Carer appointment', 'Carer training', 'Carer work', 'Sibling contact', 'Emergency', 'Other'].map(o=>`<option${p.reason===o?' selected':''}>${o}</option>`).join('')}</select></div><div class="calc">${(p.kids||[]).length?gbp(daycareAmount(p)):(names().length?'Tap the children you had':'Add the children in the Rates tab first — for now priced as one child: '+gbp(daycareAmount(p)))}</div>`;
+        else h+=`<div class="row"><input type="number" step="0.01" inputmode="decimal" placeholder="£" value="${p.amount||''}" onchange="pending[${i}].amount=this.value"><select onchange="pending[${i}].child=this.value"><option value="">(no child)</option>${names().map(n=>`<option${p.child===n?' selected':''}>${n}</option>`).join('')}</select></div>`;
+      }
+      if(p.bucket==='meds'){h+=`<div class="row"><input placeholder="Medicine" value="${esc(p.medName||'')}" onchange="pending[${i}].medName=this.value"><input placeholder="Dose (e.g. 5ml, 1 tablet)" value="${esc(p.dose||'')}" onchange="pending[${i}].dose=this.value"></div><div class="row"><input type="time" value="${p.given||''}" onchange="pending[${i}].given=this.value" title="time given"><input placeholder="Given by" value="${esc(p.givenBy||'')}" onchange="pending[${i}].givenBy=this.value"></div>`}
+      h+=`<textarea onchange="pending[${i}].text=this.value">${p.text}</textarea>${photoStrip(p.photos,i)}<div class="row" style="align-items:center"><span class="muted">📷</span><input type="file" accept="image/*" style="flex:1;padding:6px;font-size:14px" onchange="addPhoto(${i},this)"></div>
+      <div class="row" style="align-items:center;margin-top:4px"><span class="muted" style="flex:0 0 auto">⚠ Follow-up</span><select style="flex:1" onchange="pending[${i}].flag=this.value;pending[${i}].trainingNote='';attachTrainingSuggestion([pending[${i}]]);render()"><option value="">None</option>${Object.entries(FLAGS).map(([k,f])=>`<option value="${k}"${p.flag===k?' selected':''}>${f.label}</option>`).join('')}</select></div>
+      ${p.flag?`<div class="note">${['reminder','training'].includes(p.flag)?`<textarea placeholder="${p.flag==='training'?'Suggested course — edit if needed':'What to remind you to do'}" onchange="pending[${i}].flagNote=this.value">${p.flagNote||''}</textarea>`:esc(FLAGS[p.flag].guidance)}</div>${p.trainingNote?`<div class="note">💡 ${esc(p.trainingNote)}</div>`:''}`:''}</div>`;
+    });
+    h+=`<button class="btn" onclick="saveAll()">Save all</button><button class="btn quiet" onclick="pending=[];render()">Discard</button></div>`;
+  }
+  h+=thingsToDoCard();
+  v.innerHTML=h;
+}
+const KEYWORD_TRAINING=[
+ {test:/\b(hit|hurt|kick(?:ed|ing)?|threw|throw(?:ing)?|squeez(?:ed|ing)|strangl(?:ed|ing)|hurting|cruel|cruelty|choked|stamped on|stepped on|threatened|threatening|unkind|mean|nasty|rough) *(?:to|towards|with)?\b[^.?!]{0,40}\b(dog|cat|pet|animal|rabbit|hamster|guinea pig|puppy|kitten)s?\b|\b(dog|cat|pet|animal|rabbit|hamster|guinea pig|puppy|kitten)s?\b[^.?!]{0,40}\b(hit|hurt|kick(?:ed|ing)?|threw|throw(?:ing)?|squeez(?:ed|ing)|strangl(?:ed|ing)|cruel|cruelty|choked)\b/i,
+  note:"Understanding behaviour of children & young people — cruelty or aggression toward animals is a recognised sign worth exploring, not just correcting in the moment."},
+ {test:/\b(fighting|hitting|kicking|biting|scratch(?:ing)?|swearing|screaming|nasty|aggressive|violent)\b[^.?!]{0,60}\b(each other|one another|sibling|brother|sister)\b|\b(each other|one another|sibling|brother|sister)\b[^.?!]{0,60}\b(fighting|hitting|kicking|biting|scratch(?:ing)?|swearing|screaming|nasty|aggressive|violent)\b/i,
+  note:"Understanding behaviour of children & young people — ongoing conflict or aggression between children in placement is worth exploring through this course and raising at supervision. De-escalation and PACE (in the Next steps list) may help too."}
+];
+const ROLEPLAY_RE=/mums? and dads?|mommies and daddies|doctors? and nurses?|being (the )?mummy and daddy/i;
+const UNDRESS_RE=/(pulled|took off|removed|pulling|taking off)[^.!?]{0,40}(trousers|pants|underwear|knickers|clothes|pyjamas|clothing)|lay(?:ing)? on top of|climbed on top of/i;
+const KEYWORD_FLAGS=[
+ {flag:'sexualised',test:/sexuali[sz](?:ed|ing)|sexual(?:i[sz]ed|ly)?\s*(behaviour|behavior|play|touch(?:ing)?|comment|language|content|contact)|sexually inappropriate/i},
+ {flag:'sexualised',test:{test:s=>ROLEPLAY_RE.test(s)&&UNDRESS_RE.test(s)}}
+];
+const FLAG_TRAINING={
+ sexualised:{course:'Intro to harmful sexual behaviour (6 hrs)',why:'covers understanding and responding to this specifically.'},
+ disclosure:{course:'Working Together to Safeguard Children',why:'covers responding to and recording a disclosure correctly.'},
+ allegation:{course:'Managing allegations against adults (SCSA)',why:'covers what happens next when an allegation is made.'},
+ injury:{course:'Risk Management & Safer Caring',why:'covers safer care planning around unexplained injuries.'},
+ missing:{course:'Risk Management & Safer Caring',why:'covers safer care planning for a child going missing.'},
+ contact:{course:'Working with birth parents',why:'may help with the contact side of this.'}
+};
+function rescanRecords(){const todo=data.records.filter(r=>!r.flag&&!r.flagCleared);backstopFlags(todo);attachTrainingSuggestion(data.records.filter(r=>r.flag&&r.flag!=='training'&&r.flag!=='reminder'));data.records.forEach(r=>{if(r.flag==='training'&&!(r.flagNote||'').trim()){r.flag='';r.flagDone=false}});const linked=data.records.filter(linkMentionedChildren).length;return todo.filter(r=>r.flag).length+linked}
+function attachTrainingSuggestion(items){items.forEach(p=>{if(!p.flag||p.trainingNote)return;const m=FLAG_TRAINING[p.flag];if(m)p.trainingNote=`${m.course} — ${m.why}`})}
+function backstopFlags(items){items.forEach(p=>{if(!p.flag){const kf=KEYWORD_FLAGS.find(k=>k.test.test(p.text));if(kf)p.flag=kf.flag}if(!p.flag){const hit=KEYWORD_TRAINING.find(k=>k.test.test(p.text));if(hit){p.flag='training';p.flagNote=hit.note}}});attachTrainingSuggestion(items)}
+function dropRedundantDaycare(pendingList){
+  const overnightKeys=new Set();
+  data.records.filter(r=>r.bucket==='expenses'&&r.kind==='daycare'&&r.overnight).forEach(r=>(r.kids||[]).forEach(k=>overnightKeys.add(r.date+'|'+k)));
+  pendingList.filter(p=>p.bucket==='expenses'&&p.kind==='daycare'&&p.overnight).forEach(p=>(p.kids||[]).forEach(k=>overnightKeys.add(p.date+'|'+k)));
+  let dropped=0;
+  const kept=pendingList.filter(p=>{
+    if(!(p.bucket==='expenses'&&p.kind==='daycare'&&!p.overnight))return true;
+    const kids=p.kids||[]; if(!kids.length)return true;
+    const covered=kids.every(k=>overnightKeys.has(p.date+'|'+k));
+    if(covered)dropped++;
+    return !covered});
+  if(dropped)toast(dropped+' daycare item'+(dropped===1?'':'s')+' skipped — already covered by an overnight stay that day');
+  const byDateTotal={},byDateOvernight={};
+  kept.filter(p=>p.bucket==='expenses'&&p.kind==='daycare').forEach(p=>{byDateTotal[p.date]=(byDateTotal[p.date]||0)+1;if(p.overnight)byDateOvernight[p.date]=(byDateOvernight[p.date]||0)+1});
+  const suspectDates=Object.keys(byDateTotal).filter(d=>byDateTotal[d]>1&&byDateOvernight[d]===byDateTotal[d]);
+  if(suspectDates.length&&!dropped)toast('Check overnight carefully for '+suspectDates.map(d=>fmt(d)).join(', ')+' — every child came out overnight. If one actually went home, untick their overnight box before saving.');
+  return kept}
+async function sortIt(){
+  const text=$('#cap').value.trim(); if(!text)return; window._cap=text; busy=true; render();
+  const courses=TRAINING.flatMap(([,,rows])=>rows.map(r=>r[0]));
+  const sys=`You sort a UK foster carer's spoken notes into buckets. Buckets: diary (day-to-day observations about a child), supervision (things to raise with the supervising social worker at next supervision), expenses (money spent, miles driven, or day care / babysitting provided for other carers' children), meds (a specific dose of medication given to a child), sw (log of contact with a social worker: calls, visits, what was agreed), incident (serious events needing formal reporting: injury, unexplained bruise, allegation, restraint, going missing, police), scratch (anything the carer says to "just record" or that fits nowhere).
+Children known: ${names().join(', ')||'unknown'}. Match spoken names to these where obvious. If the carer names where something goes, obey. Otherwise choose sensibly; use scratch when unsure. Split into separate items if there are several things. Keep the carer's words, tidied for a written record, British English. Never add facts.
+For expenses set "kind": "purchase" (amount in pounds), "mileage" (miles driven, one item per journey, round trip if they say so), or "daycare" (care given: from/to clock times if the carer says them, otherwise hours; kids = the child cared for, overnight true if they stayed the night). Daycare and overnight are always ONE ITEM PER CHILD, even when several children were cared for on the same occasion at the same time — never combine two children into one daycare item, because their rates and circumstances (hours vs overnight) can differ. Overnight is set INDIVIDUALLY per child based on what actually happened to THAT child — read carefully who is said to have stayed versus who is said to have gone home, been collected, returned to their own carer, or otherwise ended their day. When several children were cared for together but only some stayed the night, only those specific children get overnight true; a child described as leaving, going home, or returning to their own carer always gets overnight false with their actual hours, never overnight true just because another child in the same sentence stayed over. If a child stayed overnight, create only the overnight item for them — never also create a separate daytime-hours item for that same child on that occasion, since the overnight rate already covers the whole period; only children who did NOT stay over get a daytime item.
+For meds, set "medName" (the medicine given), "dose" (quantity or strength as said, e.g. "5ml" or "1 tablet"), "given" (the time given, HH:MM, or the current time-of-day if only vaguely implied), and "givenBy" (who gave it — the carer's own name if they say "I gave" or "I've given", otherwise whoever they name). One item per child per medicine given, even if several children were given the same or different medicines at the same time — never combine children into one meds item.
+Also set "flag" on any item that needs a follow-up: one of sexualised, disclosure, injury, allegation, missing, contact, health, school, reminder, or null. Use "reminder" only when the carer explicitly asks to be reminded or told to do something later (e.g. "remind me to tell the SSW about the dentist") — set "flagNote" to that instruction in their words. Never set "flag" to "training" — the app adds a matching course itself when it's relevant, you don't need to. For the other flags leave flagNote null unless there's a short specific detail worth adding (e.g. which child, what was said) — don't write advice yourself, the app supplies that. Be cautious: only set a safeguarding flag (sexualised, disclosure, injury, allegation, missing) when the text actually describes that happening, not just the word appearing in passing.
+Separately, also consider whether any course from this list could help the carer with what's described — behaviour, emotions, relationships between children, safer caring, health, education, contact with family, or general parenting: ${courses.join(' | ')}. If one is plausibly useful, set "training" to {"course":"<exact title from the list above>","why":"<one short clause>"}; otherwise null. Err on the side of suggesting — the carer can dismiss it in one tap if it's not needed, so only leave it null when nothing on the list is even loosely relevant.
+Respond with ONLY a JSON array, no prose, no markdown: [{"bucket":"diary","child":"name or empty","text":"...","kind":"purchase|mileage|daycare|null","amount":number|null,"miles":number|null,"from":"HH:MM or null","to":"HH:MM or null","reason":"one of Carer respite/Carer appointment/Carer training/Carer work/Sibling contact/Emergency/Other or null — the reason the OTHER carer needed cover, if said","hours":number|null,"kids":["names"],"overnight":false,"medName":"string or null","dose":"string or null","given":"HH:MM or null","givenBy":"string or null","flag":"sexualised|disclosure|injury|allegation|missing|contact|health|school|reminder|null","flagNote":"string or null","training":{"course":"string","why":"string"} or null}]`;
+  try{
+    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1500,system:sys,messages:[{role:'user',content:text}]})});
+    const d=await r.json();
+    if(d.error)throw new Error(d.error.message||'API error');
+    if(!d.content)throw new Error('Empty reply');
+    const out=d.content.map(c=>c.text||'').join('').replace(/```json|```/g,'').trim();
+    const m=out.match(/\[[\s\S]*\]/); if(!m)throw new Error('No list in reply');
+    const arr=JSON.parse(m[0]); if(!Array.isArray(arr)||!arr.length)throw new Error('Nothing recognised');
+    pending=arr.map(p=>({bucket:BUCKETS[p.bucket]?p.bucket:'scratch',child:matchChild(p.child),kids:[...new Set([matchChild(p.child),...(p.others||[]).map(matchChild)].filter(Boolean))],text:p.text||'',
+      kind:['purchase','mileage','daycare'].includes(p.kind)?p.kind:'purchase',amount:p.amount||'',miles:p.miles||'',hours:p.hours||'',from:p.from||'',to:p.to||'',reason:p.reason||'',overnight:!!p.overnight,
+      medName:p.medName||'',dose:p.dose||'',given:p.given||'',givenBy:p.givenBy||'',
+      flag:FLAGS[p.flag]&&p.flag!=='training'?p.flag:'',flagNote:p.flagNote||'',
+      trainingNote:(()=>{const f=FLAGS[p.flag]&&p.flag!=='training'?p.flag:'';if(f&&FLAG_TRAINING[f])return'';const c=p.training&&findCourse(p.training.course);return c&&p.training.why?`${c[0]} — ${p.training.why}`:''})()}));
+    pending.forEach(linkMentionedChildren);
+    backstopFlags(pending);
+    pending=dropRedundantDaycare(pending);
+  }catch(e){toast('Couldn’t sort: '+(e&&e.message||e));pending=[{bucket:'scratch',child:'',text,kind:'purchase'}];pending.forEach(linkMentionedChildren);backstopFlags(pending)}
+  busy=false; render();
+}
+function saveAll(){
+  const t=today();
+  pending.forEach(p=>data.records.push({...syncKid(p),id:Date.now()+Math.random().toString(16).slice(2),date:t,done:false,flagDone:false,created:new Date().toISOString()}));
+  const n=pending.length; pending=[]; window._cap=''; save(); toast(`Saved ${n} item${n>1?'s':''}`); render();
+}
+
+/* ---------- buckets ---------- */
+function buckets(v){
+  if(window._composing){v.innerHTML=composeView();return}
+  const inRangeRecs=data.records.filter(r=>inRange(r.date,erange));
+  const recs=(tab==='all'?inRangeRecs.slice():inRangeRecs.filter(r=>r.bucket===tab||(r.alsoIn||[]).includes(tab))).sort((a,b)=>b.created.localeCompare(a.created));
+  let h=`<button class="chip" style="margin-bottom:10px" onclick="window._composing=true;window._compose={to:[],kids:[],entryIds:[],other:'',note:'',tone:'',otherRecipientOn:false,otherRecipient:{name:'',email:''}};render()">✉️ Compose email</button>
+  <select style="margin-bottom:10px" onchange="erange=this.value;render()">${ERANGES.map(([k,l])=>`<option value="${k}"${erange===k?' selected':''}>${l}</option>`).join('')}</select>
+  ${erange==='custom'?`<div class="row" style="margin-bottom:10px"><input type="date" value="${window._efrom||''}" onchange="window._efrom=this.value;render()"><input type="date" value="${window._eto||''}" onchange="window._eto=this.value;render()"></div>`:''}
+  <select style="margin-bottom:10px" onchange="tab=this.value;render()"><option value="all"${tab==='all'?' selected':''}>All (${inRangeRecs.length})</option>${Object.entries(BUCKETS).map(([k,l])=>`<option value="${k}"${tab===k?' selected':''}>${l} (${inRangeRecs.filter(r=>r.bucket===k||(r.alsoIn||[]).includes(k)).length})</option>`).join('')}</select><div class="card">`;
+  if(tab==='incident') h+=`<p class="note">Incidents usually need a formal notification within 24 hours. This is your record of dates, times and exact words — it doesn't replace the form.</p>`;
+  if(tab==='supervision') h+=`<p class="hint">Tap an item to tick it off after supervision.</p>`;
+  if(recs.length&&tab!=='scratch'&&tab!=='all') h+=`<button class="chip" onclick="sendBucket('${tab}',data.records.filter(r=>r.bucket==='${tab}'))">Send to SSW / CSW…</button>`;
+  h+=sendPanel();
+  if(!recs.length) h+=`<p class="empty">Nothing here yet.</p>`;
+  recs.forEach(r=>{
+    h+=`<div class="rec${r.done?' done':''}${tab==='incident'?' incident':''}" ${tab==='supervision'?`onclick="toggle('${r.id}')"`:''}>
+      <button class="del" onclick="event.stopPropagation();del('${r.id}')">×</button>
+      ${window._edit===r.id?editForm(r):`<span onclick="${tab==='supervision'?'':`event.stopPropagation();window._edit='${r.id}';render()`}">${r.bucket==='expenses'?describe(r):r.bucket==='meds'?describeMeds(r):r.text}</span>${tab==='supervision'?`<button class="chip" style="margin-left:6px" onclick="event.stopPropagation();window._edit='${r.id}';render()">edit</button>`:''}`}${photoStrip(r.photos)}
+      ${tab==='incident'?`<div><button class="chip${r.reported?' on':''}" onclick="event.stopPropagation();r=data.records.find(x=>x.id==='${r.id}');r.reported=r.reported?'':new Date().toISOString();save();render()">${r.reported?'Reported '+new Date(r.reported).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'Mark as reported'}</button></div>`:''}
+      ${['diary','incident','scratch','sw'].includes(r.bucket)&&(r.kids||[]).filter(k=>livesHereOf(data.children.find(c=>c.name===k)||{})===false).length?`<div class="chips" style="margin-top:4px">${(r.kids||[]).filter(k=>livesHereOf(data.children.find(c=>c.name===k)||{})===false).map(k=>`<button class="chip" onclick="event.stopPropagation();sendNote('${k}',['${r.id}'])">Send to ${k}'s carer</button>`).join('')}</div>`:''}
+      ${flagBlock(r)}
+      <small>${fmt(r.date)}${r.child?' · '+r.child:''}${tab==='all'?' · '+BUCKETS[r.bucket]:(r.bucket!==tab?' · filed under '+BUCKETS[r.bucket]:'')}${(r.alsoIn||[]).length?' · also in '+r.alsoIn.map(k=>BUCKETS[k]).join(', '):''}${r.edited?' · edited '+new Date(r.edited).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):''}</small></div>`;
+  });
+  if(tab==='expenses'){const m=today().slice(0,7);const t=expenseTotals(recs.filter(r=>r.date.startsWith(m)));
+    h+=`<div class="sub">Purchases ${gbp(t.purchase)} · Mileage ${gbp(t.mileage)} · Day care ${gbp(t.daycare)}</div><div class="total">${gbp(t.total)} this month</div>`}
+  v.innerHTML=h+'</div>';
+}
+function toggle(id){const r=data.records.find(x=>x.id===id);r.done=!r.done;save();render()}
+function del(id){if(window._del!==id){window._del=id;toast('Tap × again to delete');return}window._del=null;const r=data.records.find(x=>x.id===id);pushUndo((r?r.text.slice(0,30):'Entry')+' deleted');data.records=data.records.filter(x=>x.id!==id);save();render()}
+function flagBlock(r){if(!hasFollowUp(r))return '';
+  const hasFlag=r.flag&&!(r.flag==='training'&&!(r.flagNote||'').trim());
+  const f=hasFlag?(FLAGS[r.flag]||{label:r.flag}):null;const open=window._flagOpen===r.id;
+  if(r.flagDone) return `<div class="note" style="margin-top:4px" onclick="event.stopPropagation()">✓ Follow-up done ${new Date(r.flagDoneAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}${hasFlag?' — '+esc(f.label):''} <button class="chip" onclick="reopenFlag('${r.id}')">Reopen</button></div>`;
+  const flagPart=hasFlag?`<div style="margin-top:4px" onclick="event.stopPropagation()">
+    <button class="chip${f.urgent?' urgent':''}" onclick="window._flagOpen=window._flagOpen==='${r.id}'?null:'${r.id}';render()">${flagIcon(r)} ${esc(f.label)}${r.flag==='training'?' · '+courseTitle(r.flagNote):''}</button>
+    ${open?`<div class="note">${esc(flagGuidance(r))}</div><button class="chip on" onclick="markFlagDone('${r.id}')">Mark done</button>${r.flag==='training'?(()=>{const c=findCourse((r.flagNote||'').split(' — ')[0]);const u=c?platUrl(c[2]):'';return u?` <a class="chip" href="${u}" target="_blank" rel="noopener">Open ↗</a>`:''})():''}`:''}</div>`:'';
+  const trainingPart=(r.trainingNote&&r.flag!=='training')?trainingRow(r,r.trainingNote,''):'';
+  return flagPart+trainingPart}
+function markFlagDone(id){const r=data.records.find(x=>x.id===id);r.flagDone=true;r.flagDoneAt=new Date().toISOString();window._flagOpen=null;save();render()}
+function reopenFlag(id){const r=data.records.find(x=>x.id===id);r.flagDone=false;save();render()}
+
+/* ---------- month ---------- */
+function expensesSectionText(rs){
+  const pur=rs.filter(r=>r.kind!=='mileage'&&r.kind!=='daycare'), mil=rs.filter(r=>r.kind==='mileage');
+  let out='';
+  if(pur.length) out+=`Purchases\n`+pur.map(r=>`  ${fmt(r.date)}: ${gbp(r.amount)} ${r.text}${r.child?' ('+r.child+')':''}`).join('\n')+'\n';
+  if(mil.length){out+=`Mileage (${data.rates.dailyDeduct} miles/day deducted, ${gbp(data.rates.mileage)}/mile)\n`;[...new Set(mil.map(r=>r.date))].sort().forEach(d=>{const x=mileageForDay(d,mil);out+=`  ${fmt(d)}: ${x.miles} miles → ${x.claimable} claimable = ${gbp(x.amount)}  [${mil.filter(r=>r.date===d).map(r=>r.text).join('; ')}]\n`})}
+  const events=daycareEvents(rs);
+  if(events.length) out+=`Day care\n`+events.map(e=>`  ${fmt(e.date)}: ${e.kid} — ${e.overnight?'overnight':(e.from&&e.to?e.from+'–'+e.to+' ('+e.hours+' hrs)':e.hours+' hrs')}${e.first?'':' (additional child rate)'} — reason: ${e.reason||'NOT GIVEN'} — ${gbp(e.amount)}${e.text?' ('+e.text+')':''}`).join('\n')+'\n';
+  const t=expenseTotals(rs); out+=`Total: ${gbp(t.total)} (purchases ${gbp(t.purchase)}, mileage ${gbp(t.mileage)}, day care ${gbp(t.daycare)})\n`;
+  return out}
+function month(v){
+  const m=window._m||today().slice(0,7); const c=window._mc||'';
+  const inMonth=data.records.filter(r=>r.date.startsWith(m));
+  const recs=inMonth.filter(r=>!c||r.child===c||(r.kids||[]).includes(c));
+  const unlinked=c?inMonth.filter(r=>!r.child&&!(r.kids||[]).length&&r.bucket!=='expenses'):[];
+  let out=`${c||'Everyone'} — ${new Date(m+'-15').toLocaleDateString('en-GB',{month:'long',year:'numeric'})}\n`;
+  for(const [k,l] of Object.entries(BUCKETS)){
+    const rs=recs.filter(r=>r.bucket===k||(r.alsoIn||[]).includes(k)).sort((a,b)=>a.created.localeCompare(b.created)); if(!rs.length)continue;
+    out+=`\n${l.toUpperCase()}\n`;
+    if(k==='expenses'){out+=expensesSectionText(rs)}
+    else out+=rs.map(r=>`  ${fmt(r.date)}${r.child&&!c?' ('+r.child+')':''}: ${r.text}${r.done?' ✓':''}`).join('\n')+'\n';
+  }
+  if(unlinked.length) out+=`\nNOT LINKED TO A CHILD (${unlinked.length}) — tap these in Buckets to set the child\n`+unlinked.map(r=>`  ${fmt(r.date)}: ${r.text.slice(0,80)}`).join('\n')+'\n';
+  v.innerHTML=`<div class="card"><h3>Compile a month</h3>
+    <div class="chips"><button class="chip${!c?' on':''}" onclick="pickMc('')">Everyone</button>${names().map(n=>`<button class="chip${n===c?' on':''}" onclick="pickMc('${n}')">${n}</button>`).join('')}</div>
+    <input type="month" value="${m}" onchange="window._m=this.value;render()">
+    ${c&&livesHereOf(data.children.find(x=>x.name===c)||{})===false&&recs.some(r=>r.bucket!=='expenses')?`<button class="btn quiet" onclick="sendNote('${c}',${JSON.stringify(recs.filter(r=>r.bucket!=='expenses').map(r=>r.id)).replace(/"/g,"'")})">Send ${c}'s notes to their carer</button>`:''}
+    ${recs.length?`<pre id="rep">${out}</pre><button class="btn" onclick="navigator.clipboard.writeText($('#rep').textContent).then(()=>toast('Copied'))">Copy report</button><button class="btn quiet" onclick="sendText($('#rep').textContent.split('\\n')[0],$('#rep').textContent,window._mc||'')">Send…</button>${sendPanel()}`:'<p class="empty">Nothing recorded this month.</p>'}
+    <p class="note">Raw material for your Mockingbird return, expense claim or a social worker update — read it through before it goes anywhere.</p></div>`;
+}
+function pickMc(n){window._mc=n;render()}
+function expenseLineItems(recs){
+  const pur=recs.filter(r=>r.kind!=='mileage'&&r.kind!=='daycare').map(r=>({
+    type:'purchase',date:r.date,label:`${gbp(Number(r.amount||0))} ${r.text}`,amount:Number(r.amount||0),
+    claimed:!!r.claimed,paid:!!r.paid,paidAt:r.paidAt||'',recordIds:[r.id],created:r.created||r.date}));
+  const milDates=[...new Set(recs.filter(r=>r.kind==='mileage').map(r=>r.date))];
+  const mil=milDates.map(d=>{
+    const dayRecs=recs.filter(r=>r.kind==='mileage'&&r.date===d);
+    const x=mileageForDay(d,recs);
+    return {type:'mileage',date:d,label:`${x.miles} miles → ${x.claimable} claimable = ${gbp(x.amount)}  [${dayRecs.map(r=>r.text).join('; ')}]`,
+      amount:x.amount,claimed:dayRecs.every(r=>r.claimed),paid:dayRecs.every(r=>r.paid),paidAt:dayRecs.map(r=>r.paidAt).filter(Boolean).sort().slice(-1)[0]||'',
+      recordIds:dayRecs.map(r=>r.id),created:dayRecs.map(r=>r.created||d).sort().slice(-1)[0]};
+  });
+  const events=daycareEvents(recs);
+  const dc=events.map(e=>{const rec=recs.find(r=>r.id===e.recordId)||{};
+    return {type:'daycare',date:e.date,
+      label:`${e.kid} — ${e.overnight?'overnight':(e.from&&e.to?e.from+'–'+e.to+' ('+e.hours+' hrs)':e.hours+' hrs')}${e.first?'':' (additional child rate)'} — reason: ${e.reason||'NOT GIVEN'} — ${gbp(e.amount)}${e.text?' ('+e.text+')':''}`,
+      amount:e.amount,claimed:!!rec.claimed,paid:!!rec.paid,paidAt:rec.paidAt||'',recordIds:[e.recordId],created:rec.created||e.date};
+  });
+  return [...pur,...mil,...dc];
+}
+function markClaimed(recordIds){recordIds.forEach(id=>{const r=data.records.find(x=>x.id===id);if(r){r.claimed=true;r.claimedAt=new Date().toISOString()}});save();render()}
+function unclaimExpense(recordIds){recordIds.forEach(id=>{const r=data.records.find(x=>x.id===id);if(r){r.claimed=false;r.claimedAt=''}});save();render()}
+function markPaid(recordIds){recordIds.forEach(id=>{const r=data.records.find(x=>x.id===id);if(r){r.paid=true;r.paidAt=new Date().toISOString()}});save();render()}
+function unpayExpense(recordIds){recordIds.forEach(id=>{const r=data.records.find(x=>x.id===id);if(r){r.paid=false;r.paidAt=''}});save();render()}
+function toggleExpExclude(key){if(!window._expExcluded)window._expExcluded=new Set();window._expExcluded.has(key)?window._expExcluded.delete(key):window._expExcluded.add(key);render()}
+function expensesDoc(v){
+  const m=window._em||today().slice(0,7); const c=window._emc||'';
+  const rs=data.records.filter(r=>r.date.startsWith(m)&&(r.bucket==='expenses'||(r.alsoIn||[]).includes('expenses'))&&(!c||r.child===c||(r.kids||[]).includes(c)));
+  const items=expenseLineItems(rs).sort((a,b)=>(b.created||'').localeCompare(a.created||''));
+  const unclaimed=items.filter(x=>!x.claimed), claimedItems=items.filter(x=>x.claimed);
+  if(!window._expExcluded)window._expExcluded=new Set();
+  const excluded=window._expExcluded;
+  const keyOf=x=>x.recordIds.join(',');
+  const included=unclaimed.filter(x=>!excluded.has(keyOf(x)));
+  const total=included.reduce((s,x)=>s+x.amount,0);
+  const header=`Expenses — ${c||'Everyone'} — ${new Date(m+'-15').toLocaleDateString('en-GB',{month:'long',year:'numeric'})}\n\n`;
+  const out=header+(included.length?included.map(x=>`  ${fmt(x.date)}: ${x.label}`).join('\n')+`\n\nTotal: ${gbp(total)}`:'Nothing selected.');
+  const claimedOpen=!!window._claimedOpen;
+  v.innerHTML=`<div class="card"><h3>Expenses</h3>
+    <div class="chips"><button class="chip${!c?' on':''}" onclick="window._emc='';render()">Everyone</button>${names().map(n=>`<button class="chip${n===c?' on':''}" onclick="window._emc='${n}';render()">${n}</button>`).join('')}</div>
+    <input type="month" value="${m}" onchange="window._em=this.value;render()">
+    ${unclaimed.length?unclaimed.map(x=>`<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer"><input type="checkbox" ${excluded.has(keyOf(x))?'':'checked'} onchange="toggleExpExclude('${keyOf(x)}')" style="flex:0 0 auto"><span style="flex:1">${fmt(x.date)}: ${esc(x.label)}</span><button class="chip" style="flex:0 0 auto" onclick="event.preventDefault();markClaimed([${x.recordIds.map(id=>`'${id}'`).join(',')}])">✓ Claimed</button></label>`).join(''):'<p class="empty">Nothing unclaimed this month.</p>'}
+    ${unclaimed.length?`<p class="hint">Untick anything you don't want in this claim — it stays here, just leaves the copy/send below.</p><pre id="repx">${out}</pre><button class="btn" onclick="navigator.clipboard.writeText($('#repx').textContent).then(()=>toast('Copied'))">Copy claim</button><button class="btn quiet" onclick="sendText($('#repx').textContent.split('\\n')[0],$('#repx').textContent,window._emc||'')">Send…</button>${sendPanel()}`:''}
+    ${claimedItems.length?`<p class="hint" style="margin-top:14px;cursor:pointer" onclick="window._claimedOpen=!window._claimedOpen;render()">${claimedOpen?'▾':'▸'} ${claimedItems.length} already claimed — tap to ${claimedOpen?'hide':'show'}</p>`:''}
+    ${claimedOpen?claimedItems.map(x=>`<div class="rec" style="opacity:.85;display:flex;justify-content:space-between;align-items:center;gap:8px"><span>${fmt(x.date)}: ${esc(x.label)}${x.paid?' · Paid '+new Date(x.paidAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):''}</span><span style="flex:0 0 auto;white-space:nowrap">${x.paid?`<button class="chip" onclick="unpayExpense([${x.recordIds.map(id=>`'${id}'`).join(',')}])">Undo paid</button>`:`<button class="chip" onclick="markPaid([${x.recordIds.map(id=>`'${id}'`).join(',')}])">✓ Paid</button>`} <button class="chip" onclick="unclaimExpense([${x.recordIds.map(id=>`'${id}'`).join(',')}])">Unclaim</button></span></div>`).join(''):''}
+    <p class="note">Ready to paste into your expense claim, or send straight to whoever processes it. Tick "Claimed" once you've submitted an item and it moves out of the way here; tick "Paid" once the money's actually landed. Nothing is deleted, it just sits in the claimed list above.</p></div>`;
+}
+function medsDoc(v){
+  const m=window._mm||today().slice(0,7); const c=window._mmc||'';
+  const rs=data.records.filter(r=>r.bucket==='meds'&&r.date.startsWith(m)&&(!c||r.child===c||(r.kids||[]).includes(c))).sort((a,b)=>b.created.localeCompare(a.created));
+  const out=`Medication — ${c||'Everyone'} — ${new Date(m+'-15').toLocaleDateString('en-GB',{month:'long',year:'numeric'})}\n\n`+(rs.length?rs.map(r=>`  ${fmt(r.date)}${r.given?' '+r.given:''}: ${describeMeds(r)}`).join('\n'):'Nothing recorded this month.');
+  v.innerHTML=`<div class="card"><h3>Medication</h3>
+    <div class="chips"><button class="chip${!c?' on':''}" onclick="window._mmc='';render()">Everyone</button>${names().map(n=>`<button class="chip${n===c?' on':''}" onclick="window._mmc='${n}';render()">${n}</button>`).join('')}</div>
+    <input type="month" value="${m}" onchange="window._mm=this.value;render()">
+    ${rs.length?rs.map(r=>`<div class="rec"><span onclick="window._edit='${r.id}';view='buckets';tab='meds';render()">${fmt(r.date)}${r.given?' · '+r.given:''} — ${describeMeds(r)}</span></div>`).join(''):'<p class="empty">Nothing recorded this month.</p>'}
+    ${rs.length?`<pre id="repm">${out}</pre><button class="btn" onclick="navigator.clipboard.writeText($('#repm').textContent).then(()=>toast('Copied'))">Copy</button><button class="btn quiet" onclick="sendText($('#repm').textContent.split('\\n')[0],$('#repm').textContent,window._mmc||'')">Send…</button>${sendPanel()}`:''}
+    <p class="note">Exactly what was given, to whom, when, and by whom — useful for handover, a GP visit, or a social worker asking about medication.</p></div>`;
+}
+
+/* ---------- settings / rates ---------- */
+const LIVES_CATS=[['la_long','Looked after (long term)'],['la_short','Looked after (short term)'],['fosters','Child who fosters'],['sgo','SGO'],['adopted','Adopted'],['kinship','Kinship']];
+const VISITS_CATS=[['sleepover','Sleepover'],['daycare','Daycare'],['short_break','Short break']];
+const CATEGORIES=[...LIVES_CATS,...VISITS_CATS];
+const MB_OPTIONS=[['mb5','Your Mockingbird (MB5)'],['another','Another Mockingbird'],['no','No Mockingbird'],['other','Other']];
+const MY_HUB_CARER={name:'Maud Todd',phone:'07960076733',email:'Just.maud@yahoo.co.uk'};
+function livesHereOf(c){return c.livesHere!==undefined?c.livesHere:(VISITS_CATS.some(([k])=>k===c.category)?false:c.category?true:undefined)}
+function childCard(c,i){const ed=window._childEdit===i;const b=basics(c.name);const isSA=['sgo','adopted'].includes(c.category);const lh=livesHereOf(c);
+  return `<div class="item"><div class="row" style="align-items:center"><b style="flex:1">${esc(c.name)}</b><button class="chip" onclick="window._childEdit=${ed?'null':i};render()">${ed?'Done':'Edit'}</button><button class="x" onclick="pushUndo('${esc(c.name)} deleted');data.children.splice(${i},1);save();render()">×</button></div>
+  ${ed?`<div class="row" style="margin-top:6px"><input value="${esc(c.name)}" placeholder="Name" style="flex:1" autocomplete="off" autocorrect="off" spellcheck="false" onchange="const v=this.value.trim();if(v)data.children[${i}].name=v;save();render()"></div>
+    <div class="row" style="margin-top:6px"><select style="flex:1" onchange="data.children[${i}].pronoun=this.value;save()"><option value=""${!c.pronoun?' selected':''}>How do we refer to them?</option><option value="he/him"${c.pronoun==='he/him'?' selected':''}>He / him</option><option value="she/her"${c.pronoun==='she/her'?' selected':''}>She / her</option><option value="they/them"${c.pronoun==='they/them'?' selected':''}>They / them</option></select></div>
+    <div class="row" style="margin-top:6px"><input type="month" value="${c.born||''}" style="flex:1" title="Month and year of birth" onchange="data.children[${i}].born=this.value;save();render()"><input value="${c.family||''}" placeholder="Household / carer" style="flex:1" onchange="data.children[${i}].family=this.value.trim();save()"></div>
+    <div class="row" style="margin-top:6px"><select style="flex:1" onchange="data.children[${i}].livesHere=this.value==='1';data.children[${i}].category='';render()"><option value="">— lives with us, or visits? —</option><option value="1"${lh===true?' selected':''}>Lives with us</option><option value="0"${lh===false?' selected':''}>Visits (sleepover / daycare / short break — varies, no need to pick one)</option></select></div>
+    ${lh===true?`<div class="row" style="margin-top:6px"><select style="flex:1" onchange="data.children[${i}].category=this.value;render()"><option value="">— category —</option>${LIVES_CATS.map(([k,l])=>`<option value="${k}"${c.category===k?' selected':''}>${l}</option>`).join('')}</select></div>`:''}
+    ${isSA?`<p class="hint" style="margin-top:8px">Important contact at Surrey</p><textarea placeholder="Name · phone · email" onchange="data.children[${i}].surreyContact=this.value">${esc(c.surreyContact||'')}</textarea>`:''}
+    <p class="hint" style="margin-top:8px">Mockingbird</p>
+    <select style="flex:1" onchange="const v=this.value;data.children[${i}].mockingbird=v;if(v==='mb5'){data.children[${i}].hubCarerName=MY_HUB_CARER.name;data.children[${i}].hubCarerPhone=MY_HUB_CARER.phone;data.children[${i}].hubCarerEmail=MY_HUB_CARER.email}render()"><option value="">— not set —</option>${MB_OPTIONS.map(([k,l])=>`<option value="${k}"${c.mockingbird===k?' selected':''}>${l}</option>`).join('')}</select>
+    ${['mb5','another'].includes(c.mockingbird)?`<p class="hint" style="margin-top:6px">Hub carer name</p><input value="${esc(c.hubCarerName||'')}" onchange="data.children[${i}].hubCarerName=this.value.trim();save()">
+    <p class="hint" style="margin-top:6px">Hub carer phone</p><input type="tel" value="${esc(c.hubCarerPhone||'')}" onchange="data.children[${i}].hubCarerPhone=this.value.trim();save()">
+    <p class="hint" style="margin-top:6px">Hub carer email</p><input type="email" value="${esc(c.hubCarerEmail||'')}" onchange="data.children[${i}].hubCarerEmail=this.value.trim();save()">`:''}`
+  :`<div class="muted">${c.born?fmt(c.born+'-01',{month:'long',year:'numeric'})+' · ':''}${bandOf(c)} band${c.family?' · '+esc(c.family):''}${c.category?' · '+(CATEGORIES.find(x=>x[0]===c.category)||[,c.category])[1]:(lh===false?' · Visits us':'')}</div>
+    ${isSA&&c.surreyContact?`<div class="note" style="margin-top:6px">Surrey contact: ${linkify(c.surreyContact)}</div>`:''}
+    ${c.mockingbird?`<div class="note" style="margin-top:6px">Mockingbird: ${(MB_OPTIONS.find(x=>x[0]===c.mockingbird)||[,c.mockingbird])[1]}${['mb5','another'].includes(c.mockingbird)&&(c.hubCarerName||c.hubCarerPhone||c.hubCarerEmail)?'<br>Hub carer: '+esc(c.hubCarerName||'')+(c.hubCarerPhone?' · <a href="tel:'+esc(c.hubCarerPhone)+'">'+esc(c.hubCarerPhone)+'</a>':'')+(c.hubCarerEmail?' · <a href="mailto:'+esc(c.hubCarerEmail)+'">'+esc(c.hubCarerEmail)+'</a>':''):''}</div>`:''}
+    ${lh===undefined?`<p class="note" style="margin-top:6px">Not set yet — tap Edit.</p>`:''}`}
+  <div style="margin-top:10px;border-top:1px solid var(--line);padding-top:8px"><button class="chip" onclick="togglePlacement('${esc(c.name)}')">${placementOpen(c.name)?'▾':'▸'} Placement & professionals</button>${placementOpen(c.name)?placementBasicsBlock(c.name):''}</div>
+  </div>`}
+function about(v){v.innerHTML=`<div class="card"><h3>About us</h3>
+  <p class="hint">Everyone in the household — so it's all in one place, not scattered across contacts.</p>
+  <h4 style="margin:14px 0 4px;color:var(--accent)">Adults</h4>
+  ${data.household.adults.length?data.household.adults.map((a,i)=>adultCard(a,i)).join(''):'<p class="empty">None yet.</p>'}
+  <button class="chip add" onclick="addAdult()">+ adult</button>${adultForm()}
+  ${data.household.adults.some(a=>a.role==='Foster carer')?sswCard():''}
+  <h4 style="margin:20px 0 4px;color:var(--accent)">Other contacts</h4><p class="hint" style="margin:0 0 6px">For children who visit from other families, add their carer here with the label "Carer" and link them to the child — "Send to carer" on an entry then picks them first. Who entries can be sent to — use their Egress / work addresses.</p>
+    ${data.contacts.map((c,i)=>`<div class="item"><div class="row"><input value="${c.label}" placeholder="SSW / CSW / Hub" style="flex:0 0 90px" onchange="data.contacts[${i}].label=this.value;save()"><input value="${c.name||''}" placeholder="Name" onchange="data.contacts[${i}].name=this.value;save()"><button class="x" onclick="pushUndo('${esc(c.label||c.name||'Contact')} deleted');data.contacts.splice(${i},1);save();render()">×</button></div>
+    <div class="row" style="margin-top:6px"><input value="${c.phone||''}" placeholder="Phone" type="tel" onchange="data.contacts[${i}].phone=this.value.trim();save()"><input value="${c.email}" placeholder="email address" type="email" inputmode="email" onchange="data.contacts[${i}].email=this.value.trim();save()"><select style="flex:0 0 90px" onchange="data.contacts[${i}].child=this.value;save()"><option value="">any child</option>${names().map(n=>`<option${c.child===n?' selected':''}>${n}</option>`).join('')}</select></div></div>`).join('')}
+    <button class="chip add" onclick="data.contacts.push({label:'SSW',name:'',phone:'',email:''});save();render()">+ contact</button>
+    ${data.contacts.some(c=>isStructuralLabel(c.label))?`<button class="chip quiet" onclick="tidyStructuralContacts()">Tidy up duplicate SSW/CSW contacts</button>`:''}
+  <h4 style="margin:20px 0 4px;color:var(--accent)">Children — living with us</h4>
+  ${data.children.filter(c=>livesHereOf(c)!==false).length?data.children.map((c,i)=>[c,i]).filter(([c])=>livesHereOf(c)!==false).map(([c,i])=>childCard(c,i)).join(''):'<p class="empty">None yet.</p>'}
+  <h4 style="margin:20px 0 4px;color:var(--accent)">Children — visiting (sleepover / daycare / short break)</h4>
+  ${data.children.map((c,i)=>[c,i]).filter(([c])=>livesHereOf(c)===false).length?data.children.map((c,i)=>[c,i]).filter(([c])=>livesHereOf(c)===false).map(([c,i])=>childCard(c,i)).join(''):'<p class="empty">None yet.</p>'}
+  <button class="chip add" onclick="addChild()">+ child</button>${childForm()}
+  </div>`}
+const ADULT_ROLES=['Foster carer','Adult child','Live-in grandparent','Other'];
+function addAdult(){window._addingAdult=true;render()}
+function adultForm(){return window._addingAdult?`<div style="margin-top:8px"><input id="newAdultName" placeholder="Name" style="width:100%" autocomplete="off" spellcheck="false">
+  <div class="row" style="margin-top:6px"><input id="newAdultPhone" placeholder="Phone" type="tel" style="flex:1"><input id="newAdultEmail" placeholder="Email" type="email" style="flex:1"></div>
+  <div class="row" style="margin-top:6px"><select id="newAdultRole" style="flex:1">${ADULT_ROLES.map(r=>`<option>${r}</option>`).join('')}</select><button class="chip" style="flex:0 0 auto" onclick="confirmAdult()">Add</button><button class="x" onclick="window._addingAdult=false;render()">×</button></div></div>`:''}
+function confirmAdult(){const n=$('#newAdultName').value.trim();if(!n)return;data.household.adults.push({name:n,phone:$('#newAdultPhone').value.trim(),email:$('#newAdultEmail').value.trim(),role:$('#newAdultRole').value});window._addingAdult=false;save();render()}
+function adultCard(a,i){const ed=window._adultEdit===i;
+  return `<div class="item"><div class="row" style="align-items:center"><b style="flex:1">${esc(a.name)}</b><button class="chip" onclick="window._adultEdit=${ed?'null':i};render()">${ed?'Done':'Edit'}</button><button class="x" onclick="pushUndo('${esc(a.name)} deleted');data.household.adults.splice(${i},1);save();render()">×</button></div>
+  ${ed?`<div class="row" style="margin-top:6px"><input value="${esc(a.name)}" placeholder="Name" style="flex:1" onchange="data.household.adults[${i}].name=this.value.trim();save();render()"></div>
+    <div class="row" style="margin-top:6px"><input value="${esc(a.phone||'')}" placeholder="Phone" type="tel" style="flex:1" onchange="data.household.adults[${i}].phone=this.value.trim();save()"><input value="${esc(a.email||'')}" placeholder="Email" type="email" style="flex:1" onchange="data.household.adults[${i}].email=this.value.trim();save()"></div>
+    <div class="row" style="margin-top:6px"><select style="flex:1" onchange="data.household.adults[${i}].role=this.value;render()">${ADULT_ROLES.map(r=>`<option${a.role===r?' selected':''}>${r}</option>`).join('')}</select></div>`
+  :`<div class="muted">${a.role||'—'}${a.phone?' · <a href="tel:'+esc(a.phone)+'">'+esc(a.phone)+'</a>':''}${a.email?' · <a href="mailto:'+esc(a.email)+'">'+esc(a.email)+'</a>':''}</div>`}</div>`}
+function sswCard(){const h=data.household;const ed=window._sswEdit;
+  return `<div class="item"><div class="row" style="align-items:center"><b style="flex:1">Supervising social worker</b><span class="muted" style="flex:0 0 auto;margin-right:8px">shared by all foster carers here</span><button class="chip" onclick="window._sswEdit=${ed?'false':'true'};render()">${ed?'Done':'Edit'}</button></div>
+  ${ed?`<p class="hint" style="margin-top:8px">SSW — name</p><input value="${esc(h.sswName||'')}" onchange="data.household.sswName=this.value.trim();save()">
+    <p class="hint" style="margin-top:6px">SSW — phone</p><input type="tel" value="${esc(h.sswPhone||'')}" onchange="data.household.sswPhone=this.value.trim();save()">
+    <p class="hint" style="margin-top:6px">SSW — email</p><input type="email" value="${esc(h.sswEmail||'')}" onchange="data.household.sswEmail=this.value.trim();save()">
+    <p class="hint" style="margin-top:8px">SSW's manager — name</p><input value="${esc(h.sswManagerName||'')}" onchange="data.household.sswManagerName=this.value.trim();save()">
+    <p class="hint" style="margin-top:6px">Manager — phone</p><input type="tel" value="${esc(h.sswManagerPhone||'')}" onchange="data.household.sswManagerPhone=this.value.trim();save()">
+    <p class="hint" style="margin-top:6px">Manager — email</p><input type="email" value="${esc(h.sswManagerEmail||'')}" onchange="data.household.sswManagerEmail=this.value.trim();save()">
+    <p class="hint" style="margin-top:6px">Date they started as SSW</p><input type="date" value="${h.sswStart||''}" onchange="data.household.sswStart=this.value;save()">`
+  :`${h.sswName||h.sswManagerName?`<div class="note" style="margin-top:6px">${h.sswName?'SSW: '+esc(h.sswName)+(h.sswPhone?' · <a href="tel:'+esc(h.sswPhone)+'">'+esc(h.sswPhone)+'</a>':'')+(h.sswEmail?' · <a href="mailto:'+esc(h.sswEmail)+'">'+esc(h.sswEmail)+'</a>':''):''}${h.sswManagerName?'<br>Manager: '+esc(h.sswManagerName)+(h.sswManagerPhone?' · <a href="tel:'+esc(h.sswManagerPhone)+'">'+esc(h.sswManagerPhone)+'</a>':'')+(h.sswManagerEmail?' · <a href="mailto:'+esc(h.sswManagerEmail)+'">'+esc(h.sswManagerEmail)+'</a>':''):''}${h.sswStart?'<br>Started: '+fmt(h.sswStart):''}</div>`:'<p class="empty" style="margin-top:6px">Not set yet.</p>'}`}</div>`}
+function settings(v){
+  const R=data.rates;
+  const num=(path,val)=>`<input type="number" step="0.01" value="${val}" onchange="setRate('${path}',this.value)">`;
+  v.innerHTML=`<div class="card"><h3>Children</h3>
+    ${data.children.length?`<table><tr><th>Name</th><th>Band</th></tr>${data.children.map(c=>`<tr><td>${esc(c.name)}</td><td>${bandOf(c)}${ageOf(c)!==null?` (${ageOf(c)})`:''}<small style="display:block;color:var(--grey)">${bandChange(c)}</small></td></tr>`).join('')}</table>`:'<p class="empty">None yet.</p>'}
+    <button class="chip" style="margin-top:8px" onclick="view='about';render()">Manage children in About us →</button>
+    <p class="hint">Day-care rate band is worked out from month and year of birth, and updates as they grow.</p></div>
+  <div class="card"><h3>Rates — ${R.label}</h3>
+    <label>Mileage, £ per mile</label>${num('mileage',R.mileage)}
+    <label>Miles deducted per day</label>${num('dailyDeduct',R.dailyDeduct)}
+    <label>Day care under 5 hours, £ per hour — first child / additional child</label>
+    <div class="row">${num('hourFirst',R.hourFirst)}${num('hourAdd',R.hourAdd)}</div>
+    <label>Day care 5+ hours (Level 3) — first / additional</label>
+    <table>${BANDS.map(b=>`<tr><td>${b}</td><td>${num('dayFirst.'+b,R.dayFirst[b])}</td><td>${num('dayAdd.'+b,R.dayAdd[b])}</td></tr>`).join('')}</table>
+    <label>Overnight</label>
+    <table>${BANDS.map(b=>`<tr><td>${b}</td><td>${num('overnight.'+b,R.overnight[b])}</td></tr>`).join('')}</table>
+    <label>Label (e.g. the year of the document)</label><input value="${R.label}" onchange="setRate('label',this.value)">
+    <button class="btn quiet" onclick="data.rates=JSON.parse(JSON.stringify(DEFAULT_RATES));save();render()">Reset to April 2026 rates</button>
+    <p class="note">Siblings: give them the same household name. The first child from a household is paid at the first-child rate, brothers and sisters at the additional-child rate. Children from different households each count as a first child.</p>
+    <h3 style="margin-top:20px">Out-of-hours rota</h3>
+    <p class="muted">${data.rota.length} days loaded (${data.rota.length?fmt(data.rota[0].d)+' to '+fmt(data.rota[data.rota.length-1].d):'none'}). When next month's rota arrives, open the Word file, select all, copy, and paste it here.</p>
+    <textarea id="rotaTxt" rows="3" style="width:100%" placeholder="Paste the whole rota document text here"></textarea><button class="btn" onclick="importRota()">Load rota</button>
+    <h3 style="margin-top:20px">Reminders</h3>
+    <div class="row"><label style="flex:1">Diary to SW <select onchange="data.settings.diaryEvery=this.value;save()"><option value="weekly"${data.settings.diaryEvery==='weekly'?' selected':''}>weekly</option><option value="monthly"${data.settings.diaryEvery!=='weekly'?' selected':''}>monthly</option></select></label>
+    <label style="flex:1">Invoice by day <input type="number" min="1" max="28" value="${data.settings.invoiceDay||1}" style="width:60px" onchange="data.settings.invoiceDay=this.value;save()"></label>
+    <label style="flex:1">Pay day <input type="number" min="1" max="28" value="${data.settings.payDay||28}" style="width:60px" onchange="data.settings.payDay=this.value;save()"></label></div>
+    <h3 style="margin-top:20px">Backup</h3>
+    <p class="muted">Copy this text somewhere safe (a note on your phone). Paste it back here and tap Restore to get everything back.</p>
+    <textarea id="backup" rows="3" style="width:100%;font-size:11px"></textarea>
+    <button class="btn" onclick="exportData()">Copy backup</button><button class="btn quiet" onclick="importData()">Restore</button>
+    <p class="note">Additional children overnight are costed at 80% — the document doesn't say, so check that one. Update these each April from the new finance document.</p>
+    <p class="muted" style="margin-top:20px">Build ${BUILD} · <button class="chip" onclick="const n=rescanRecords();save();toast(n?n+' entr'+(n===1?'y':'ies')+' flagged':'Nothing new to flag');render()">Rescan entries for follow-ups</button></p></div>`;
+}
+function setRate(path,val){const [a,b]=path.split('.');if(b)data.rates[a][b]=Number(val);else data.rates[a]=a==='label'?val:Number(val);save();toast('Rate updated')}
+
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{view=b.dataset.v;render()});
+load().then(render);
+
+</script>
+</body>
+</html>
