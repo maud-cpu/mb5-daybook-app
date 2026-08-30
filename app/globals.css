@@ -1,0 +1,296 @@
+@import "tailwindcss";
+
+/* Design tokens carried over from the original MB5 Day Book app, so the
+   look and feel stays the same for carers who already know it. */
+:root {
+  --pine: #2d5a4a;
+  --marker: #e0a800;
+  --grey: #6b6b63;
+  --accent: #8a6d3b;
+  --bg: #f6f5f0;
+  --card: #ffffff;
+  --ink: #25291f;
+  --line: #e5e3d8;
+  --danger: #c0392b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  margin: 0 0 8px;
+}
+
+a {
+  color: var(--pine);
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  font-size: 15px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  width: 100%;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  flex: 0 0 auto;
+}
+
+textarea {
+  min-height: 70px;
+  resize: vertical;
+}
+
+label {
+  font-size: 14px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.card h3 {
+  font-size: 20px;
+  margin-bottom: 10px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.row input,
+.row select {
+  flex: 1;
+  min-width: 0;
+}
+
+.btn {
+  display: block;
+  width: 100%;
+  background: var(--pine);
+  color: #fff;
+  border: 0;
+  border-radius: 10px;
+  padding: 14px;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+}
+
+.btn.quiet {
+  background: transparent;
+  color: var(--pine);
+  border: 1.5px solid var(--pine);
+  margin-top: 8px;
+}
+
+.chip {
+  border: 1.5px solid var(--pine);
+  background: transparent;
+  color: var(--pine);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-block;
+  text-decoration: none;
+  margin: 2px 4px 2px 0;
+}
+
+.chip.on {
+  background: var(--pine);
+  color: #fff;
+}
+
+.chip.add {
+  border-style: dashed;
+  font-weight: 400;
+}
+
+.chip.urgent {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.chip.urgent.on {
+  background: var(--danger);
+  color: #fff;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.tabs button {
+  border: 1.5px solid var(--pine);
+  background: transparent;
+  color: var(--pine);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.tabs button.on {
+  background: var(--pine);
+  color: #fff;
+}
+
+.item {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 10px;
+  background: #fbfaf6;
+}
+
+.rec {
+  border-bottom: 1px solid var(--line);
+  padding: 8px 0;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.rec:last-child {
+  border-bottom: 0;
+}
+
+.rec.done {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+.rec.incident {
+  border-left: 3px solid var(--danger);
+  padding-left: 8px;
+}
+
+.note {
+  background: #f4f1e8;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 14px;
+  margin: 6px 0;
+  color: #4a4636;
+}
+
+.hint,
+.muted {
+  color: var(--grey);
+  font-size: 13px;
+}
+
+.empty {
+  color: var(--grey);
+  font-style: italic;
+}
+
+.total {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--pine);
+}
+
+nav.tabbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #fff;
+  border-top: 1px solid var(--line);
+  display: flex;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+nav.tabbar button {
+  flex: 1;
+  border: 0;
+  background: none;
+  padding: 8px 1px 10px;
+  font: inherit;
+  font-size: 10px;
+  line-height: 1.25;
+  color: var(--grey);
+  cursor: pointer;
+}
+
+nav.tabbar button.on {
+  color: var(--pine);
+  font-weight: 700;
+  border-top: 3px solid var(--marker);
+  margin-top: -1px;
+}
+
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: 90px;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--ink);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+  max-width: 90%;
+  text-align: center;
+  z-index: 60;
+}
+
+#toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
