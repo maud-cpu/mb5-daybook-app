@@ -15,6 +15,41 @@ const FLAG_KEYS = [
   "reminder",
 ] as const;
 
+const ROLEPLAY_RE = /mums? and dads?|mommies and daddies|doctors? and nurses?|being (the )?mummy and daddy/i;
+const UNDRESS_RE =
+  /(pulled|took off|removed|pulling|taking off)[^.!?]{0,40}(trousers|pants|underwear|knickers|clothes|pyjamas|clothing)|lay(?:ing)? on top of|climbed on top of/i;
+
+const KEYWORD_FLAGS: { flag: FlagKey; test: (s: string) => boolean }[] = [
+  {
+    flag: "sexualised",
+    test: (s) =>
+      /sexuali[sz](?:ed|ing)|sexual(?:i[sz]ed|ly)?\s*(behaviour|behavior|play|touch(?:ing)?|comment|language|content|contact)|sexually inappropriate/i.test(
+        s,
+      ),
+  },
+  { flag: "sexualised", test: (s) => ROLEPLAY_RE.test(s) && UNDRESS_RE.test(s) },
+];
+
+const KEYWORD_TRAINING: { test: RegExp; note: string }[] = [
+  {
+    test: /\b(hit|hurt|kick(?:ed|ing)?|threw|throw(?:ing)?|squeez(?:ed|ing)|strangl(?:ed|ing)|hurting|cruel|cruelty|choked|stamped on|stepped on|threatened|threatening|unkind|mean|nasty|rough) *(?:to|towards|with)?\b[^.?!]{0,40}\b(dog|cat|pet|animal|rabbit|hamster|guinea pig|puppy|kitten)s?\b|\b(dog|cat|pet|animal|rabbit|hamster|guinea pig|puppy|kitten)s?\b[^.?!]{0,40}\b(hit|hurt|kick(?:ed|ing)?|threw|throw(?:ing)?|squeez(?:ed|ing)|strangl(?:ed|ing)|cruel|cruelty|choked)\b/i,
+    note: "Understanding behaviour of children & young people — cruelty or aggression toward animals is a recognised sign worth exploring, not just correcting in the moment.",
+  },
+  {
+    test: /\b(fighting|hitting|kicking|biting|scratch(?:ing)?|swearing|screaming|nasty|aggressive|violent)\b[^.?!]{0,60}\b(each other|one another|sibling|brother|sister)\b|\b(each other|one another|sibling|brother|sister)\b[^.?!]{0,60}\b(fighting|hitting|kicking|biting|scratch(?:ing)?|swearing|screaming|nasty|aggressive|violent)\b/i,
+    note: "Understanding behaviour of children & young people — ongoing conflict or aggression between children in placement is worth exploring through this course and raising at supervision. De-escalation and PACE (in the Next steps list) may help too.",
+  },
+];
+
+/** Safety net: catches obvious safeguarding language even if the AI call fails or misses it. */
+function backstopFlag(text: string): { flag: string; flagNote: string } {
+  const kf = KEYWORD_FLAGS.find((k) => k.test(text));
+  if (kf) return { flag: kf.flag, flagNote: "" };
+  const kt = KEYWORD_TRAINING.find((k) => k.test.test(text));
+  if (kt) return { flag: "training", flagNote: kt.note };
+  return { flag: "", flagNote: "" };
+}
+
 const FLAG_TRAINING: Partial<Record<FlagKey, { course: string; why: string }>> = {
   sexualised: { course: "Intro to harmful sexual behaviour (6 hrs)", why: "covers understanding and responding to this specifically." },
   disclosure: { course: "Working Together to Safeguard Children", why: "covers responding to and recording a disclosure correctly." },
@@ -55,8 +90,11 @@ export async function POST(req: NextRequest) {
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
+    const backstop = backstopFlag(text);
     return NextResponse.json({
-      items: [{ bucket: "scratch", child: "", kids: [], text, kind: "purchase" }],
+      items: [
+        { bucket: "scratch", child: "", kids: [], also_in: [], text, kind: "purchase", flag: backstop.flag, flag_note: backstop.flagNote },
+      ],
       warning: "AI sorting isn't set up yet (no ANTHROPIC_API_KEY) — saved as 'Just record' so nothing is lost.",
     });
   }
@@ -92,7 +130,15 @@ Respond with ONLY a JSON array, no prose, no markdown: [{"bucket":"diary","child
       const child = matchChild(names, p.child);
       const others = (p.others || []).map((o: string) => matchChild(names, o));
       const kids = [...new Set([child, ...others].filter(Boolean))];
-      const flag: string = p.flag && (FLAG_KEYS as readonly string[]).includes(p.flag) ? p.flag : "";
+      let flag: string = p.flag && (FLAG_KEYS as readonly string[]).includes(p.flag) ? p.flag : "";
+      let flagNote = p.flagNote || "";
+      if (!flag) {
+        const backstop = backstopFlag(p.text || "");
+        if (backstop.flag) {
+          flag = backstop.flag;
+          flagNote = backstop.flagNote;
+        }
+      }
       const trainingFromFlag = flag && FLAG_TRAINING[flag as FlagKey];
       const trainingNote = trainingFromFlag
         ? ""
@@ -119,15 +165,27 @@ Respond with ONLY a JSON array, no prose, no markdown: [{"bucket":"diary","child
         given: p.given || null,
         given_by: p.givenBy || "",
         flag,
-        flag_note: p.flagNote || "",
+        flag_note: flagNote,
         training_note: trainingNote,
       };
     });
 
     return NextResponse.json({ items });
   } catch (e) {
+    const backstop = backstopFlag(text);
     return NextResponse.json({
-      items: [{ bucket: "scratch", child: "", kids: [], also_in: [], text, kind: "purchase" }],
+      items: [
+        {
+          bucket: "scratch",
+          child: "",
+          kids: [],
+          also_in: [],
+          text,
+          kind: "purchase",
+          flag: backstop.flag,
+          flag_note: backstop.flagNote,
+        },
+      ],
       warning: `Couldn't sort automatically (${e instanceof Error ? e.message : "unknown error"}) — saved as "Just record" so nothing is lost.`,
     });
   }

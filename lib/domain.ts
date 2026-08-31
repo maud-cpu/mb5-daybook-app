@@ -177,6 +177,19 @@ export function expenseTotals(rates: Rates, children: Child[], recs: EntryRecord
   return { purchase, daycare, mileage, total: purchase + daycare + mileage };
 }
 
+export type TrainingStatus = { s: "todo" | "ok" | "soon" | "over"; label: string };
+
+export function trainingStatus(is3yr: boolean, completedOn: string | undefined | null): TrainingStatus {
+  if (!completedOn) return { s: "todo", label: "Not done" };
+  if (!is3yr) return { s: "ok", label: "Done " + new Date(completedOn).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) };
+  const due = new Date(completedOn);
+  due.setFullYear(due.getFullYear() + 3);
+  const dueStr = due.toISOString().slice(0, 10);
+  const daysLeft = (due.getTime() - new Date(today()).getTime()) / 86400000;
+  const label = (daysLeft < 0 ? "Expired " : "Renew by ") + new Date(dueStr).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return { s: daysLeft < 0 ? "over" : daysLeft < 90 ? "soon" : "ok", label };
+}
+
 export function gbp(n: number | null | undefined): string {
   return "£" + Number(n || 0).toFixed(2);
 }

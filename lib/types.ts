@@ -135,8 +135,20 @@ export type EntryRecord = {
   given: string | null;
   given_by: string;
   shared_with_admin: boolean;
+  claimed: boolean;
+  claimed_at: string | null;
+  paid: boolean;
+  paid_at: string | null;
   edited: string | null;
   created_at: string;
+};
+
+export type Reminder = {
+  id: string;
+  text: string;
+  date: string;
+  done: boolean;
+  done_at: string | null;
 };
 
 export type PendingItem = Partial<EntryRecord> & {

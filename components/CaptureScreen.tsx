@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { daycareAmount, gbp, today } from "@/lib/domain";
+import ThingsToDoCard from "@/components/ThingsToDoCard";
 import {
   BUCKETS,
   Bucket,
@@ -398,6 +399,8 @@ export default function CaptureScreen() {
           </button>
         </div>
       )}
+
+      <ThingsToDoCard />
 
       {toast && <div id="toast" className="show">{toast}</div>}
     </div>
