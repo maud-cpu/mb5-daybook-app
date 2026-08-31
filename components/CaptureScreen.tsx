@@ -27,6 +27,7 @@ export default function CaptureScreen() {
   const [newChildName, setNewChildName] = useState("");
   const [newChildBorn, setNewChildBorn] = useState("");
   const [newChildFamily, setNewChildFamily] = useState("");
+  const [adminName, setAdminName] = useState("");
 
   async function loadChildren() {
     const { data } = await supabase.from("children").select("id, name, born, family").order("created_at");
@@ -41,6 +42,11 @@ export default function CaptureScreen() {
       .select("*")
       .single()
       .then(({ data }) => setRates(data as Rates));
+    supabase
+      .from("profiles")
+      .select("display_name")
+      .eq("role", "admin")
+      .then(({ data }) => setAdminName((data ?? []).map((a) => a.display_name).join(" & ")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -122,6 +128,7 @@ export default function CaptureScreen() {
       flag: p.flag ?? "",
       flag_note: p.flag_note ?? "",
       training_note: p.training_note ?? "",
+      shared_with_admin: !!p.shared_with_admin,
     }));
     const { error } = await supabase.from("records").insert(rows);
     if (error) {
@@ -370,6 +377,17 @@ export default function CaptureScreen() {
                 </div>
               )}
               {p.training_note && <div className="note">💡 {p.training_note}</div>}
+              {adminName && (
+                <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
+                  <input
+                    type="checkbox"
+                    style={{ width: "auto" }}
+                    checked={!!p.shared_with_admin}
+                    onChange={(e) => updatePending(i, { shared_with_admin: e.target.checked })}
+                  />
+                  📤 Also send this one straight to {adminName} — instead of phoning/messaging them separately
+                </label>
+              )}
             </div>
           ))}
           <button className="btn" onClick={saveAll}>

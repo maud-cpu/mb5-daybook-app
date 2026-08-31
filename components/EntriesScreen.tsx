@@ -135,6 +135,7 @@ export default function EntriesScreen() {
               {fmt(r.date)}
               {r.child ? " · " + r.child : ""}
               {tab === "all" ? " · " + BUCKETS[r.bucket] : r.bucket !== tab ? " · filed under " + BUCKETS[r.bucket] : ""}
+              {r.shared_with_admin ? " · 📤 shared with admin" : ""}
             </small>
           </div>
         ))}
@@ -167,6 +168,15 @@ function EditForm({
   return (
     <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 6 }}>
       <textarea rows={4} value={draft.text} onChange={(e) => setDraft({ ...draft, text: e.target.value })} />
+      <label style={{ display: "flex", alignItems: "center", gap: 6, margin: "8px 0" }}>
+        <input
+          type="checkbox"
+          style={{ width: "auto" }}
+          checked={!!draft.shared_with_admin}
+          onChange={(e) => setDraft({ ...draft, shared_with_admin: e.target.checked })}
+        />
+        📤 Shared with admin
+      </label>
       <div className="row">
         <button className="btn" style={{ flex: 1 }} onClick={() => onSave(draft)}>
           Save
