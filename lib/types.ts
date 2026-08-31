@@ -109,6 +109,7 @@ export type Child = {
 
 export type EntryRecord = {
   id: string;
+  user_id: string;
   bucket: Bucket;
   child: string;
   kids: string[];
@@ -133,6 +134,7 @@ export type EntryRecord = {
   dose: string;
   given: string | null;
   given_by: string;
+  shared_with_admin: boolean;
   edited: string | null;
   created_at: string;
 };
