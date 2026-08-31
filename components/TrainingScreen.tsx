@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { today } from "@/lib/domain";
+import { trainingStatus } from "@/lib/domain";
 
 type Course = {
   id: string;
@@ -20,18 +20,9 @@ const GROUP_ORDER = ["pre", "once", "3yr", "next"] as const;
 
 function statusFor(course: Course, completedOn: string | undefined) {
   if (!completedOn) return { label: course.group_key === "next" ? "" : "Not done", color: "var(--grey)" };
-  if (course.group_key !== "3yr") return { label: "Done " + fmt(completedOn), color: "var(--pine)" };
-  const due = new Date(completedOn);
-  due.setFullYear(due.getFullYear() + 3);
-  const dueStr = due.toISOString().slice(0, 10);
-  const daysLeft = (due.getTime() - new Date(today()).getTime()) / 86400000;
-  if (daysLeft < 0) return { label: "Expired " + fmt(dueStr), color: "var(--danger)" };
-  if (daysLeft < 90) return { label: "Renew by " + fmt(dueStr), color: "#b36b00" };
-  return { label: "Renew by " + fmt(dueStr), color: "var(--pine)" };
-}
-
-function fmt(iso: string) {
-  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  const st = trainingStatus(course.group_key === "3yr", completedOn);
+  const color = st.s === "over" ? "var(--danger)" : st.s === "soon" ? "#b36b00" : "var(--pine)";
+  return { label: st.label, color };
 }
 
 export default function TrainingScreen() {
