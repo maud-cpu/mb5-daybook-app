@@ -143,6 +143,16 @@ export type EntryRecord = {
   created_at: string;
 };
 
+export const TONE_OPTIONS = [
+  "Warm and friendly",
+  "Professional and formal",
+  "Brief and factual",
+  "Firm and assertive",
+  "Warm but concerned",
+] as const;
+
+export type Contact = { id: string; label: string; name: string; phone: string; email: string };
+
 export type Reminder = {
   id: string;
   text: string;
