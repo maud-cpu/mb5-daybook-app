@@ -153,6 +153,27 @@ export const TONE_OPTIONS = [
 
 export type Contact = { id: string; label: string; name: string; phone: string; email: string };
 
+export const DIARY_SECTIONS = [
+  ["comments", "Comments on the week/month", "can include details of activities undertaken, routines, wellbeing of the child etc"],
+  ["achievements", "Achievements", "developmental, educational, any achievement, big or small"],
+  ["good", "Good things this week/month", "emotional, behavioural, educational / specific positives"],
+  ["worries", "Worries or challenges", "incidents/health/education/missing episodes/child sexual exploitation"],
+  ["views", "Views of the child", "they can add comments here if they wish, or carer can comment on how they are feeling/what they enjoy"],
+  ["appointments", "Appointments", "social worker / supervising social worker / other professionals"],
+  ["family", "Time with family", "positive / missed / concerns"],
+  ["health", "Health including medication", "list medical appointments / medication / bumps / bruises etc here"],
+] as const;
+
+export type DiarySectionKey = (typeof DIARY_SECTIONS)[number][0];
+
+export type Diary = {
+  id: string;
+  child_names: string[];
+  date_from: string | null;
+  date_to: string | null;
+  sw_name: string;
+} & Record<DiarySectionKey, string>;
+
 export type Reminder = {
   id: string;
   text: string;
