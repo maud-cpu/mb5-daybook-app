@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { describeExpense, describeMeds, expenseTotals, gbp, today } from "@/lib/domain";
 import { BUCKETS, Bucket, Child, EntryRecord, Rates } from "@/lib/types";
+import ComposeEmail from "@/components/ComposeEmail";
 
 const ERANGES: [string, string][] = [
   ["7d", "Last 7 days"],
@@ -33,6 +34,7 @@ export default function EntriesScreen() {
   const [erange, setErange] = useState("7d");
   const [editId, setEditId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [composing, setComposing] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -89,8 +91,19 @@ export default function EntriesScreen() {
         )
       : null;
 
+  if (composing) {
+    return (
+      <div>
+        <ComposeEmail onClose={() => setComposing(false)} />
+      </div>
+    );
+  }
+
   return (
     <div>
+      <button className="chip" style={{ marginBottom: 10 }} onClick={() => setComposing(true)}>
+        ✉️ Compose email
+      </button>
       <select style={{ marginBottom: 10 }} value={erange} onChange={(e) => setErange(e.target.value)}>
         {ERANGES.map(([k, l]) => (
           <option key={k} value={k}>
