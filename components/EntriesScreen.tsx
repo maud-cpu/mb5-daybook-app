@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { describeExpense, describeMeds, expenseTotals, gbp, today } from "@/lib/domain";
-import { BUCKETS, Bucket, Child, EntryRecord, Rates } from "@/lib/types";
+import { daycareAmount, describeExpense, describeMeds, expenseTotals, gbp, today } from "@/lib/domain";
+import { BUCKETS, Bucket, Child, DAYCARE_REASONS, EntryRecord, FLAGS, Rates } from "@/lib/types";
 import ComposeEmail from "@/components/ComposeEmail";
 import PhotoField from "@/components/PhotoField";
 
@@ -171,6 +171,8 @@ function EditForm({
   record,
   onSave,
   onCancel,
+  rates,
+  children_,
 }: {
   record: EntryRecord;
   onSave: (r: EntryRecord) => void;
@@ -179,10 +181,152 @@ function EditForm({
   children_: Child[];
 }) {
   const [draft, setDraft] = useState(record);
+  const names = children_.map((c) => c.name);
+
+  function toggleKid(n: string) {
+    const kids = draft.kids.includes(n) ? draft.kids.filter((k) => k !== n) : [...draft.kids, n];
+    setDraft({ ...draft, kids, child: kids[0] || "" });
+  }
+
   return (
     <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 6 }}>
+      <div className="row">
+        <select value={draft.bucket} onChange={(e) => setDraft({ ...draft, bucket: e.target.value as Bucket })}>
+          {Object.entries(BUCKETS).map(([k, l]) => (
+            <option key={k} value={k}>
+              {l}
+            </option>
+          ))}
+        </select>
+        <input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} />
+      </div>
+
+      {draft.bucket !== "expenses" && (
+        <div className="row" style={{ flexWrap: "wrap" }}>
+          {names.map((n) => (
+            <button key={n} className={`chip${draft.kids.includes(n) ? " on" : ""}`} style={{ flex: "0 0 auto" }} onClick={() => toggleKid(n)}>
+              {n}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {draft.bucket === "expenses" && (
+        <>
+          <div className="row">
+            <select value={draft.kind ?? "purchase"} onChange={(e) => setDraft({ ...draft, kind: e.target.value as EntryRecord["kind"] })}>
+              <option value="purchase">Purchase</option>
+              <option value="mileage">Mileage</option>
+              <option value="daycare">Day care</option>
+            </select>
+          </div>
+          {draft.kind === "mileage" && (
+            <input
+              type="number"
+              inputMode="decimal"
+              placeholder="miles"
+              value={draft.miles ?? ""}
+              onChange={(e) => setDraft({ ...draft, miles: e.target.value === "" ? null : Number(e.target.value) })}
+            />
+          )}
+          {draft.kind === "daycare" && (
+            <>
+              <div className="row" style={{ flexWrap: "wrap" }}>
+                {names.map((n) => (
+                  <button key={n} className={`chip${draft.kids.includes(n) ? " on" : ""}`} style={{ flex: "0 0 auto" }} onClick={() => toggleKid(n)}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <div className="row">
+                <input type="time" value={draft.time_from ?? ""} onChange={(e) => setDraft({ ...draft, time_from: e.target.value || null })} />
+                <input type="time" value={draft.time_to ?? ""} onChange={(e) => setDraft({ ...draft, time_to: e.target.value || null })} />
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.25"
+                  placeholder="or hrs"
+                  style={{ flex: "0 0 70px" }}
+                  value={draft.hours ?? ""}
+                  onChange={(e) => setDraft({ ...draft, hours: e.target.value === "" ? null : Number(e.target.value) })}
+                />
+                <label style={{ margin: 0, display: "flex", alignItems: "center", gap: 6 }}>
+                  <input
+                    type="checkbox"
+                    style={{ width: "auto" }}
+                    checked={!!draft.overnight}
+                    onChange={(e) => setDraft({ ...draft, overnight: e.target.checked })}
+                  />
+                  overnight
+                </label>
+              </div>
+              <select value={draft.reason} onChange={(e) => setDraft({ ...draft, reason: e.target.value })}>
+                <option value="">Reason for day care…</option>
+                {DAYCARE_REASONS.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+              {rates && <div className="calc">{gbp(daycareAmount(rates, children_, draft))}</div>}
+            </>
+          )}
+          {draft.kind === "purchase" && (
+            <input
+              type="number"
+              step="0.01"
+              inputMode="decimal"
+              placeholder="£"
+              value={draft.amount ?? ""}
+              onChange={(e) => setDraft({ ...draft, amount: e.target.value === "" ? null : Number(e.target.value) })}
+            />
+          )}
+        </>
+      )}
+
+      {draft.bucket === "meds" && (
+        <>
+          <div className="row">
+            <input placeholder="Medicine" value={draft.med_name} onChange={(e) => setDraft({ ...draft, med_name: e.target.value })} />
+            <input placeholder="Dose" value={draft.dose} onChange={(e) => setDraft({ ...draft, dose: e.target.value })} />
+          </div>
+          <div className="row">
+            <input type="time" value={draft.given ?? ""} onChange={(e) => setDraft({ ...draft, given: e.target.value || null })} />
+            <input placeholder="Given by" value={draft.given_by} onChange={(e) => setDraft({ ...draft, given_by: e.target.value })} />
+          </div>
+        </>
+      )}
+
       <textarea rows={4} value={draft.text} onChange={(e) => setDraft({ ...draft, text: e.target.value })} />
       <PhotoField photos={draft.photos ?? []} onChange={(next) => setDraft({ ...draft, photos: next })} />
+
+      <div className="row" style={{ alignItems: "center", marginTop: 4 }}>
+        <span className="muted" style={{ flex: "0 0 auto" }}>
+          ⚠ Follow-up
+        </span>
+        <select style={{ flex: 1 }} value={draft.flag} onChange={(e) => setDraft({ ...draft, flag: e.target.value, flag_note: "" })}>
+          <option value="">None</option>
+          {Object.entries(FLAGS).map(([k, f]) => (
+            <option key={k} value={k}>
+              {f.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      {draft.flag && (
+        <div className="note">
+          {["reminder", "training"].includes(draft.flag) ? (
+            <textarea
+              placeholder={draft.flag === "training" ? "Suggested course — edit if needed" : "What to remind you to do"}
+              value={draft.flag_note}
+              onChange={(e) => setDraft({ ...draft, flag_note: e.target.value })}
+            />
+          ) : (
+            FLAGS[draft.flag as keyof typeof FLAGS]?.guidance
+          )}
+        </div>
+      )}
+
       <label style={{ display: "flex", alignItems: "center", gap: 6, margin: "8px 0" }}>
         <input
           type="checkbox"
