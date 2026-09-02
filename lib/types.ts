@@ -134,6 +134,7 @@ export type EntryRecord = {
   dose: string;
   given: string | null;
   given_by: string;
+  photos: string[];
   shared_with_admin: boolean;
   claimed: boolean;
   claimed_at: string | null;

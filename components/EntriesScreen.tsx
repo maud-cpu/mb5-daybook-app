@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { describeExpense, describeMeds, expenseTotals, gbp, today } from "@/lib/domain";
 import { BUCKETS, Bucket, Child, EntryRecord, Rates } from "@/lib/types";
 import ComposeEmail from "@/components/ComposeEmail";
+import PhotoField from "@/components/PhotoField";
 
 const ERANGES: [string, string][] = [
   ["7d", "Last 7 days"],
@@ -181,6 +182,7 @@ function EditForm({
   return (
     <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 6 }}>
       <textarea rows={4} value={draft.text} onChange={(e) => setDraft({ ...draft, text: e.target.value })} />
+      <PhotoField photos={draft.photos ?? []} onChange={(next) => setDraft({ ...draft, photos: next })} />
       <label style={{ display: "flex", alignItems: "center", gap: 6, margin: "8px 0" }}>
         <input
           type="checkbox"

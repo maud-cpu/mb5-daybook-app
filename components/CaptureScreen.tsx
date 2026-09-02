@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { daycareAmount, gbp, today } from "@/lib/domain";
 import ThingsToDoCard from "@/components/ThingsToDoCard";
+import PhotoField from "@/components/PhotoField";
 import {
   BUCKETS,
   Bucket,
@@ -130,6 +131,7 @@ export default function CaptureScreen() {
       flag_note: p.flag_note ?? "",
       training_note: p.training_note ?? "",
       shared_with_admin: !!p.shared_with_admin,
+      photos: p.photos ?? [],
     }));
     const { error } = await supabase.from("records").insert(rows);
     if (error) {
@@ -346,6 +348,8 @@ export default function CaptureScreen() {
               )}
 
               <textarea value={p.text} onChange={(e) => updatePending(i, { text: e.target.value })} />
+
+              <PhotoField photos={p.photos ?? []} onChange={(next) => updatePending(i, { photos: next })} />
 
               <div className="row" style={{ alignItems: "center", marginTop: 4 }}>
                 <span className="muted" style={{ flex: "0 0 auto" }}>
