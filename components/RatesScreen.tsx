@@ -11,6 +11,19 @@ export default function RatesScreen() {
   const supabase = createClient();
   const [rates, setRates] = useState<Rates | null>(null);
   const [rota, setRota] = useState<RotaRow[]>([]);
+  const [rescanMsg, setRescanMsg] = useState("");
+  const [rescanning, setRescanning] = useState(false);
+
+  async function rescan() {
+    setRescanning(true);
+    setRescanMsg("");
+    const res = await fetch("/api/rescan", { method: "POST" });
+    const data = await res.json();
+    setRescanning(false);
+    setRescanMsg(
+      res.ok ? (data.changed ? `${data.changed} entr${data.changed === 1 ? "y" : "ies"} updated` : "Nothing new to flag") : data.error || "Couldn't rescan",
+    );
+  }
 
   useEffect(() => {
     async function load() {
@@ -75,6 +88,17 @@ export default function RatesScreen() {
           priced as a family — the eldest gets the first-child rate, the rest get the additional-child rate.
         </p>
         <p className="hint">This is set by your admin and applies to everyone.</p>
+      </div>
+
+      <div className="card">
+        <h3>Follow-ups</h3>
+        <p className="hint">
+          If a safeguarding check gets improved, this re-checks all your past entries so nothing gets missed.
+        </p>
+        <button className="chip" onClick={rescan} disabled={rescanning}>
+          {rescanning ? "Rescanning…" : "Rescan entries for follow-ups"}
+        </button>
+        {rescanMsg && <p className="hint">{rescanMsg}</p>}
       </div>
     </div>
   );

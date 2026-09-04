@@ -13,27 +13,64 @@ import {
   unreportedIncidentItems,
   upcomingReminders,
 } from "@/lib/thingsToDo";
-import { Child, Reminder } from "@/lib/types";
+import { Child, FLAGS, Reminder } from "@/lib/types";
+
+type FollowUp = {
+  id: string;
+  bucket: string;
+  child: string;
+  text: string;
+  flag: string;
+  flag_note: string;
+  training_note: string;
+};
+
+function followUpLabel(f: FollowUp): string {
+  if (f.flag && f.flag in FLAGS) return FLAGS[f.flag as keyof typeof FLAGS].label;
+  return "Training suggestion";
+}
+
+function followUpIcon(f: FollowUp): string {
+  if (f.flag === "training" || (!f.flag && f.training_note)) return "💡";
+  if (f.flag === "reminder") return "🔔";
+  return "⚠";
+}
+
+function followUpGuidance(f: FollowUp): string {
+  if (f.flag && FLAGS[f.flag as keyof typeof FLAGS]?.guidance) return FLAGS[f.flag as keyof typeof FLAGS].guidance;
+  return f.flag_note;
+}
 
 export default function ThingsToDoCard() {
   const supabase = createClient();
   const [due, setDue] = useState<DueItem[]>([]);
   const [upcoming, setUpcoming] = useState<Reminder[]>([]);
+  const [followUps, setFollowUps] = useState<FollowUp[]>([]);
+  const [openId, setOpenId] = useState<string | null>(null);
   const [newText, setNewText] = useState("");
   const [newDate, setNewDate] = useState("");
   const [loaded, setLoaded] = useState(false);
 
   async function load() {
-    const [{ data: incidents }, { data: children }, { data: household }, { data: settings }, { data: courses }, { data: progress }, { data: reminders }] =
-      await Promise.all([
-        supabase.from("records").select("id, text, created_at, reported").eq("bucket", "incident"),
-        supabase.from("children").select("id, name, born, family, basics"),
-        supabase.from("household").select("edt").maybeSingle(),
-        supabase.from("carer_settings").select("invoice_day, pay_day").maybeSingle(),
-        supabase.from("shared_training_catalog").select("title").eq("group_key", "3yr").eq("archived", false),
-        supabase.from("training_progress").select("course_title, completed_on"),
-        supabase.from("reminders").select("*").order("date"),
-      ]);
+    const [
+      { data: incidents },
+      { data: children },
+      { data: household },
+      { data: settings },
+      { data: courses },
+      { data: progress },
+      { data: reminders },
+      { data: openRecords },
+    ] = await Promise.all([
+      supabase.from("records").select("id, text, created_at, reported").eq("bucket", "incident"),
+      supabase.from("children").select("id, name, born, family, basics"),
+      supabase.from("household").select("edt").maybeSingle(),
+      supabase.from("carer_settings").select("invoice_day, pay_day").maybeSingle(),
+      supabase.from("shared_training_catalog").select("title").eq("group_key", "3yr").eq("archived", false),
+      supabase.from("training_progress").select("course_title, completed_on"),
+      supabase.from("reminders").select("*").order("date"),
+      supabase.from("records").select("id, bucket, child, text, flag, flag_note, training_note").eq("flag_done", false),
+    ]);
     const { data: unpaidClaimed } = await supabase
       .from("records")
       .select("id")
@@ -61,6 +98,9 @@ export default function ThingsToDoCard() {
       ...dueReminders(remindersList),
     ]);
     setUpcoming(upcomingReminders(remindersList));
+    setFollowUps(
+      ((openRecords as FollowUp[] | null) ?? []).filter((r) => (r.flag && r.flag !== "reminder") || r.training_note),
+    );
     setLoaded(true);
   }
 
@@ -85,9 +125,14 @@ export default function ThingsToDoCard() {
     load();
   }
 
-  if (!loaded || (!due.length && !upcoming.length)) return null;
+  async function markFollowUpDone(id: string) {
+    await supabase.from("records").update({ flag_done: true, flag_done_at: new Date().toISOString() }).eq("id", id);
+    setFollowUps((prev) => prev.filter((f) => f.id !== id));
+  }
 
-  const anyUrgent = due.some((x) => x.urgent);
+  if (!loaded || (!due.length && !upcoming.length && !followUps.length)) return null;
+
+  const anyUrgent = due.some((x) => x.urgent) || followUps.some((f) => FLAGS[f.flag as keyof typeof FLAGS]?.urgent);
 
   return (
     <div className="card" style={{ borderLeft: `4px solid ${anyUrgent ? "var(--danger)" : "var(--marker)"}` }}>
@@ -119,6 +164,36 @@ export default function ThingsToDoCard() {
           Add
         </button>
       </div>
+
+      {followUps.map((f) => {
+        const open = openId === f.id;
+        const urgent = FLAGS[f.flag as keyof typeof FLAGS]?.urgent;
+        return (
+          <div
+            key={f.id}
+            className="rec"
+            style={urgent ? { color: "var(--danger)" } : undefined}
+            onClick={() => setOpenId(open ? null : f.id)}
+          >
+            <b>
+              {followUpIcon(f)} {followUpLabel(f)}
+            </b>
+            {f.child ? " · " + f.child : ""} <small className="muted">{open ? "" : "— tap for details"}</small>
+            {open && (
+              <div onClick={(e) => e.stopPropagation()}>
+                <div className="muted" style={{ margin: "4px 0" }}>
+                  {f.text}
+                </div>
+                {followUpGuidance(f) && <div className="note">{followUpGuidance(f)}</div>}
+                {f.training_note && f.flag !== "training" && <div className="note">💡 {f.training_note}</div>}
+                <button className="chip on" onClick={() => markFollowUpDone(f.id)}>
+                  Mark done
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

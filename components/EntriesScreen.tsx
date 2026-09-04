@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { daycareAmount, describeExpense, describeMeds, expenseTotals, gbp, today } from "@/lib/domain";
 import { BUCKETS, Bucket, Child, DAYCARE_REASONS, EntryRecord, FLAGS, Rates } from "@/lib/types";
@@ -35,7 +36,8 @@ export default function EntriesScreen() {
   const [erange, setErange] = useState("7d");
   const [editId, setEditId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [composing, setComposing] = useState(false);
+  const searchParams = useSearchParams();
+  const [composing, setComposing] = useState(searchParams.get("compose") === "1");
 
   async function load() {
     setLoading(true);
@@ -304,7 +306,11 @@ function EditForm({
         <span className="muted" style={{ flex: "0 0 auto" }}>
           ⚠ Follow-up
         </span>
-        <select style={{ flex: 1 }} value={draft.flag} onChange={(e) => setDraft({ ...draft, flag: e.target.value, flag_note: "" })}>
+        <select
+          style={{ flex: 1 }}
+          value={draft.flag}
+          onChange={(e) => setDraft({ ...draft, flag: e.target.value, flag_note: "", flag_cleared: !e.target.value })}
+        >
           <option value="">None</option>
           {Object.entries(FLAGS).map(([k, f]) => (
             <option key={k} value={k}>

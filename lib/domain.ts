@@ -195,6 +195,11 @@ export function extractEmail(s: string | null | undefined): string {
   return m ? m[0] : "";
 }
 
+export function extractPhone(s: string | null | undefined): string {
+  const m = (s || "").match(/(0\d[\d ]{8,12})/);
+  return m ? m[1].replace(/\s/g, "") : "";
+}
+
 export function gbp(n: number | null | undefined): string {
   return "£" + Number(n || 0).toFixed(2);
 }
