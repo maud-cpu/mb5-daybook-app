@@ -68,6 +68,45 @@ function matchChild(names: string[], x: string | null | undefined): string {
   return m || "";
 }
 
+function namesInText(names: string[], text: string): string[] {
+  if (!text) return [];
+  return names.filter((n) => new RegExp("\\b" + n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(text));
+}
+
+/**
+ * Safety net: an item's own text often names a child the AI didn't tag
+ * (or tagged only on a sibling item). Re-scanning each item's text and
+ * folding in any mentioned child is what makes "Ruben had a great day...
+ * Ruby had a good day too" reliably end up as two separately-tagged
+ * entries rather than one or both landing with no child attached.
+ */
+function linkMentionedChildren(names: string[], item: PendingItem) {
+  const found = namesInText(names, item.text);
+  if (!found.length) return;
+  const kids = new Set(item.kids);
+  found.forEach((n) => kids.add(n));
+  item.kids = [...kids];
+  if (!item.child && item.kids.length) item.child = item.kids[0];
+}
+
+/**
+ * Everything in one capture batch is for the same day. If a child already
+ * has an overnight daycare item in this batch, drop any separate
+ * daytime-hours item for the same child -- the overnight rate already
+ * covers the whole period, so keeping both would double-charge their care.
+ */
+function dropRedundantDaycare(items: PendingItem[]): PendingItem[] {
+  const overnightKids = new Set(
+    items.filter((p) => p.bucket === "expenses" && p.kind === "daycare" && p.overnight).flatMap((p) => p.kids),
+  );
+  if (!overnightKids.size) return items;
+  return items.filter((p) => {
+    if (!(p.bucket === "expenses" && p.kind === "daycare" && !p.overnight)) return true;
+    if (!p.kids.length) return true;
+    return !p.kids.every((k) => overnightKids.has(k));
+  });
+}
+
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const {
@@ -170,7 +209,10 @@ Respond with ONLY a JSON array, no prose, no markdown: [{"bucket":"diary","child
       };
     });
 
-    return NextResponse.json({ items });
+    items.forEach((item) => linkMentionedChildren(names, item));
+    const deduped = dropRedundantDaycare(items);
+
+    return NextResponse.json({ items: deduped });
   } catch (e) {
     const backstop = backstopFlag(text);
     return NextResponse.json({
