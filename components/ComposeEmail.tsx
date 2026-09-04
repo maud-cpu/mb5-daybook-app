@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { extractEmail } from "@/lib/domain";
 import { BUCKETS, Contact, EntryRecord, TONE_OPTIONS } from "@/lib/types";
 
 type Recipient = { key: string; label: string; name: string; email: string };
@@ -31,18 +32,26 @@ export default function ComposeEmail({ onClose }: { onClose: () => void }) {
       const [{ data: contacts }, { data: household }, { data: kids }, { data: recs }] = await Promise.all([
         supabase.from("contacts").select("id, label, name, phone, email"),
         supabase.from("household").select("ssw_name, ssw_email, ssw_manager_name, ssw_manager_email").maybeSingle(),
-        supabase.from("children").select("name"),
+        supabase.from("children").select("name, basics"),
         supabase.from("records").select("*").order("created_at", { ascending: false }),
       ]);
-      const opts: Recipient[] = (contacts as Contact[] | null)?.filter((c) => c.email).map((c) => ({ key: "c:" + c.id, label: c.label || "Contact", name: c.name, email: c.email })) ?? [];
-      if (household?.ssw_name && household?.ssw_email) opts.push({ key: "h:ssw", label: "SSW", name: household.ssw_name, email: household.ssw_email });
-      if (household?.ssw_manager_name && household?.ssw_manager_email)
-        opts.push({ key: "h:sswm", label: "SSW's manager", name: household.ssw_manager_name, email: household.ssw_manager_email });
+      // Show everyone possible, even without an email on file yet -- a name
+      // is enough to appear in the draft ("Dear Rhodri...") and be reminded
+      // to fill the email in later.
+      const opts: Recipient[] =
+        (contacts as Contact[] | null)?.map((c) => ({ key: "c:" + c.id, label: c.label || "Contact", name: c.name, email: c.email || "" })) ?? [];
+      if (household?.ssw_name) opts.push({ key: "h:ssw", label: "SSW", name: household.ssw_name, email: household.ssw_email || "" });
+      if (household?.ssw_manager_name)
+        opts.push({ key: "h:sswm", label: "SSW's manager", name: household.ssw_manager_name, email: household.ssw_manager_email || "" });
+      (kids as { name: string; basics: Record<string, string> }[] | null)?.forEach((c) => {
+        const csw = c.basics?.csw?.trim();
+        if (csw) opts.push({ key: "csw:" + c.name, label: `${c.name}'s CSW`, name: csw.split(" — ")[0], email: extractEmail(csw) });
+      });
       setRecipientOptions(opts);
       setChildNames((kids ?? []).map((k: { name: string }) => k.name));
       setRecords((recs as EntryRecord[]) ?? []);
     }
-     
+
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -109,7 +118,7 @@ export default function ComposeEmail({ onClose }: { onClose: () => void }) {
 
       <h4 style={{ margin: "14px 0 4px", color: "var(--accent)" }}>Who to</h4>
       <div className="chips">
-        {recipientOptions.length === 0 && <span className="muted">No email contacts yet — add them in About us, or use Other below.</span>}
+        {recipientOptions.length === 0 && <span className="muted">Nobody set up yet — add contacts in About us, or use Other below.</span>}
         {recipientOptions.map((o) => (
           <button
             key={o.key}
@@ -118,6 +127,7 @@ export default function ComposeEmail({ onClose }: { onClose: () => void }) {
           >
             {o.label}
             {o.name ? " — " + o.name : ""}
+            {!o.email && " (no email yet)"}
           </button>
         ))}
       </div>
@@ -194,6 +204,12 @@ export default function ComposeEmail({ onClose }: { onClose: () => void }) {
           <p className="note" style={{ background: "#fdf3d9" }}>
             ⚠ This is a first draft, written by AI from what you gave it. Read it fully and personalise it before sending anything.
           </p>
+          {selectedRecipientObjs.some((r) => !r.email) && (
+            <p className="note" style={{ background: "#fdf3d9" }}>
+              No email on file yet for: {selectedRecipientObjs.filter((r) => !r.email).map((r) => r.name || r.label).join(", ")}. Add it in About us,
+              or send to them separately.
+            </p>
+          )}
           <p className="hint">Subject</p>
           <input value={draft.subject} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} />
           <p className="hint" style={{ marginTop: 8 }}>

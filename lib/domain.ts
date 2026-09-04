@@ -190,6 +190,11 @@ export function trainingStatus(is3yr: boolean, completedOn: string | undefined |
   return { s: daysLeft < 0 ? "over" : daysLeft < 90 ? "soon" : "ok", label };
 }
 
+export function extractEmail(s: string | null | undefined): string {
+  const m = (s || "").match(/([\w.+-]+@[\w-]+\.[\w.]+)/);
+  return m ? m[0] : "";
+}
+
 export function gbp(n: number | null | undefined): string {
   return "£" + Number(n || 0).toFixed(2);
 }
