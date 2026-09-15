@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { describeExpense, describeMeds, expenseTotals, gbp, today } from "@/lib/domain";
 import { BUCKETS, Bucket, Child, EntryRecord, Rates } from "@/lib/types";
 import DiaryTab from "@/components/DiaryTab";
+import HandoverTab from "@/components/HandoverTab";
 
 type Tab = "month" | "expenses" | "meds" | "diary" | "handover";
 
@@ -14,8 +15,6 @@ export default function PaperworkScreen() {
   const [records, setRecords] = useState<EntryRecord[]>([]);
   const [children, setChildren] = useState<Child[]>([]);
   const [rates, setRates] = useState<Rates | null>(null);
-  const [handover, setHandover] = useState("");
-  const [savedAt, setSavedAt] = useState("");
   const [claimedOpen, setClaimedOpen] = useState(false);
 
   function patchRecord(id: string, patch: Partial<EntryRecord>) {
@@ -36,27 +35,18 @@ export default function PaperworkScreen() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: recs }, { data: kids }, { data: r }, { data: ho }] = await Promise.all([
+      const [{ data: recs }, { data: kids }, { data: r }] = await Promise.all([
         supabase.from("records").select("*").order("date", { ascending: false }),
         supabase.from("children").select("id, name, born, family"),
         supabase.from("shared_rates").select("*").single(),
-        supabase.from("handovers").select("content").maybeSingle(),
       ]);
       setRecords((recs as EntryRecord[]) ?? []);
       setChildren((kids as Child[]) ?? []);
       setRates(r as Rates);
-      setHandover(ho?.content ?? "");
     }
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  async function saveHandover(content: string) {
-    setHandover(content);
-    await supabase.from("handovers").upsert({ content, updated_at: new Date().toISOString() });
-    setSavedAt(new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }));
-    setTimeout(() => setSavedAt(""), 1500);
-  }
 
   const thisMonth = today().slice(0, 7);
   const monthRecs = records.filter((r) => r.date.startsWith(thisMonth));
@@ -154,14 +144,7 @@ export default function PaperworkScreen() {
         </div>
       )}
 
-      {tab === "handover" && (
-        <div className="card">
-          <h3>Handover notes</h3>
-          <p className="hint">Free text for whoever needs to step in — private to you, not shared with other carers.</p>
-          <textarea rows={10} value={handover} onChange={(e) => saveHandover(e.target.value)} />
-          {savedAt && <p className="hint">Saved {savedAt}</p>}
-        </div>
-      )}
+      {tab === "handover" && <HandoverTab />}
     </div>
   );
 }
