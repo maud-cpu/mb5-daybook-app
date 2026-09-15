@@ -45,6 +45,7 @@ export default function ThingsToDoCard() {
   const supabase = createClient();
   const [due, setDue] = useState<DueItem[]>([]);
   const [upcoming, setUpcoming] = useState<Reminder[]>([]);
+  const [allReminders, setAllReminders] = useState<Reminder[]>([]);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [newText, setNewText] = useState("");
@@ -98,6 +99,7 @@ export default function ThingsToDoCard() {
       ...dueReminders(remindersList),
     ]);
     setUpcoming(upcomingReminders(remindersList));
+    setAllReminders(remindersList.filter((r) => !r.done));
     setFollowUps(
       ((openRecords as FollowUp[] | null) ?? []).filter((r) => (r.flag && r.flag !== "reminder") || r.training_note),
     );
@@ -123,6 +125,26 @@ export default function ThingsToDoCard() {
     const id = key.slice(4);
     await supabase.from("reminders").update({ done: true, done_at: new Date().toISOString() }).eq("id", id);
     load();
+  }
+
+  function downloadIcs() {
+    if (!allReminders.length) return;
+    const ics =
+      "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//MB5 Day Book//EN\r\n" +
+      allReminders
+        .map(
+          (r) =>
+            `BEGIN:VEVENT\r\nUID:${r.id}@mb5\r\nDTSTART;VALUE=DATE:${r.date.replace(/-/g, "")}\r\nSUMMARY:${r.text}\r\nBEGIN:VALARM\r\nTRIGGER:-PT9H\r\nACTION:DISPLAY\r\nDESCRIPTION:${r.text}\r\nEND:VALARM\r\nEND:VEVENT`,
+        )
+        .join("\r\n") +
+      "\r\nEND:VCALENDAR\r\n";
+    const blob = new Blob([ics], { type: "text/calendar" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "mb5-reminders.ics";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   }
 
   async function markFollowUpDone(id: string) {
@@ -164,6 +186,14 @@ export default function ThingsToDoCard() {
           Add
         </button>
       </div>
+      {allReminders.length > 0 && (
+        <p className="muted">
+          Tap a reminder to add it to your phone calendar for an alert:{" "}
+          <button className="chip" onClick={downloadIcs}>
+            calendar file
+          </button>
+        </p>
+      )}
 
       {followUps.map((f) => {
         const open = openId === f.id;
