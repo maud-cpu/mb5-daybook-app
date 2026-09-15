@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { daycareAmount, describeExpense, describeMeds, expenseTotals, gbp, today } from "@/lib/domain";
-import { BUCKETS, Bucket, Child, DAYCARE_REASONS, EntryRecord, FLAGS, Rates } from "@/lib/types";
+import { BUCKETS, Bucket, Child, DAYCARE_REASONS, EntryRecord, FLAGS, livesHereOf, Rates } from "@/lib/types";
 import ComposeEmail from "@/components/ComposeEmail";
 import PhotoField from "@/components/PhotoField";
 
@@ -38,12 +38,18 @@ export default function EntriesScreen() {
   const [loading, setLoading] = useState(true);
   const searchParams = useSearchParams();
   const [composing, setComposing] = useState(searchParams.get("compose") === "1");
+  const [sendPreset, setSendPreset] = useState<{ child: string; entryId: string } | null>(null);
+
+  function sendToCarer(child: string, entryId: string) {
+    setSendPreset({ child, entryId });
+    setComposing(true);
+  }
 
   async function load() {
     setLoading(true);
     const [{ data: recs }, { data: kids }, { data: r }] = await Promise.all([
       supabase.from("records").select("*").order("created_at", { ascending: false }),
-      supabase.from("children").select("id, name, born, family"),
+      supabase.from("children").select("id, name, born, family, category, lives_here"),
       supabase.from("shared_rates").select("*").single(),
     ]);
     setRecords((recs as EntryRecord[]) ?? []);
@@ -97,7 +103,14 @@ export default function EntriesScreen() {
   if (composing) {
     return (
       <div>
-        <ComposeEmail onClose={() => setComposing(false)} />
+        <ComposeEmail
+          onClose={() => {
+            setComposing(false);
+            setSendPreset(null);
+          }}
+          presetChildName={sendPreset?.child}
+          presetEntryId={sendPreset?.entryId}
+        />
       </div>
     );
   }
@@ -145,6 +158,17 @@ export default function EntriesScreen() {
                     ? describeMeds(r)
                     : r.text}
               </span>
+            )}
+            {["diary", "incident", "scratch", "sw"].includes(r.bucket) && (
+              <div className="chips" style={{ marginTop: 4 }}>
+                {r.kids
+                  .filter((k) => livesHereOf(children.find((c) => c.name === k) ?? { lives_here: null, category: "" }) === false)
+                  .map((k) => (
+                    <button key={k} className="chip" onClick={() => sendToCarer(k, r.id)}>
+                      Send to {k}&apos;s carer
+                    </button>
+                  ))}
+              </div>
             )}
             <br />
             <small>
