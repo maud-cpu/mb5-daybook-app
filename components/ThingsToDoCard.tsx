@@ -13,7 +13,7 @@ import {
   unreportedIncidentItems,
   upcomingReminders,
 } from "@/lib/thingsToDo";
-import { Child, FLAGS, Reminder } from "@/lib/types";
+import { FLAGS, Reminder } from "@/lib/types";
 
 type FollowUp = {
   id: string;
@@ -92,9 +92,9 @@ export default function ThingsToDoCard() {
     setDue([
       ...unreportedIncidentItems(incidents ?? []),
       ...invoiceMonthItems(settings?.invoice_day ?? 1, settings?.pay_day ?? 28, !!unpaidClaimed?.length),
-      ...bandChangeItems((children as Child[]) ?? []),
+      ...bandChangeItems(children ?? []),
       ...trainingItems,
-      ...missingNumbersItems((children as (Child & { basics: Record<string, string> })[]) ?? []),
+      ...missingNumbersItems(children ?? []),
       ...edtMissingItem(household?.edt ?? ""),
       ...dueReminders(remindersList),
     ]);

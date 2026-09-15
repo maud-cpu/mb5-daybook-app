@@ -24,7 +24,7 @@ export function unreportedIncidentItems(incidents: IncidentLike[]): DueItem[] {
     });
 }
 
-export function bandChangeItems(children: Child[]): DueItem[] {
+export function bandChangeItems(children: Pick<Child, "id" | "name" | "born">[]): DueItem[] {
   return children
     .map((c) => ({ c, change: bandChangeSoon(c) }))
     .filter((x) => x.change)
@@ -37,7 +37,7 @@ const ESSENTIAL_CHILD_FIELDS: [string, string][] = [
   ["gp", "GP practice"],
 ];
 
-export function missingNumbersItems(children: (Child & { basics: Record<string, string> })[]): DueItem[] {
+export function missingNumbersItems(children: (Pick<Child, "id" | "name"> & { basics: Record<string, string> })[]): DueItem[] {
   return children
     .map((c) => {
       const b = c.basics || {};

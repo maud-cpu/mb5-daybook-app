@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { BASICS_SECTIONS } from "@/lib/basics";
-import { Child } from "@/lib/types";
+import { Child, LIVES_CATS, livesHereOf, MB_OPTIONS } from "@/lib/types";
 
 const ADULT_ROLES = ["Foster carer", "Adult child", "Live-in grandparent", "Other"];
 
@@ -42,7 +42,10 @@ export default function AboutScreen() {
 
   async function load() {
     const [{ data: kids }, { data: hh }, { data: adultRows }] = await Promise.all([
-      supabase.from("children").select("id, name, born, family, basics").order("created_at"),
+      supabase
+        .from("children")
+        .select("id, name, born, family, basics, category, lives_here, mockingbird, hub_carer_name, hub_carer_phone, hub_carer_email, surrey_contact")
+        .order("created_at"),
       supabase.from("household").select("*").maybeSingle(),
       supabase.from("household_adults").select("*").order("created_at"),
     ]);
@@ -72,6 +75,12 @@ export default function AboutScreen() {
     const next = { ...(basics[childId] || {}), [key]: value };
     setBasics((prev) => ({ ...prev, [childId]: next }));
     await supabase.from("children").update({ basics: next }).eq("id", childId);
+    flashSaved();
+  }
+
+  async function saveChild(childId: string, patch: Partial<Child>) {
+    setChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, ...patch } : c)));
+    await supabase.from("children").update(patch).eq("id", childId);
     flashSaved();
   }
 
@@ -200,6 +209,77 @@ export default function AboutScreen() {
             <h3 onClick={() => setOpenChild(open ? null : c.id)} style={{ cursor: "pointer" }}>
               {open ? "▾" : "▸"} {c.name}
             </h3>
+            {!open && (
+              <div className="muted">
+                {livesHereOf(c) === false
+                  ? "Visits us"
+                  : (LIVES_CATS.find(([k]) => k === c.category)?.[1] ?? (livesHereOf(c) === true ? "Lives with us" : "Not set yet"))}
+                {c.mockingbird ? " · " + (MB_OPTIONS.find(([k]) => k === c.mockingbird)?.[1] ?? c.mockingbird) : ""}
+              </div>
+            )}
+            {open && (
+              <div style={{ marginBottom: 12 }}>
+                <b style={{ fontSize: 14 }}>Living arrangement</b>
+                <select
+                  style={{ marginTop: 6 }}
+                  value={c.lives_here === null || c.lives_here === undefined ? "" : c.lives_here ? "1" : "0"}
+                  onChange={(e) => saveChild(c.id, { lives_here: e.target.value === "1", category: "" })}
+                >
+                  <option value="">— lives with us, or visits? —</option>
+                  <option value="1">Lives with us</option>
+                  <option value="0">Visits (sleepover / daycare / short break)</option>
+                </select>
+                {c.lives_here === true && (
+                  <select style={{ marginTop: 6 }} value={c.category} onChange={(e) => saveChild(c.id, { category: e.target.value })}>
+                    <option value="">— category —</option>
+                    {LIVES_CATS.map(([k, l]) => (
+                      <option key={k} value={k}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {["sgo", "adopted"].includes(c.category) && (
+                  <>
+                    <p className="hint" style={{ marginTop: 8 }}>
+                      Important contact at Surrey
+                    </p>
+                    <textarea
+                      placeholder="Name · phone · email"
+                      defaultValue={c.surrey_contact}
+                      onBlur={(e) => saveChild(c.id, { surrey_contact: e.target.value })}
+                    />
+                  </>
+                )}
+                <p className="hint" style={{ marginTop: 8 }}>
+                  Mockingbird
+                </p>
+                <select value={c.mockingbird} onChange={(e) => saveChild(c.id, { mockingbird: e.target.value })}>
+                  <option value="">— not set —</option>
+                  {MB_OPTIONS.map(([k, l]) => (
+                    <option key={k} value={k}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+                {["mb5", "another"].includes(c.mockingbird) && (
+                  <>
+                    <p className="hint" style={{ marginTop: 6 }}>
+                      Hub carer name
+                    </p>
+                    <input defaultValue={c.hub_carer_name} onBlur={(e) => saveChild(c.id, { hub_carer_name: e.target.value })} />
+                    <p className="hint" style={{ marginTop: 6 }}>
+                      Hub carer phone
+                    </p>
+                    <input type="tel" defaultValue={c.hub_carer_phone} onBlur={(e) => saveChild(c.id, { hub_carer_phone: e.target.value })} />
+                    <p className="hint" style={{ marginTop: 6 }}>
+                      Hub carer email
+                    </p>
+                    <input type="email" defaultValue={c.hub_carer_email} onBlur={(e) => saveChild(c.id, { hub_carer_email: e.target.value })} />
+                  </>
+                )}
+              </div>
+            )}
             {open &&
               BASICS_SECTIONS.map((section) => (
                 <div key={section.title} style={{ marginBottom: 12 }}>

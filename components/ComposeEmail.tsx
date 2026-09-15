@@ -7,7 +7,15 @@ import { BUCKETS, Contact, EntryRecord, TONE_OPTIONS } from "@/lib/types";
 
 type Recipient = { key: string; label: string; name: string; email: string };
 
-export default function ComposeEmail({ onClose }: { onClose: () => void }) {
+export default function ComposeEmail({
+  onClose,
+  presetChildName,
+  presetEntryId,
+}: {
+  onClose: () => void;
+  presetChildName?: string;
+  presetEntryId?: string;
+}) {
   const supabase = createClient();
   const [recipientOptions, setRecipientOptions] = useState<Recipient[]>([]);
   const [childNames, setChildNames] = useState<string[]>([]);
@@ -32,7 +40,7 @@ export default function ComposeEmail({ onClose }: { onClose: () => void }) {
       const [{ data: contacts }, { data: household }, { data: kids }, { data: recs }] = await Promise.all([
         supabase.from("contacts").select("id, label, name, phone, email"),
         supabase.from("household").select("ssw_name, ssw_email, ssw_manager_name, ssw_manager_email").maybeSingle(),
-        supabase.from("children").select("name, basics"),
+        supabase.from("children").select("name, basics, hub_carer_name, hub_carer_email"),
         supabase.from("records").select("*").order("created_at", { ascending: false }),
       ]);
       // Show everyone possible, even without an email on file yet -- a name
@@ -43,11 +51,19 @@ export default function ComposeEmail({ onClose }: { onClose: () => void }) {
       if (household?.ssw_name) opts.push({ key: "h:ssw", label: "SSW", name: household.ssw_name, email: household.ssw_email || "" });
       if (household?.ssw_manager_name)
         opts.push({ key: "h:sswm", label: "SSW's manager", name: household.ssw_manager_name, email: household.ssw_manager_email || "" });
-      (kids as { name: string; basics: Record<string, string> }[] | null)?.forEach((c) => {
+      const kidRows = (kids as { name: string; basics: Record<string, string>; hub_carer_name: string; hub_carer_email: string }[] | null) ?? [];
+      kidRows.forEach((c) => {
         const csw = c.basics?.csw?.trim();
         if (csw) opts.push({ key: "csw:" + c.name, label: `${c.name}'s CSW`, name: csw.split(" — ")[0], email: extractEmail(csw) });
+        if (c.hub_carer_name) opts.push({ key: "hub:" + c.name, label: `${c.name}'s carer`, name: c.hub_carer_name, email: c.hub_carer_email || "" });
       });
       setRecipientOptions(opts);
+      if (presetChildName && kidRows.some((c) => c.name === presetChildName)) {
+        setSelectedKids([presetChildName]);
+        const hubKey = kidRows.find((c) => c.name === presetChildName && c.hub_carer_name);
+        if (hubKey) setSelectedRecipients(["hub:" + presetChildName]);
+      }
+      if (presetEntryId) setSelectedEntries([presetEntryId]);
       setChildNames((kids ?? []).map((k: { name: string }) => k.name));
       setRecords((recs as EntryRecord[]) ?? []);
     }

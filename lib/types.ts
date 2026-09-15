@@ -105,7 +105,43 @@ export type Child = {
   name: string;
   born: string | null;
   family: string;
+  category: string;
+  lives_here: boolean | null;
+  mockingbird: string;
+  hub_carer_name: string;
+  hub_carer_phone: string;
+  hub_carer_email: string;
+  surrey_contact: string;
 };
+
+export const LIVES_CATS = [
+  ["la_long", "Looked after (long term)"],
+  ["la_short", "Looked after (short term)"],
+  ["fosters", "Child who fosters"],
+  ["sgo", "SGO"],
+  ["adopted", "Adopted"],
+  ["kinship", "Kinship"],
+] as const;
+
+export const VISITS_CATS = [
+  ["sleepover", "Sleepover"],
+  ["daycare", "Daycare"],
+  ["short_break", "Short break"],
+] as const;
+
+export const MB_OPTIONS = [
+  ["mb5", "Your Mockingbird (MB5)"],
+  ["another", "Another Mockingbird"],
+  ["no", "No Mockingbird"],
+  ["other", "Other"],
+] as const;
+
+export function livesHereOf(c: Pick<Child, "lives_here" | "category">): boolean | undefined {
+  if (c.lives_here !== null && c.lives_here !== undefined) return c.lives_here;
+  if (VISITS_CATS.some(([k]) => k === c.category)) return false;
+  if (c.category) return true;
+  return undefined;
+}
 
 export type EntryRecord = {
   id: string;
