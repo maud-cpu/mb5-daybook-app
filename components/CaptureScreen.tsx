@@ -67,11 +67,22 @@ export default function CaptureScreen() {
   async function addChild() {
     const name = newChildName.trim();
     if (!name) return;
-    const { data } = await supabase
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      showToast("Couldn't add child: not signed in");
+      return;
+    }
+    const { data, error } = await supabase
       .from("children")
-      .insert({ name, born: newChildBorn || null, family: newChildFamily.trim() })
+      .insert({ user_id: user.id, name, born: newChildBorn || null, family: newChildFamily.trim() })
       .select("id, name, born, family")
       .single();
+    if (error) {
+      showToast("Couldn't add child: " + error.message);
+      return;
+    }
     await loadChildren();
     if (typeof addFor === "number" && data) {
       const addedName = (data as Child).name;
