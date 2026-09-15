@@ -250,7 +250,7 @@ export default function CaptureScreen() {
                 <div className="note" style={{ color: "#a66d00" }}>
                   {p.unmatched!.map((n) => (
                     <div key={n} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <span>⚠ You said &quot;{n}&quot; — not registered yet, so they weren&apos;t linked (and any day care won&apos;t price correctly).</span>
+                      <span>⚠ &quot;{n}&quot; isn&apos;t registered yet — add them so this links up properly.</span>
                       <button
                         className="chip"
                         style={{ flex: "0 0 auto" }}
