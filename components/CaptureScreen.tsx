@@ -25,7 +25,7 @@ export default function CaptureScreen() {
   const [pending, setPending] = useState<PendingItem[]>([]);
   const [warning, setWarning] = useState("");
   const [toast, setToast] = useState("");
-  const [addingChild, setAddingChild] = useState(false);
+  const [addFor, setAddFor] = useState<number | "top" | null>(null);
   const [newChildName, setNewChildName] = useState("");
   const [newChildBorn, setNewChildBorn] = useState("");
   const [newChildFamily, setNewChildFamily] = useState("");
@@ -57,15 +57,37 @@ export default function CaptureScreen() {
     setTimeout(() => setToast(""), 1800);
   }
 
+  function openAddChild(forItem: number | "top", prefillName = "") {
+    setAddFor(forItem);
+    setNewChildName(prefillName);
+    setNewChildBorn("");
+    setNewChildFamily("");
+  }
+
   async function addChild() {
     const name = newChildName.trim();
     if (!name) return;
-    await supabase.from("children").insert({ name, born: newChildBorn || null, family: newChildFamily.trim() });
+    const { data } = await supabase
+      .from("children")
+      .insert({ name, born: newChildBorn || null, family: newChildFamily.trim() })
+      .select("id, name, born, family")
+      .single();
+    await loadChildren();
+    if (typeof addFor === "number" && data) {
+      const addedName = (data as Child).name;
+      setPending((prev) =>
+        prev.map((p, idx) => {
+          if (idx !== addFor) return p;
+          const kids = p.kids.includes(addedName) ? p.kids : [...p.kids, addedName];
+          const unmatched = (p.unmatched ?? []).filter((n) => n.toLowerCase() !== name.toLowerCase());
+          return { ...p, kids, unmatched, child: p.child || addedName };
+        }),
+      );
+    }
     setNewChildName("");
     setNewChildBorn("");
     setNewChildFamily("");
-    setAddingChild(false);
-    loadChildren();
+    setAddFor(null);
   }
 
   async function sortIt() {
@@ -145,6 +167,35 @@ export default function CaptureScreen() {
 
   const names = children.map((c) => c.name);
 
+  function addChildForm() {
+    return (
+      <div style={{ marginTop: 8 }}>
+        <input
+          placeholder="Initials or first name"
+          value={newChildName}
+          onChange={(e) => setNewChildName(e.target.value)}
+        />
+        <div className="row" style={{ marginTop: 6 }}>
+          <input
+            type="month"
+            style={{ flex: "0 0 150px" }}
+            title="Month and year of birth"
+            value={newChildBorn}
+            onChange={(e) => setNewChildBorn(e.target.value)}
+          />
+          <input
+            placeholder="Household / carer (e.g. Smiths)"
+            value={newChildFamily}
+            onChange={(e) => setNewChildFamily(e.target.value)}
+          />
+          <button className="chip" style={{ flex: "0 0 auto" }} onClick={addChild}>
+            Add
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="card">
@@ -159,36 +210,11 @@ export default function CaptureScreen() {
         </button>
         <p className="hint">
           Children: {names.join(", ") || "none yet"}{" "}
-          <button className="chip add" onClick={() => setAddingChild(!addingChild)}>
+          <button className="chip add" onClick={() => (addFor === "top" ? setAddFor(null) : openAddChild("top"))}>
             + child
           </button>
         </p>
-        {addingChild && (
-          <div style={{ marginTop: 8 }}>
-            <input
-              placeholder="Initials or first name"
-              value={newChildName}
-              onChange={(e) => setNewChildName(e.target.value)}
-            />
-            <div className="row" style={{ marginTop: 6 }}>
-              <input
-                type="month"
-                style={{ flex: "0 0 150px" }}
-                title="Month and year of birth"
-                value={newChildBorn}
-                onChange={(e) => setNewChildBorn(e.target.value)}
-              />
-              <input
-                placeholder="Household / carer (e.g. Smiths)"
-                value={newChildFamily}
-                onChange={(e) => setNewChildFamily(e.target.value)}
-              />
-              <button className="chip" style={{ flex: "0 0 auto" }} onClick={addChild}>
-                Add
-              </button>
-            </div>
-          </div>
-        )}
+        {addFor === "top" && addChildForm()}
       </div>
 
       {warning && <div className="note">{warning}</div>}
@@ -219,6 +245,24 @@ export default function CaptureScreen() {
                   ×
                 </button>
               </div>
+
+              {(p.unmatched ?? []).length > 0 && (
+                <div className="note" style={{ color: "#a66d00" }}>
+                  {p.unmatched!.map((n) => (
+                    <div key={n} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span>⚠ You said &quot;{n}&quot; — not registered yet, so they weren&apos;t linked (and any day care won&apos;t price correctly).</span>
+                      <button
+                        className="chip"
+                        style={{ flex: "0 0 auto" }}
+                        onClick={() => (addFor === i ? setAddFor(null) : openAddChild(i, n))}
+                      >
+                        + Register {n}
+                      </button>
+                    </div>
+                  ))}
+                  {addFor === i && addChildForm()}
+                </div>
+              )}
 
               {p.bucket !== "expenses" && (
                 <div className="row" style={{ flexWrap: "wrap" }}>
@@ -301,7 +345,16 @@ export default function CaptureScreen() {
                       ))}
                     </select>
                   </div>
-                  {rates && <div className="calc">{gbp(daycareAmount(rates, children, p as never))}</div>}
+                  {rates && (
+                    <div className="calc">
+                      {gbp(daycareAmount(rates, children, p as never))}
+                      {!p.overnight && !p.time_from && !p.time_to && !p.hours && (
+                        <span className="note" style={{ color: "#a66d00", display: "block", fontWeight: "normal" }}>
+                          ⚠ No hours or times given yet, so this is £0.00 — add them above.
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
 

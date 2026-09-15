@@ -118,9 +118,16 @@ Respond with ONLY a JSON array, no prose, no markdown: [{"bucket":"diary","child
     if (!Array.isArray(arr) || !arr.length) throw new Error("Nothing recognised");
 
     const items: PendingItem[] = arr.map((p) => {
-      const child = matchChild(names, p.child);
-      const others = (p.others || []).map((o: string) => matchChild(names, o));
+      const rawChild = p.child ? String(p.child).trim() : "";
+      const rawOthers: string[] = Array.isArray(p.kids)
+        ? p.kids.map((k: string) => String(k).trim()).filter(Boolean)
+        : [];
+      const rawNames = [...new Set([rawChild, ...rawOthers].filter(Boolean))];
+
+      const child = matchChild(names, rawChild);
+      const others = rawOthers.map((o) => matchChild(names, o));
       const kids = [...new Set([child, ...others].filter(Boolean))];
+      const unmatched = rawNames.filter((n) => !matchChild(names, n));
       let flag: string = p.flag && (FLAG_KEYS as readonly string[]).includes(p.flag) ? p.flag : "";
       let flagNote = p.flagNote || "";
       if (!flag) {
@@ -158,6 +165,7 @@ Respond with ONLY a JSON array, no prose, no markdown: [{"bucket":"diary","child
         flag,
         flag_note: flagNote,
         training_note: trainingNote,
+        unmatched,
       };
     });
 
