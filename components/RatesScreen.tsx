@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { gbp, today } from "@/lib/domain";
 import { BANDS, Rates } from "@/lib/types";
+import ChangePasswordCard from "@/components/ChangePasswordCard";
 
 type RotaRow = { date: string; name: string; phone: string };
 
@@ -100,6 +101,8 @@ export default function RatesScreen() {
         </button>
         {rescanMsg && <p className="hint">{rescanMsg}</p>}
       </div>
+
+      <ChangePasswordCard />
     </div>
   );
 }
