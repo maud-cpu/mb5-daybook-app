@@ -14,6 +14,7 @@ export default function RatesScreen() {
   const [rota, setRota] = useState<RotaRow[]>([]);
   const [rescanMsg, setRescanMsg] = useState("");
   const [rescanning, setRescanning] = useState(false);
+  const [loadError, setLoadError] = useState("");
 
   async function rescan() {
     setRescanning(true);
@@ -28,10 +29,11 @@ export default function RatesScreen() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: r }, { data: rt }] = await Promise.all([
+      const [{ data: r, error }, { data: rt }] = await Promise.all([
         supabase.from("shared_rates").select("*").single(),
         supabase.from("shared_rota").select("date, name, phone").order("date"),
       ]);
+      if (error) setLoadError(error.message);
       setRates(r as Rates);
       setRota((rt as RotaRow[]) ?? []);
     }
@@ -41,7 +43,8 @@ export default function RatesScreen() {
 
   const tonight = rota.find((r) => r.date === today());
 
-  if (!rates) return <p className="muted">Loading…</p>;
+  if (!rates)
+    return <p className="muted">{loadError ? `Couldn't load rates: ${loadError}` : "Loading…"}</p>;
 
   return (
     <div>
