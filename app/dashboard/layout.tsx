@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/auth";
 import NavBar from "@/components/NavBar";
 import QuickAccessButtons from "@/components/QuickAccessButtons";
+import RouteRemount from "@/components/RouteRemount";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   await requireUser();
@@ -12,7 +13,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       </header>
       <QuickAccessButtons />
       <div id="view" style={{ padding: "12px 14px 24px", maxWidth: 640, margin: "0 auto", width: "100%" }}>
-        {children}
+        <RouteRemount>{children}</RouteRemount>
       </div>
       <NavBar />
     </>
