@@ -42,6 +42,7 @@ export default function CaptureScreen() {
   const [adminName, setAdminName] = useState("");
   const [composing, setComposing] = useState(false);
   const [composeQueue, setComposeQueue] = useState<{ child: string; entryId: string }[]>([]);
+  const [courseUrls, setCourseUrls] = useState<Record<string, string>>({});
 
   async function loadChildren() {
     const { data } = await supabase
@@ -64,6 +65,19 @@ export default function CaptureScreen() {
       .select("display_name")
       .eq("role", "admin")
       .then(({ data }) => setAdminName((data ?? []).map((a) => a.display_name).join(" & ")));
+    Promise.all([
+      supabase.from("shared_training_catalog").select("title, platform"),
+      supabase.from("shared_training_platforms").select("name, url"),
+    ]).then(([{ data: courses }, { data: platforms }]) => {
+      const urlByPlatform: Record<string, string> = {};
+      (platforms ?? []).forEach((p: { name: string; url: string }) => (urlByPlatform[p.name] = p.url));
+      const byCourse: Record<string, string> = {};
+      (courses ?? []).forEach((c: { title: string; platform: string }) => {
+        const url = urlByPlatform[c.platform];
+        if (url) byCourse[c.title] = url;
+      });
+      setCourseUrls(byCourse);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -518,7 +532,19 @@ export default function CaptureScreen() {
                   )}
                 </div>
               )}
-              {p.training_note && <div className="note">💡 {p.training_note}</div>}
+              {p.training_note && (
+                <div className="note">
+                  💡 {p.training_note}
+                  {p.training_course && courseUrls[p.training_course] && (
+                    <>
+                      {" "}
+                      <a href={courseUrls[p.training_course]} target="_blank" rel="noopener noreferrer">
+                        Open course ↗
+                      </a>
+                    </>
+                  )}
+                </div>
+              )}
               {adminName && (
                 <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
                   <input

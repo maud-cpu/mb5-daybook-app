@@ -143,6 +143,7 @@ Respond with ONLY a JSON array, no prose, no markdown: [{"bucket":"diary","child
         : p.training?.course && p.training?.why
           ? `${p.training.course} — ${p.training.why}`
           : "";
+      const trainingCourse = trainingFromFlag ? "" : p.training?.course || "";
 
       return {
         bucket: BUCKETS[p.bucket as keyof typeof BUCKETS] ? p.bucket : "scratch",
@@ -165,6 +166,7 @@ Respond with ONLY a JSON array, no prose, no markdown: [{"bucket":"diary","child
         flag,
         flag_note: flagNote,
         training_note: trainingNote,
+        training_course: trainingCourse,
         unmatched,
       };
     });
