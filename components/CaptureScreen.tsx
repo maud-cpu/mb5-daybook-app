@@ -35,7 +35,8 @@ export default function CaptureScreen() {
   const [toast, setToast] = useState("");
   const [addFor, setAddFor] = useState<number | "top" | null>(null);
   const [newChildName, setNewChildName] = useState("");
-  const [newChildBorn, setNewChildBorn] = useState("");
+  const [newChildBornMonth, setNewChildBornMonth] = useState("");
+  const [newChildBornYear, setNewChildBornYear] = useState("");
   const [newChildFamily, setNewChildFamily] = useState("");
   const [adminName, setAdminName] = useState("");
 
@@ -68,7 +69,8 @@ export default function CaptureScreen() {
   function openAddChild(forItem: number | "top", prefillName = "") {
     setAddFor(forItem);
     setNewChildName(prefillName);
-    setNewChildBorn("");
+    setNewChildBornMonth("");
+    setNewChildBornYear("");
     setNewChildFamily("");
   }
 
@@ -82,9 +84,10 @@ export default function CaptureScreen() {
       showToast("Couldn't add child: not signed in");
       return;
     }
+    const born = newChildBornMonth && newChildBornYear ? `${newChildBornYear}-${newChildBornMonth}-01` : null;
     const { data, error } = await supabase
       .from("children")
-      .insert({ user_id: user.id, name, born: newChildBorn ? `${newChildBorn}-01` : null, family: newChildFamily.trim() })
+      .insert({ user_id: user.id, name, born, family: newChildFamily.trim() })
       .select("id, name, born, family")
       .single();
     if (error) {
@@ -104,7 +107,8 @@ export default function CaptureScreen() {
       );
     }
     setNewChildName("");
-    setNewChildBorn("");
+    setNewChildBornMonth("");
+    setNewChildBornYear("");
     setNewChildFamily("");
     setAddFor(null);
   }
@@ -187,12 +191,6 @@ export default function CaptureScreen() {
   const names = children.map((c) => c.name);
 
   function addChildForm() {
-    const [bornYear, bornMonth] = newChildBorn.split("-");
-    function setBornPart(part: "y" | "m", value: string) {
-      const y = part === "y" ? value : bornYear || "";
-      const m = part === "m" ? value : bornMonth || "";
-      setNewChildBorn(y && m ? `${y}-${m}` : "");
-    }
     return (
       <div style={{ marginTop: 8 }}>
         <input
@@ -204,7 +202,7 @@ export default function CaptureScreen() {
           <span className="muted" style={{ alignSelf: "center", flex: "0 0 auto" }}>
             Born
           </span>
-          <select value={bornMonth || ""} onChange={(e) => setBornPart("m", e.target.value)}>
+          <select value={newChildBornMonth} onChange={(e) => setNewChildBornMonth(e.target.value)}>
             <option value="">Month</option>
             {MONTH_NAMES.map((m, i) => (
               <option key={m} value={String(i + 1).padStart(2, "0")}>
@@ -212,7 +210,7 @@ export default function CaptureScreen() {
               </option>
             ))}
           </select>
-          <select value={bornYear || ""} onChange={(e) => setBornPart("y", e.target.value)}>
+          <select value={newChildBornYear} onChange={(e) => setNewChildBornYear(e.target.value)}>
             <option value="">Year</option>
             {BIRTH_YEARS.map((y) => (
               <option key={y} value={y}>
