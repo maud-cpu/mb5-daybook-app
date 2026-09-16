@@ -17,7 +17,7 @@ type Course = {
 
 type Platform = { name: string; url: string };
 
-const GROUP_ORDER = ["pre", "once", "3yr", "next"] as const;
+const GROUP_ORDER = ["next", "pre", "once", "3yr"] as const;
 
 function statusFor(course: Course, completedOn: string | undefined) {
   if (!completedOn) return { label: course.group_key === "next" ? "" : "Not done", color: "var(--grey)" };
