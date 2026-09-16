@@ -39,6 +39,8 @@ export default function EntriesScreen() {
   const searchParams = useSearchParams();
   const [composing, setComposing] = useState(searchParams.get("compose") === "1");
   const [sendPreset, setSendPreset] = useState<{ child: string; entryId: string } | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   function sendToCarer(child: string, entryId: string) {
     setSendPreset({ child, entryId });
@@ -86,6 +88,33 @@ export default function EntriesScreen() {
     if (!confirm("Delete this entry?")) return;
     await supabase.from("records").delete().eq("id", id);
     setRecords((prev) => prev.filter((r) => r.id !== id));
+  }
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAllShown() {
+    setSelected(new Set(shown.map((r) => r.id)));
+  }
+
+  async function deleteSelected() {
+    if (!selected.size) return;
+    if (!confirm(`Delete ${selected.size} entr${selected.size > 1 ? "ies" : "y"}? This can't be undone.`)) return;
+    const ids = [...selected];
+    const { error } = await supabase.from("records").delete().in("id", ids);
+    if (error) {
+      alert("Couldn't delete: " + error.message);
+      return;
+    }
+    setRecords((prev) => prev.filter((r) => !selected.has(r.id)));
+    setSelected(new Set());
+    setSelectMode(false);
   }
 
   async function saveEdit(r: EntryRecord) {
@@ -144,6 +173,29 @@ export default function EntriesScreen() {
           </option>
         ))}
       </select>
+      <button
+        className="chip"
+        style={{ marginBottom: 10, marginLeft: 8 }}
+        onClick={() => {
+          setSelectMode(!selectMode);
+          setSelected(new Set());
+        }}
+      >
+        {selectMode ? "Cancel" : "Select"}
+      </button>
+      {selectMode && (
+        <div className="row" style={{ marginBottom: 10, alignItems: "center" }}>
+          <button className="chip" onClick={selectAllShown}>
+            Select all {shown.length} shown
+          </button>
+          <button className="chip" onClick={() => setSelected(new Set())}>
+            Clear
+          </button>
+          <button className="btn" style={{ flex: "0 0 auto" }} disabled={!selected.size} onClick={deleteSelected}>
+            Delete {selected.size || ""} selected
+          </button>
+        </div>
+      )}
       <div className="card">
         {tab === "incident" && (
           <p className="note">
@@ -154,9 +206,19 @@ export default function EntriesScreen() {
         {shown.length === 0 && <p className="empty">Nothing here yet.</p>}
         {shown.map((r) => (
           <div className={`rec${r.done ? " done" : ""}${tab === "incident" ? " incident" : ""}`} key={r.id}>
-            <button className="del" onClick={() => del(r.id)}>
-              ×
-            </button>
+            {selectMode ? (
+              <input
+                type="checkbox"
+                className="del"
+                style={{ width: "auto" }}
+                checked={selected.has(r.id)}
+                onChange={() => toggleSelected(r.id)}
+              />
+            ) : (
+              <button className="del" onClick={() => del(r.id)}>
+                ×
+              </button>
+            )}
             {editId === r.id ? (
               <EditForm record={r} onCancel={() => setEditId(null)} onSave={saveEdit} rates={rates} children_={children} />
             ) : (
