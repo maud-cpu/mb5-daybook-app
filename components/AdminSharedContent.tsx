@@ -50,6 +50,8 @@ export default function AdminSharedContent() {
   const [toast, setToast] = useState("");
   const [bulkGroup, setBulkGroup] = useState("next");
   const [bulkText, setBulkText] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkStatus, setBulkStatus] = useState("");
 
   async function load() {
     const [{ data: r }, { data: rt }, { data: c }, { data: p }] = await Promise.all([
@@ -119,20 +121,64 @@ export default function AdminSharedContent() {
     else load();
   }
 
+  function fallbackTitleFromUrl(url: string): string {
+    try {
+      const u = new URL(url);
+      const last = u.pathname.split("/").filter(Boolean).pop() || u.hostname;
+      return decodeURIComponent(last).replace(/[-_]+/g, " ").replace(/\.\w+$/, "").trim() || url;
+    } catch {
+      return url;
+    }
+  }
+
+  async function fetchTitlesFor(urls: string[]): Promise<Record<string, string>> {
+    const map: Record<string, string> = {};
+    for (let i = 0; i < urls.length; i += 25) {
+      const batch = urls.slice(i, i + 25);
+      setBulkStatus(`Fetching titles — ${Math.min(i + 25, urls.length)} of ${urls.length}…`);
+      try {
+        const res = await fetch("/api/fetch-titles", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ urls: batch }),
+        });
+        const data = await res.json();
+        (data.results ?? []).forEach((r: { url: string; title: string }) => {
+          if (r.title) map[r.url] = r.title;
+        });
+      } catch {
+        // leave this batch untitled — fallbackTitleFromUrl covers it
+      }
+    }
+    return map;
+  }
+
   async function bulkImportCourses(groupKey: string, text: string) {
-    const rows = text
+    const lines = text
       .split("\n")
       .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => {
+      .filter(Boolean);
+    const parsed = lines.map((line) => {
+      if (line.includes("|")) {
         const [title, rest] = line.split("|").map((s) => s.trim());
         return { title, extra: rest || "" };
-      })
-      .filter((r) => r.title);
-    if (!rows.length) {
-      showToast("Nothing to import — one per line, e.g. Understanding trauma | MyLearning");
+      }
+      if (/^https?:\/\//i.test(line)) return { title: "", extra: line };
+      return { title: line, extra: "" };
+    });
+    if (!parsed.length) {
+      showToast("Nothing to import — one per line: a title, a link, or Title | link");
       return;
     }
+
+    setBulkBusy(true);
+    const needTitle = [...new Set(parsed.filter((r) => !r.title && r.extra).map((r) => r.extra))];
+    const fetchedTitles = needTitle.length ? await fetchTitlesFor(needTitle) : {};
+    setBulkStatus("Saving…");
+
+    const rows = parsed
+      .map((r) => ({ title: r.title || fetchedTitles[r.extra] || fallbackTitleFromUrl(r.extra), extra: r.extra }))
+      .filter((r) => r.title);
     const inserts = rows.map((r, i) => {
       const isUrl = /^https?:\/\//i.test(r.extra);
       const matchedPlatform = platforms.find((p) => p.name.toLowerCase() === r.extra.toLowerCase());
@@ -149,11 +195,15 @@ export default function AdminSharedContent() {
       const { error } = await supabase.from("shared_training_catalog").insert(inserts.slice(i, i + 500));
       if (error) {
         showToast(`Import stopped after ${i} of ${inserts.length}: ${error.message}`);
+        setBulkBusy(false);
+        setBulkStatus("");
         load();
         return;
       }
     }
     showToast(`Imported ${inserts.length} resource${inserts.length > 1 ? "s" : ""}`);
+    setBulkBusy(false);
+    setBulkStatus("");
     load();
   }
 
@@ -248,10 +298,14 @@ export default function AdminSharedContent() {
       <div className="card">
         <h3>Bulk-add resources</h3>
         <p className="note">
-          Add lots at once instead of one by one. One per line: <code>Title | link or platform name</code> — the
-          bit after the | is optional, and can be a web address or the exact name of a platform above.
+          Add lots at once instead of one by one. One per line — any of these work:
+          <br />
+          <code>Title | link or platform name</code> — you give the title
+          <br />
+          <code>https://a-bare-link-with-no-title</code> — just paste the link and it fetches the page&apos;s title
+          for you automatically
         </p>
-        <select value={bulkGroup} onChange={(e) => setBulkGroup(e.target.value)}>
+        <select value={bulkGroup} onChange={(e) => setBulkGroup(e.target.value)} disabled={bulkBusy}>
           {Object.entries(GROUP_LABELS).map(([k, l]) => (
             <option key={k} value={k}>
               {l}
@@ -260,18 +314,21 @@ export default function AdminSharedContent() {
         </select>
         <textarea
           rows={6}
-          placeholder={"Understanding trauma | MyLearning\nWhy try PACE (TED talk) | https://youtube.com/watch?v=..."}
+          placeholder={"Understanding trauma | MyLearning\nhttps://youtube.com/watch?v=...\nhttps://youtube.com/watch?v=..."}
           value={bulkText}
           onChange={(e) => setBulkText(e.target.value)}
+          disabled={bulkBusy}
         />
         <button
           className="btn"
+          disabled={bulkBusy || !bulkText.trim()}
           onClick={() => {
-            bulkImportCourses(bulkGroup, bulkText);
+            const text = bulkText;
             setBulkText("");
+            bulkImportCourses(bulkGroup, text);
           }}
         >
-          Import
+          {bulkBusy ? bulkStatus || "Importing…" : "Import"}
         </button>
       </div>
 
