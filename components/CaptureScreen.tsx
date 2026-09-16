@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { daycareAmount, gbp, today } from "@/lib/domain";
 import ThingsToDoCard from "@/components/ThingsToDoCard";
 import PhotoField from "@/components/PhotoField";
+import ComposeEmail from "@/components/ComposeEmail";
 import {
   BUCKETS,
   Bucket,
@@ -39,9 +40,14 @@ export default function CaptureScreen() {
   const [newChildBornYear, setNewChildBornYear] = useState("");
   const [newChildFamily, setNewChildFamily] = useState("");
   const [adminName, setAdminName] = useState("");
+  const [composing, setComposing] = useState(false);
+  const [composeQueue, setComposeQueue] = useState<{ child: string; entryId: string }[]>([]);
 
   async function loadChildren() {
-    const { data } = await supabase.from("children").select("id, name, born, family").order("created_at");
+    const { data } = await supabase
+      .from("children")
+      .select("id, name, born, family, hub_carer_name, hub_carer_email")
+      .order("created_at");
     setChildren((data as Child[]) ?? []);
   }
 
@@ -151,6 +157,18 @@ export default function CaptureScreen() {
     );
   }
 
+  function toggleSendHub(i: number, name: string) {
+    setPending((prev) =>
+      prev.map((p, idx) => {
+        if (idx !== i) return p;
+        const send_hub = (p.send_hub ?? []).includes(name)
+          ? (p.send_hub ?? []).filter((k) => k !== name)
+          : [...(p.send_hub ?? []), name];
+        return { ...p, send_hub };
+      }),
+    );
+  }
+
   async function saveAll() {
     if (!pending.length) return;
     const rows = pending.map((p) => ({
@@ -178,14 +196,34 @@ export default function CaptureScreen() {
       shared_with_admin: !!p.shared_with_admin,
       photos: p.photos ?? [],
     }));
-    const { error } = await supabase.from("records").insert(rows);
+    const { data: inserted, error } = await supabase.from("records").insert(rows).select("id");
     if (error) {
       showToast("Couldn't save: " + error.message);
       return;
     }
     showToast(`Saved ${rows.length} item${rows.length > 1 ? "s" : ""}`);
+    const queue: { child: string; entryId: string }[] = [];
+    pending.forEach((p, idx) => {
+      const entryId = inserted?.[idx]?.id;
+      if (!entryId) return;
+      (p.send_hub ?? []).forEach((child) => queue.push({ child, entryId }));
+    });
     setPending([]);
     setCap("");
+    if (queue.length) {
+      setComposeQueue(queue);
+      setComposing(true);
+    }
+  }
+
+  function closeCompose() {
+    const rest = composeQueue.slice(1);
+    if (rest.length) {
+      setComposeQueue(rest);
+    } else {
+      setComposing(false);
+      setComposeQueue([]);
+    }
   }
 
   const names = children.map((c) => c.name);
@@ -230,6 +268,14 @@ export default function CaptureScreen() {
           </button>
         </div>
         <p className="note">Just month and year is enough — we only need this to work out age bands, not their exact birthday.</p>
+      </div>
+    );
+  }
+
+  if (composing && composeQueue[0]) {
+    return (
+      <div>
+        <ComposeEmail onClose={closeCompose} presetChildName={composeQueue[0].child} presetEntryId={composeQueue[0].entryId} />
       </div>
     );
   }
@@ -484,6 +530,21 @@ export default function CaptureScreen() {
                   📤 Also send this one straight to {adminName} — instead of phoning/messaging them separately
                 </label>
               )}
+              {p.kids
+                .map((k) => children.find((c) => c.name === k))
+                .filter((c): c is Child => !!c && !!(c.hub_carer_name || c.hub_carer_email))
+                .map((c) => (
+                  <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
+                    <input
+                      type="checkbox"
+                      style={{ width: "auto" }}
+                      checked={(p.send_hub ?? []).includes(c.name)}
+                      onChange={() => toggleSendHub(i, c.name)}
+                    />
+                    📤 Also send this to {c.name}&apos;s Mockingbird hub carer{c.hub_carer_name ? ` (${c.hub_carer_name})` : ""} — instead of
+                    messaging them separately
+                  </label>
+                ))}
             </div>
           ))}
           <button className="btn" onClick={saveAll}>
