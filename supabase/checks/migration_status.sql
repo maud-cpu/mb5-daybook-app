@@ -87,6 +87,10 @@ select migration, applied from (
       exists (select 1 from shared_rates)),
 
     ('0013 profiles admin-check no longer recurses (reads that touch an admin-gated policy actually work)',
-      pg_temp.no_rls_recursion())
+      pg_temp.no_rls_recursion()),
+
+    ('0014 per-course direct link column',
+      exists (select 1 from information_schema.columns
+         where table_schema = 'public' and table_name = 'shared_training_catalog' and column_name = 'url'))
 ) as t(migration, applied)
 order by migration;
