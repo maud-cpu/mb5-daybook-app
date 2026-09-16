@@ -16,6 +16,14 @@ import {
   Rates,
 } from "@/lib/types";
 
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+const CURRENT_YEAR = new Date().getFullYear();
+const BIRTH_YEARS = Array.from({ length: 26 }, (_, i) => String(CURRENT_YEAR - i));
+
 export default function CaptureScreen() {
   const supabase = createClient();
   const [children, setChildren] = useState<Child[]>([]);
@@ -76,7 +84,7 @@ export default function CaptureScreen() {
     }
     const { data, error } = await supabase
       .from("children")
-      .insert({ user_id: user.id, name, born: newChildBorn || null, family: newChildFamily.trim() })
+      .insert({ user_id: user.id, name, born: newChildBorn ? `${newChildBorn}-01` : null, family: newChildFamily.trim() })
       .select("id, name, born, family")
       .single();
     if (error) {
@@ -179,6 +187,12 @@ export default function CaptureScreen() {
   const names = children.map((c) => c.name);
 
   function addChildForm() {
+    const [bornYear, bornMonth] = newChildBorn.split("-");
+    function setBornPart(part: "y" | "m", value: string) {
+      const y = part === "y" ? value : bornYear || "";
+      const m = part === "m" ? value : bornMonth || "";
+      setNewChildBorn(y && m ? `${y}-${m}` : "");
+    }
     return (
       <div style={{ marginTop: 8 }}>
         <input
@@ -187,13 +201,27 @@ export default function CaptureScreen() {
           onChange={(e) => setNewChildName(e.target.value)}
         />
         <div className="row" style={{ marginTop: 6 }}>
-          <input
-            type="month"
-            style={{ flex: "0 0 150px" }}
-            title="Month and year of birth"
-            value={newChildBorn}
-            onChange={(e) => setNewChildBorn(e.target.value)}
-          />
+          <span className="muted" style={{ alignSelf: "center", flex: "0 0 auto" }}>
+            Born
+          </span>
+          <select value={bornMonth || ""} onChange={(e) => setBornPart("m", e.target.value)}>
+            <option value="">Month</option>
+            {MONTH_NAMES.map((m, i) => (
+              <option key={m} value={String(i + 1).padStart(2, "0")}>
+                {m}
+              </option>
+            ))}
+          </select>
+          <select value={bornYear || ""} onChange={(e) => setBornPart("y", e.target.value)}>
+            <option value="">Year</option>
+            {BIRTH_YEARS.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="row" style={{ marginTop: 6 }}>
           <input
             placeholder="Household / carer (e.g. Smiths)"
             value={newChildFamily}
@@ -203,6 +231,7 @@ export default function CaptureScreen() {
             Add
           </button>
         </div>
+        <p className="note">Just month and year is enough — we only need this to work out age bands, not their exact birthday.</p>
       </div>
     );
   }
