@@ -29,6 +29,9 @@ select migration, applied from (
       and to_regclass('public.shared_training_platforms') is not null
       and to_regclass('public.shared_rota') is not null),
 
+    ('0002 shared_rates has its one required row (else Rates screen and every day-care amount silently fail)',
+      exists (select 1 from shared_rates)),
+
     ('0003 admin usage-stats functions',
       to_regprocedure('public.is_admin()') is not null
       and to_regprocedure('public.admin_carer_overview()') is not null
