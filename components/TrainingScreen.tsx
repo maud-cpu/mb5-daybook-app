@@ -11,6 +11,7 @@ type Course = {
   title: string;
   how: string;
   platform: string;
+  url: string;
   sort_order: number;
 };
 
@@ -89,7 +90,7 @@ export default function TrainingScreen() {
           {g.rows.map((c) => {
             const completedOn = progress[c.title];
             const status = statusFor(c, completedOn);
-            const url = platformUrl(c.platform);
+            const url = c.url || platformUrl(c.platform);
             return (
               <div
                 key={c.id}

@@ -66,14 +66,14 @@ export default function CaptureScreen() {
       .eq("role", "admin")
       .then(({ data }) => setAdminName((data ?? []).map((a) => a.display_name).join(" & ")));
     Promise.all([
-      supabase.from("shared_training_catalog").select("title, platform"),
+      supabase.from("shared_training_catalog").select("title, platform, url"),
       supabase.from("shared_training_platforms").select("name, url"),
     ]).then(([{ data: courses }, { data: platforms }]) => {
       const urlByPlatform: Record<string, string> = {};
       (platforms ?? []).forEach((p: { name: string; url: string }) => (urlByPlatform[p.name] = p.url));
       const byCourse: Record<string, string> = {};
-      (courses ?? []).forEach((c: { title: string; platform: string }) => {
-        const url = urlByPlatform[c.platform];
+      (courses ?? []).forEach((c: { title: string; platform: string; url: string }) => {
+        const url = c.url || urlByPlatform[c.platform];
         if (url) byCourse[c.title] = url;
       });
       setCourseUrls(byCourse);

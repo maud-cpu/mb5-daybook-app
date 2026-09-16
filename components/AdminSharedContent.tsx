@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { BANDS, Rates } from "@/lib/types";
 
 type RotaRow = { date: string; name: string; phone: string };
-type Course = { id: string; group_key: string; group_label: string; title: string; how: string; platform: string; archived: boolean };
+type Course = { id: string; group_key: string; group_label: string; title: string; how: string; platform: string; url: string; archived: boolean };
 type Platform = { name: string; url: string };
 
 const GROUP_LABELS: Record<string, string> = {
@@ -231,6 +231,14 @@ export default function AdminSharedContent() {
                     </option>
                   ))}
                 </select>
+                {!c.platform && (
+                  <input
+                    style={{ flex: 1 }}
+                    defaultValue={c.url}
+                    placeholder="or paste a direct link (YouTube, TED talk, podcast…)"
+                    onBlur={(e) => updateCourse(c.id, { url: e.target.value })}
+                  />
+                )}
                 <button className="chip" onClick={() => updateCourse(c.id, { archived: !c.archived })}>
                   {c.archived ? "Unarchive" : "Archive"}
                 </button>
