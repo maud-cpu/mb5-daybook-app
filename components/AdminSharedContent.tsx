@@ -48,6 +48,8 @@ export default function AdminSharedContent() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [toast, setToast] = useState("");
+  const [bulkGroup, setBulkGroup] = useState("next");
+  const [bulkText, setBulkText] = useState("");
 
   async function load() {
     const [{ data: r }, { data: rt }, { data: c }, { data: p }] = await Promise.all([
@@ -115,6 +117,44 @@ export default function AdminSharedContent() {
       .insert({ group_key: groupKey, group_label: GROUP_LABELS[groupKey], title, sort_order: 999 });
     if (error) showToast("Couldn't add: " + error.message);
     else load();
+  }
+
+  async function bulkImportCourses(groupKey: string, text: string) {
+    const rows = text
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [title, rest] = line.split("|").map((s) => s.trim());
+        return { title, extra: rest || "" };
+      })
+      .filter((r) => r.title);
+    if (!rows.length) {
+      showToast("Nothing to import — one per line, e.g. Understanding trauma | MyLearning");
+      return;
+    }
+    const inserts = rows.map((r, i) => {
+      const isUrl = /^https?:\/\//i.test(r.extra);
+      const matchedPlatform = platforms.find((p) => p.name.toLowerCase() === r.extra.toLowerCase());
+      return {
+        group_key: groupKey,
+        group_label: GROUP_LABELS[groupKey],
+        title: r.title,
+        platform: matchedPlatform ? matchedPlatform.name : "",
+        url: !matchedPlatform && isUrl ? r.extra : "",
+        sort_order: 999 + i,
+      };
+    });
+    for (let i = 0; i < inserts.length; i += 500) {
+      const { error } = await supabase.from("shared_training_catalog").insert(inserts.slice(i, i + 500));
+      if (error) {
+        showToast(`Import stopped after ${i} of ${inserts.length}: ${error.message}`);
+        load();
+        return;
+      }
+    }
+    showToast(`Imported ${inserts.length} resource${inserts.length > 1 ? "s" : ""}`);
+    load();
   }
 
   async function updatePlatformUrl(name: string, url: string) {
@@ -203,6 +243,36 @@ export default function AdminSharedContent() {
             <input value={p.url} onChange={(e) => updatePlatformUrl(p.name, e.target.value)} placeholder="link" />
           </div>
         ))}
+      </div>
+
+      <div className="card">
+        <h3>Bulk-add resources</h3>
+        <p className="note">
+          Add lots at once instead of one by one. One per line: <code>Title | link or platform name</code> — the
+          bit after the | is optional, and can be a web address or the exact name of a platform above.
+        </p>
+        <select value={bulkGroup} onChange={(e) => setBulkGroup(e.target.value)}>
+          {Object.entries(GROUP_LABELS).map(([k, l]) => (
+            <option key={k} value={k}>
+              {l}
+            </option>
+          ))}
+        </select>
+        <textarea
+          rows={6}
+          placeholder={"Understanding trauma | MyLearning\nWhy try PACE (TED talk) | https://youtube.com/watch?v=..."}
+          value={bulkText}
+          onChange={(e) => setBulkText(e.target.value)}
+        />
+        <button
+          className="btn"
+          onClick={() => {
+            bulkImportCourses(bulkGroup, bulkText);
+            setBulkText("");
+          }}
+        >
+          Import
+        </button>
       </div>
 
       {["pre", "once", "3yr", "next"].map((g) => (
