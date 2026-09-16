@@ -52,6 +52,7 @@ export default function AdminSharedContent() {
   const [bulkText, setBulkText] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkStatus, setBulkStatus] = useState("");
+  const [courseTab, setCourseTab] = useState<"active" | "archived">("active");
 
   async function load() {
     const [{ data: r }, { data: rt }, { data: c }, { data: p }] = await Promise.all([
@@ -332,11 +333,22 @@ export default function AdminSharedContent() {
         </button>
       </div>
 
-      {["pre", "once", "3yr", "next"].map((g) => (
+      <div className="tabs">
+        <button className={courseTab === "active" ? "on" : ""} onClick={() => setCourseTab("active")}>
+          Active ({courses.filter((c) => !c.archived).length})
+        </button>
+        <button className={courseTab === "archived" ? "on" : ""} onClick={() => setCourseTab("archived")}>
+          Archived ({courses.filter((c) => c.archived).length})
+        </button>
+      </div>
+
+      {["pre", "once", "3yr", "next"]
+        .filter((g) => courseTab === "active" || courses.some((c) => c.group_key === g && c.archived))
+        .map((g) => (
         <div className="card" key={g}>
           <h3>{GROUP_LABELS[g]}</h3>
           {courses
-            .filter((c) => c.group_key === g)
+            .filter((c) => c.group_key === g && (courseTab === "archived" ? c.archived : !c.archived))
             .map((c) => (
               <div key={c.id} className="row" style={{ alignItems: "center" }}>
                 <input
@@ -371,9 +383,11 @@ export default function AdminSharedContent() {
                 </button>
               </div>
             ))}
-          <button className="chip add" onClick={() => addCourse(g)}>
-            + course
-          </button>
+          {courseTab === "active" && (
+            <button className="chip add" onClick={() => addCourse(g)}>
+              + course
+            </button>
+          )}
         </div>
       ))}
 
