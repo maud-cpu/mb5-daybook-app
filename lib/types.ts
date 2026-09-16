@@ -226,4 +226,6 @@ export type PendingItem = Partial<EntryRecord> & {
   kids: string[];
   /** Names the carer said that don't match anyone registered yet — prompts a quick "add child". */
   unmatched?: string[];
+  /** Kids whose Mockingbird hub carer should be emailed once this item is saved. */
+  send_hub?: string[];
 };
