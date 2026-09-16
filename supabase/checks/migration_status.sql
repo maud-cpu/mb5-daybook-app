@@ -10,6 +10,18 @@
 -- carer, but never actually run -- and the app then fails later with a
 -- confusing "column not found" error. This query catches that up front.
 
+-- Temporary helper (this session only): actually tries a read that would
+-- trip the profiles self-recursion bug from 0001/0013, instead of just
+-- checking whether a policy or column exists on paper.
+create or replace function pg_temp.no_rls_recursion() returns boolean language plpgsql as $$
+begin
+  perform 1 from shared_rates limit 1;
+  return true;
+exception when others then
+  return false;
+end;
+$$;
+
 select migration, applied from (
   values
     ('0001 core tables (profiles, children, records, contacts, household, handovers, reminders, training_progress, carer_settings)',
@@ -28,9 +40,6 @@ select migration, applied from (
       and to_regclass('public.shared_training_catalog') is not null
       and to_regclass('public.shared_training_platforms') is not null
       and to_regclass('public.shared_rota') is not null),
-
-    ('0002 shared_rates has its one required row (else Rates screen and every day-care amount silently fail)',
-      exists (select 1 from shared_rates)),
 
     ('0003 admin usage-stats functions',
       to_regprocedure('public.is_admin()') is not null
@@ -72,6 +81,12 @@ select migration, applied from (
       to_regclass('public.handover_child_profiles') is not null
       and to_regclass('public.handover_plans') is not null
       and exists (select 1 from information_schema.columns
-         where table_schema = 'public' and table_name = 'household' and column_name = 'carseat'))
+         where table_schema = 'public' and table_name = 'household' and column_name = 'carseat')),
+
+    ('0012 shared_rates has its one required row (else Rates screen and every day-care amount silently fail)',
+      exists (select 1 from shared_rates)),
+
+    ('0013 profiles admin-check no longer recurses (reads that touch an admin-gated policy actually work)',
+      pg_temp.no_rls_recursion())
 ) as t(migration, applied)
 order by migration;
