@@ -25,6 +25,8 @@ type FollowUp = {
   training_note: string;
 };
 
+type DoneFollowUp = FollowUp & { flag_done_at: string };
+
 function followUpLabel(f: FollowUp): string {
   if (f.flag && f.flag in FLAGS) return FLAGS[f.flag as keyof typeof FLAGS].label;
   return "Training suggestion";
@@ -47,6 +49,9 @@ export default function ThingsToDoCard() {
   const [upcoming, setUpcoming] = useState<Reminder[]>([]);
   const [allReminders, setAllReminders] = useState<Reminder[]>([]);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
+  const [doneFollowUps, setDoneFollowUps] = useState<DoneFollowUp[]>([]);
+  const [doneReminders, setDoneReminders] = useState<Reminder[]>([]);
+  const [showDone, setShowDone] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [newText, setNewText] = useState("");
   const [newDate, setNewDate] = useState("");
@@ -62,6 +67,7 @@ export default function ThingsToDoCard() {
       { data: progress },
       { data: reminders },
       { data: openRecords },
+      { data: closedRecords },
     ] = await Promise.all([
       supabase.from("records").select("id, text, created_at, reported").eq("bucket", "incident"),
       supabase.from("children").select("id, name, born, family, basics"),
@@ -71,6 +77,12 @@ export default function ThingsToDoCard() {
       supabase.from("training_progress").select("course_title, completed_on"),
       supabase.from("reminders").select("*").order("date"),
       supabase.from("records").select("id, bucket, child, text, flag, flag_note, training_note").eq("flag_done", false),
+      supabase
+        .from("records")
+        .select("id, bucket, child, text, flag, flag_note, training_note, flag_done_at")
+        .eq("flag_done", true)
+        .order("flag_done_at", { ascending: false })
+        .limit(20),
     ]);
     const { data: unpaidClaimed } = await supabase
       .from("records")
@@ -102,6 +114,12 @@ export default function ThingsToDoCard() {
     setAllReminders(remindersList.filter((r) => !r.done));
     setFollowUps(
       ((openRecords as FollowUp[] | null) ?? []).filter((r) => (r.flag && r.flag !== "reminder") || r.training_note),
+    );
+    setDoneFollowUps(
+      ((closedRecords as DoneFollowUp[] | null) ?? []).filter((r) => (r.flag && r.flag !== "reminder") || r.training_note),
+    );
+    setDoneReminders(
+      remindersList.filter((r) => r.done).sort((a, b) => (b.done_at || "").localeCompare(a.done_at || "")).slice(0, 20),
     );
     setLoaded(true);
   }
@@ -149,10 +167,21 @@ export default function ThingsToDoCard() {
 
   async function markFollowUpDone(id: string) {
     await supabase.from("records").update({ flag_done: true, flag_done_at: new Date().toISOString() }).eq("id", id);
-    setFollowUps((prev) => prev.filter((f) => f.id !== id));
+    load();
   }
 
-  if (!loaded || (!due.length && !upcoming.length && !followUps.length)) return null;
+  async function reopenFollowUp(id: string) {
+    await supabase.from("records").update({ flag_done: false, flag_done_at: null }).eq("id", id);
+    load();
+  }
+
+  async function reopenReminder(id: string) {
+    await supabase.from("reminders").update({ done: false, done_at: null }).eq("id", id);
+    load();
+  }
+
+  if (!loaded || (!due.length && !upcoming.length && !followUps.length && !doneFollowUps.length && !doneReminders.length))
+    return null;
 
   const anyUrgent = due.some((x) => x.urgent) || followUps.some((f) => FLAGS[f.flag as keyof typeof FLAGS]?.urgent);
 
@@ -224,6 +253,54 @@ export default function ThingsToDoCard() {
           </div>
         );
       })}
+
+      {(doneFollowUps.length > 0 || doneReminders.length > 0) && (
+        <>
+          <p className="hint" style={{ marginTop: 10, cursor: "pointer" }} onClick={() => setShowDone(!showDone)}>
+            {showDone ? "▾" : "▸"} Recently done ({doneFollowUps.length + doneReminders.length}) — tap to{" "}
+            {showDone ? "hide" : "show"}
+          </p>
+          {showDone && (
+            <>
+              {doneReminders.map((r) => (
+                <div key={r.id} className="rec" style={{ opacity: 0.7, display: "flex", justifyContent: "space-between", gap: 8 }}>
+                  <span>
+                    🔔 {r.text}
+                    {r.done_at && (
+                      <small className="muted">
+                        {" "}
+                        — done {new Date(r.done_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                      </small>
+                    )}
+                  </span>
+                  <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => reopenReminder(r.id)}>
+                    Reopen
+                  </button>
+                </div>
+              ))}
+              {doneFollowUps.map((f) => (
+                <div key={f.id} className="rec" style={{ opacity: 0.7, display: "flex", justifyContent: "space-between", gap: 8 }}>
+                  <span>
+                    {followUpIcon(f)} {followUpLabel(f)}
+                    {f.child ? " · " + f.child : ""}
+                    {f.flag_done_at && (
+                      <small className="muted">
+                        {" "}
+                        — done {new Date(f.flag_done_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                      </small>
+                    )}
+                    <br />
+                    <small className="muted">{f.text}</small>
+                  </span>
+                  <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => reopenFollowUp(f.id)}>
+                    Reopen
+                  </button>
+                </div>
+              ))}
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 }
