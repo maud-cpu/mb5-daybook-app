@@ -63,6 +63,12 @@ type ParsedResource = { title: string; extra: string; length: string; descriptio
  * link ourselves from the title/author we've already cleanly extracted
  * sidesteps all of that.
  */
+function matchesCourseSearch(c: { title: string; description: string }, search: string): boolean {
+  const q = search.trim().toLowerCase();
+  if (!q) return true;
+  return c.title.toLowerCase().includes(q) || c.description.toLowerCase().includes(q);
+}
+
 function amazonSearchUrl(title: string, author: string): string {
   const q = [title, author].filter(Boolean).join(" ");
   return `https://www.amazon.co.uk/s?k=${encodeURIComponent(q)}&tag=fostercarersu-21`;
@@ -158,6 +164,7 @@ export default function AdminSharedContent() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkStatus, setBulkStatus] = useState("");
   const [courseTab, setCourseTab] = useState<"active" | "archived">("active");
+  const [courseSearch, setCourseSearch] = useState("");
 
   async function load() {
     const [{ data: r }, { data: rt }, { data: c }, { data: p }] = await Promise.all([
@@ -651,13 +658,33 @@ export default function AdminSharedContent() {
         </button>
       </div>
 
+      <input
+        type="text"
+        placeholder="Search by title or description…"
+        value={courseSearch}
+        onChange={(e) => setCourseSearch(e.target.value)}
+        style={{ margin: "8px 0" }}
+      />
+
       {["pre", "once", "3yr", "next"]
-        .filter((g) => courseTab === "active" || courses.some((c) => c.group_key === g && c.archived))
+        .filter((g) =>
+          courses.some(
+            (c) =>
+              c.group_key === g &&
+              (courseTab === "archived" ? c.archived : !c.archived) &&
+              matchesCourseSearch(c, courseSearch),
+          ),
+        )
         .map((g) => (
         <div className="card" key={g}>
           <h3>{GROUP_LABELS[g]}</h3>
           {courses
-            .filter((c) => c.group_key === g && (courseTab === "archived" ? c.archived : !c.archived))
+            .filter(
+              (c) =>
+                c.group_key === g &&
+                (courseTab === "archived" ? c.archived : !c.archived) &&
+                matchesCourseSearch(c, courseSearch),
+            )
             .map((c) => (
               <div key={c.id} style={{ borderBottom: "1px solid #eee", padding: "6px 0" }}>
                 <div className="row" style={{ alignItems: "center" }}>
@@ -713,6 +740,15 @@ export default function AdminSharedContent() {
           )}
         </div>
       ))}
+
+      {courseSearch.trim() &&
+        !courses.some(
+          (c) => (courseTab === "archived" ? c.archived : !c.archived) && matchesCourseSearch(c, courseSearch),
+        ) && (
+          <div className="card">
+            <p className="empty">Nothing matches &quot;{courseSearch.trim()}&quot; in {courseTab} resources.</p>
+          </div>
+        )}
 
       {toast && <div id="toast" className="show">{toast}</div>}
     </div>
