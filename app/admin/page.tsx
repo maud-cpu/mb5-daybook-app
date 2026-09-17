@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/auth";
 import { computeUsage, EntryDateRow } from "@/lib/usageStats";
 import ChangePasswordCard from "@/components/ChangePasswordCard";
+import DisplayNameCard from "@/components/DisplayNameCard";
 
 export default async function AdminPage() {
   const { supabase } = await requireAdmin();
@@ -44,6 +45,7 @@ export default async function AdminPage() {
         })}
       </div>
 
+      <DisplayNameCard />
       <ChangePasswordCard />
     </div>
   );

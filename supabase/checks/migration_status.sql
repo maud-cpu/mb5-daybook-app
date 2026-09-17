@@ -98,6 +98,10 @@ select migration, applied from (
          where table_schema = 'public' and table_name = 'shared_training_catalog' and column_name = 'length')),
 
     ('0016 dismissed_todos table',
-      to_regclass('public.dismissed_todos') is not null)
+      to_regclass('public.dismissed_todos') is not null),
+
+    ('0017 records.flag_dismissed column',
+      exists (select 1 from information_schema.columns
+         where table_schema = 'public' and table_name = 'records' and column_name = 'flag_dismissed'))
 ) as t(migration, applied)
 order by migration;

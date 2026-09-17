@@ -92,9 +92,10 @@ export async function POST(req: NextRequest) {
 
   const sys = `You sort a UK foster carer's spoken notes into buckets. Buckets: diary (day-to-day observations about a child), supervision (things to raise with the supervising social worker at next supervision), expenses (money spent, miles driven, or day care / babysitting provided for other carers' children), meds (a specific dose of medication given to a child), sw (log of contact with a social worker: calls, visits, what was agreed), incident (serious events needing formal reporting: injury, unexplained bruise, allegation, restraint, going missing, police), scratch (anything the carer says to "just record" or that fits nowhere).
 Children known: ${names.join(", ") || "unknown"}. Match spoken names to these where obvious. If the carer names where something goes, obey. Otherwise choose sensibly; use scratch when unsure. Split into separate items if there are several things. Keep the carer's words, tidied for a written record, British English. Never add facts.
+"kids" for each item must only be children the carer actually names or unambiguously refers to (e.g. "she"/"her" meaning the one child just named) in THAT item's own text — never add a child who isn't mentioned there, even if they're mentioned in a different item from the same note.
 For expenses set "kind": "purchase" (amount in pounds), "mileage" (miles driven, one item per journey, round trip if they say so), or "daycare" (care given: from/to clock times if the carer says them, otherwise hours; kids = the child cared for, overnight true if they stayed the night). Daycare and overnight are always ONE ITEM PER CHILD, even when several children were cared for on the same occasion at the same time. Overnight is set INDIVIDUALLY per child based on what actually happened to THAT child.
 For meds, set "medName", "dose", "given" (HH:MM), and "givenBy". One item per child per medicine given.
-Also set "flag" on any item that needs a follow-up: one of ${FLAG_KEYS.join(", ")}, or null. Use "reminder" only when the carer explicitly asks to be reminded — set "flagNote" to that instruction. Never set "flag" to "training". Be cautious: only set a safeguarding flag when the text actually describes that happening.
+Also set "flag" on any item that needs a follow-up: one of ${FLAG_KEYS.join(", ")}, or null. Use "reminder" only when the carer explicitly asks to be reminded — set "flagNote" to that instruction. Never set "flag" to "training". Set a safeguarding flag both when the text describes something happening, AND when the carer is asking or wondering whether a behaviour or mark might be a sign of one of these things (e.g. "is this a sign of abuse?") — that question is itself exactly the kind of concern that needs the guidance and support surfaced, not just a literal account of abuse having occurred. Still be cautious about flagging things that are clearly unrelated.
 Separately, consider whether any courses from this list could help: ${courses.join(" | ")}. Set "training" to a list of every one plausibly useful (often none, sometimes more than one), each as {"course":"<exact title>","why":"<one short clause, specific to why THIS course over the others>"}; empty list if none.
 Reason for day care, if said, is one of: ${DAYCARE_REASONS.join("/")}.
 Respond with ONLY a JSON array, no prose, no markdown: [{"bucket":"diary","child":"name or empty","text":"...","kind":"purchase|mileage|daycare|null","amount":number|null,"miles":number|null,"from":"HH:MM or null","to":"HH:MM or null","reason":"string or null","hours":number|null,"kids":["names"],"overnight":false,"medName":"string or null","dose":"string or null","given":"HH:MM or null","givenBy":"string or null","flag":"string or null","flagNote":"string or null","training":[{"course":"string","why":"string"}]}]`;
@@ -138,13 +139,14 @@ Respond with ONLY a JSON array, no prose, no markdown: [{"bucket":"diary","child
         }
       }
       const trainingFromFlag = flag && FLAG_TRAINING[flag as FlagKey];
-      const trainingList: { course: string; why: string }[] = Array.isArray(p.training) ? p.training : [];
-      const trainingNote = trainingFromFlag
-        ? ""
-        : trainingList
-            .filter((t) => t?.course && t?.why)
-            .map((t) => `${t.course} — ${t.why}`)
-            .join("\n");
+      const aiTrainingList: { course: string; why: string }[] = Array.isArray(p.training) ? p.training : [];
+      const trainingList = trainingFromFlag
+        ? [trainingFromFlag, ...aiTrainingList.filter((t) => t?.course && t.course !== trainingFromFlag.course)]
+        : aiTrainingList;
+      const trainingNote = trainingList
+        .filter((t) => t?.course && t?.why)
+        .map((t) => `${t.course} — ${t.why}`)
+        .join("\n");
 
       return {
         bucket: BUCKETS[p.bucket as keyof typeof BUCKETS] ? p.bucket : "scratch",

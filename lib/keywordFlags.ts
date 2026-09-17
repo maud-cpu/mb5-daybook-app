@@ -8,11 +8,30 @@ const KEYWORD_FLAGS: { flag: FlagKey; test: (s: string) => boolean }[] = [
   {
     flag: "sexualised",
     test: (s) =>
-      /sexuali[sz](?:ed|ing)|sexual(?:i[sz]ed|ly)?\s*(behaviour|behavior|play|touch(?:ing)?|comment|language|content|contact)|sexually inappropriate/i.test(
+      /sexuali[sz](?:ed|ing)|sexual(?:i[sz]ed|ly)?\s*(behaviour|behavior|play|touch(?:ing)?|comment|language|content|contact)|sexually inappropriate|sexually abused/i.test(
         s,
       ),
   },
   { flag: "sexualised", test: (s) => ROLEPLAY_RE.test(s) && UNDRESS_RE.test(s) },
+  {
+    // Catches the carer directly asking/wondering whether something might be
+    // a sign of sexual abuse -- this is exactly the kind of concern that
+    // should surface guidance and support, not just a literal description
+    // of abuse actually happening.
+    flag: "sexualised",
+    test: (s) =>
+      /\b(sign|signs)\s+of\s+sexual\s+abuse\b|\b(is|could|might|would)\s+(it|this|that)\s+(be\s+)?(a\s+sign\s+of\s+)?sexual\s+abuse\b/i.test(
+        s,
+      ),
+  },
+  {
+    // Same, for a possible sign of abuse generally (not specifically sexual).
+    flag: "disclosure",
+    test: (s) =>
+      /\b(sign|signs)\s+of\s+abuse\b|\b(is|could|might|would)\s+(it|this|that)\s+(be\s+)?(a\s+sign\s+of\s+)?abuse\b|\bbeing\s+abused\b/i.test(
+        s,
+      ),
+  },
 ];
 
 const KEYWORD_TRAINING: { test: RegExp; note: string }[] = [

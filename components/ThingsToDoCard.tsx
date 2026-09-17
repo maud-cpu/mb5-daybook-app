@@ -25,7 +25,7 @@ type FollowUp = {
   training_note: string;
 };
 
-type DoneFollowUp = FollowUp & { flag_done_at: string };
+type DoneFollowUp = FollowUp & { flag_done_at: string; flag_dismissed: boolean };
 type DismissedDue = { key: string; text: string; dismissed_at: string };
 
 // inv-monthend/inv-send/payday recur every month with the same key -- dismiss
@@ -89,7 +89,7 @@ export default function ThingsToDoCard() {
       supabase.from("records").select("id, bucket, child, text, flag, flag_note, training_note").eq("flag_done", false),
       supabase
         .from("records")
-        .select("id, bucket, child, text, flag, flag_note, training_note, flag_done_at")
+        .select("id, bucket, child, text, flag, flag_note, training_note, flag_done_at, flag_dismissed")
         .eq("flag_done", true)
         .order("flag_done_at", { ascending: false })
         .limit(20),
@@ -192,12 +192,23 @@ export default function ThingsToDoCard() {
   }
 
   async function markFollowUpDone(id: string) {
-    await supabase.from("records").update({ flag_done: true, flag_done_at: new Date().toISOString() }).eq("id", id);
+    await supabase
+      .from("records")
+      .update({ flag_done: true, flag_done_at: new Date().toISOString(), flag_dismissed: false })
+      .eq("id", id);
+    load();
+  }
+
+  async function dismissFollowUp(id: string) {
+    await supabase
+      .from("records")
+      .update({ flag_done: true, flag_done_at: new Date().toISOString(), flag_dismissed: true })
+      .eq("id", id);
     load();
   }
 
   async function reopenFollowUp(id: string) {
-    await supabase.from("records").update({ flag_done: false, flag_done_at: null }).eq("id", id);
+    await supabase.from("records").update({ flag_done: false, flag_done_at: null, flag_dismissed: false }).eq("id", id);
     load();
   }
 
@@ -275,6 +286,9 @@ export default function ThingsToDoCard() {
                 {f.training_note && f.flag !== "training" && <div className="note">💡 {f.training_note}</div>}
                 <button className="chip on" onClick={() => markFollowUpDone(f.id)}>
                   Mark done
+                </button>{" "}
+                <button className="chip" onClick={() => dismissFollowUp(f.id)}>
+                  Dismiss
                 </button>
               </div>
             )}
@@ -328,7 +342,8 @@ export default function ThingsToDoCard() {
                     {f.flag_done_at && (
                       <small className="muted">
                         {" "}
-                        — done {new Date(f.flag_done_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                        — {f.flag_dismissed ? "dismissed" : "done"}{" "}
+                        {new Date(f.flag_done_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                       </small>
                     )}
                     <br />
