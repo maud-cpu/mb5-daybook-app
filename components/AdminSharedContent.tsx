@@ -66,6 +66,18 @@ function looksLikeBookList(text: string): boolean {
 }
 
 /**
+ * Builds the same "search Amazon for this title" link the reading list
+ * itself describes using. Used both when a pasted line's markdown link
+ * didn't survive the copy/paste (pasting a rendered link into a plain text
+ * box commonly keeps only its visible text, dropping the href entirely)
+ * and to backfill a link onto a book that's already been saved without one.
+ */
+function amazonSearchUrl(title: string, author: string): string {
+  const q = [title, author].filter(Boolean).join(" ");
+  return `https://www.amazon.co.uk/s?k=${encodeURIComponent(q)}&tag=fostercarersu-21`;
+}
+
+/**
  * A reading list pasted as one book per bullet, with a short description
  * (and optionally a "Keywords: ..." line) underneath each one, and section
  * headings/intro paragraphs in between -- exactly the shape a curated book
@@ -84,11 +96,13 @@ function parseBookList(text: string): ParsedResource[] {
     const m = line.match(BOOK_HEADER_RE);
     if (m) {
       const [, title, author, pages, url] = m;
+      const cleanTitle = title.trim();
+      const cleanAuthor = author.trim();
       current = {
-        title: title.trim(),
-        extra: url || "",
+        title: cleanTitle,
+        extra: url || amazonSearchUrl(cleanTitle, cleanAuthor),
         length: pages ? `Book, ~${pages} pages` : "Book",
-        description: author ? `By ${author.trim()}.` : "",
+        description: cleanAuthor ? `By ${cleanAuthor}.` : "",
       };
       books.push(current);
       return;
@@ -310,12 +324,18 @@ export default function AdminSharedContent() {
     // this is how an earlier medium-only tag (e.g. "Podcast") picks up a
     // provider name once that's supported, without needing a re-import.
     const targets = courses.filter((c) => c.url);
-    if (!targets.length) {
+    // A book saved with no link at all -- typically because a markdown
+    // link's href didn't survive being pasted (a browser paste into a plain
+    // text box commonly keeps only the visible link text) -- gets the same
+    // Amazon search link rebuilt from its own title/author instead of
+    // needing the whole list re-pasted.
+    const linklessBooks = courses.filter((c) => !c.url && /^Book(,|$)/.test(c.length));
+    if (!targets.length && !linklessBooks.length) {
       showToast("No resources have their own link to check.");
       return;
     }
     setBulkBusy(true);
-    const fetched = await fetchTitlesFor([...new Set(targets.map((c) => c.url))]);
+    const fetched = targets.length ? await fetchTitlesFor([...new Set(targets.map((c) => c.url))]) : {};
     setBulkStatus("Saving…");
     let updated = 0;
     for (const c of targets) {
@@ -338,7 +358,13 @@ export default function AdminSharedContent() {
         updated++;
       }
     }
-    showToast(updated ? `Updated ${updated} of ${targets.length}` : "Nothing new to add for any of them");
+    for (const c of linklessBooks) {
+      const authorMatch = c.description.match(/^By (.+?)\./);
+      const url = amazonSearchUrl(c.title, authorMatch ? authorMatch[1] : "");
+      await supabase.from("shared_training_catalog").update({ url }).eq("id", c.id);
+      updated++;
+    }
+    showToast(updated ? `Updated ${updated} of ${targets.length + linklessBooks.length}` : "Nothing new to add for any of them");
     setBulkBusy(false);
     setBulkStatus("");
     load();
@@ -510,11 +536,13 @@ export default function AdminSharedContent() {
         <p className="note" style={{ marginTop: 10 }}>
           Re-checks every linked resource for its medium, best-effort duration, (for YouTube/Spotify/Vimeo) the
           channel or show name, and — if it doesn&apos;t have one yet — a description pulled from the page itself
-          (e.g. the blurb shown under a Spotify episode). Never overwrites a description you&apos;ve written or
-          edited yourself. Safe to re-run any time, e.g. after this gains a new capability.
+          (e.g. the blurb shown under a Spotify episode). Also rebuilds a missing Amazon link on any book that got
+          saved without one (this happens if a link&apos;s underlying address didn&apos;t survive being pasted).
+          Never overwrites a description you&apos;ve written or edited yourself. Safe to re-run any time, e.g. after
+          this gains a new capability.
         </p>
         <button className="chip" disabled={bulkBusy} onClick={backfillLengths}>
-          {bulkBusy ? bulkStatus || "Working…" : "Update medium/length/description for all linked resources"}
+          {bulkBusy ? bulkStatus || "Working…" : "Update medium/length/description/links for all resources"}
         </button>{" "}
         <button className="chip" disabled={bulkBusy} onClick={removeDuplicateCourses}>
           Remove duplicate resources
