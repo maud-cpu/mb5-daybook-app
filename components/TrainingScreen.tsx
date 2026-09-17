@@ -19,6 +19,38 @@ type Course = {
 type Platform = { name: string; url: string };
 
 const GROUP_ORDER = ["next", "pre", "once", "3yr"] as const;
+const LENGTH_BUCKETS = ["Under 15 min", "15–30 min", "30–60 min", "Over 1 hour", "Not timed"] as const;
+
+function minutesOf(length: string): number | null {
+  if (!length) return null;
+  const hm = length.match(/(\d+)\s*h(?:\s*(\d+)\s*m)?/i);
+  if (hm) return Number(hm[1]) * 60 + Number(hm[2] || 0);
+  const m = length.match(/(\d+)\s*min/i);
+  if (m) return Number(m[1]);
+  if (/under a min/i.test(length)) return 0;
+  return null;
+}
+
+function lengthBucketOf(c: Course): string {
+  const mins = minutesOf(c.length);
+  if (mins === null) return "Not timed";
+  if (mins < 15) return "Under 15 min";
+  if (mins < 30) return "15–30 min";
+  if (mins < 60) return "30–60 min";
+  return "Over 1 hour";
+}
+
+function mediumOf(c: Course): string {
+  if (c.length) {
+    const part = c.length.split(/,|—/)[0].trim();
+    if (part) return part;
+  }
+  return c.how || "";
+}
+
+function isMandatory(c: Course): boolean {
+  return c.group_key !== "next";
+}
 
 function statusFor(course: Course, completedOn: string | undefined) {
   if (!completedOn) return { label: course.group_key === "next" ? "" : "Not done", color: "var(--grey)" };
@@ -35,6 +67,9 @@ export default function TrainingScreen() {
   const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [progress, setProgress] = useState<Record<string, string>>({});
   const [personal, setPersonal] = useState<Record<string, PersonalSuggestion>>({});
+  const [search, setSearch] = useState("");
+  const [mediaFilter, setMediaFilter] = useState("");
+  const [lengthFilter, setLengthFilter] = useState("");
 
   async function load() {
     const [{ data: c }, { data: pl }, { data: pr }, { data: notes }] = await Promise.all([
@@ -79,12 +114,26 @@ export default function TrainingScreen() {
   }
 
   const platformUrl = (name: string) => platforms.find((p) => p.name === name)?.url || "";
+
+  const mediaOptions = Array.from(new Set(courses.map((c) => mediumOf(c)).filter(Boolean))).sort();
+
+  function matchesFilters(c: Course): boolean {
+    if (search.trim() && !c.title.toLowerCase().includes(search.trim().toLowerCase())) return false;
+    if (mediaFilter && mediumOf(c) !== mediaFilter) return false;
+    if (lengthFilter && lengthBucketOf(c) !== lengthFilter) return false;
+    return true;
+  }
+
   const groups = GROUP_ORDER.map((key) => ({
     key,
     label: courses.find((c) => c.group_key === key)?.group_label || key,
-    rows: courses.filter((c) => c.group_key === key && !personal[c.title]),
+    rows: courses.filter((c) => c.group_key === key && !personal[c.title] && matchesFilters(c)),
   })).filter((g) => g.rows.length);
-  const personalEntries = Object.entries(personal);
+  const personalEntries = Object.entries(personal).filter(([title]) => {
+    const course = courses.find((c) => c.title === title);
+    return course ? matchesFilters(course) : title.toLowerCase().includes(search.trim().toLowerCase());
+  });
+  const filtersActive = search.trim() || mediaFilter || lengthFilter;
 
   return (
     <div>
@@ -92,6 +141,7 @@ export default function TrainingScreen() {
         <h3>Training</h3>
         <p className="note">
           Enter the date you completed each course; 3-yearly ones show when they&apos;re due for renewal.
+          ⭐ marks the courses that are mandatory rather than just suggested.
         </p>
         <div className="chips">
           {platforms
@@ -101,6 +151,31 @@ export default function TrainingScreen() {
                 Open {p.name} ↗
               </a>
             ))}
+        </div>
+        <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+          <input
+            type="text"
+            placeholder="Search by keyword…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ flex: "1 1 180px" }}
+          />
+          <select value={mediaFilter} onChange={(e) => setMediaFilter(e.target.value)} style={{ flex: "0 0 auto" }}>
+            <option value="">All media</option>
+            {mediaOptions.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+          <select value={lengthFilter} onChange={(e) => setLengthFilter(e.target.value)} style={{ flex: "0 0 auto" }}>
+            <option value="">Any length</option>
+            {LENGTH_BUCKETS.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
       {personalEntries.length > 0 && (
@@ -119,7 +194,10 @@ export default function TrainingScreen() {
                 style={{ alignItems: "flex-start", borderBottom: "1px solid #eee", padding: "6px 0" }}
               >
                 <div style={{ flex: 1 }}>
-                  <b>{title}</b>
+                  <b>
+                    {course && isMandatory(course) && "⭐ "}
+                    {title}
+                  </b>
                   {course?.length && (
                     <>
                       {" "}
@@ -168,7 +246,10 @@ export default function TrainingScreen() {
                 style={{ alignItems: "center", borderBottom: "1px solid #eee", padding: "6px 0" }}
               >
                 <div style={{ flex: 1 }}>
-                  <b>{c.title}</b>
+                  <b>
+                    {isMandatory(c) && "⭐ "}
+                    {c.title}
+                  </b>
                   <br />
                   <small className="muted">
                     {[c.how, c.platform, c.length].filter(Boolean).join(" · ")}
@@ -196,6 +277,11 @@ export default function TrainingScreen() {
           })}
         </div>
       ))}
+      {filtersActive && personalEntries.length === 0 && groups.length === 0 && (
+        <div className="card">
+          <p className="empty">No training matches that search — try clearing the filters above.</p>
+        </div>
+      )}
     </div>
   );
 }
