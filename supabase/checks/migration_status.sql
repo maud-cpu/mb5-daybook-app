@@ -91,6 +91,10 @@ select migration, applied from (
 
     ('0014 per-course direct link column',
       exists (select 1 from information_schema.columns
-         where table_schema = 'public' and table_name = 'shared_training_catalog' and column_name = 'url'))
+         where table_schema = 'public' and table_name = 'shared_training_catalog' and column_name = 'url')),
+
+    ('0015 per-course length/format column',
+      exists (select 1 from information_schema.columns
+         where table_schema = 'public' and table_name = 'shared_training_catalog' and column_name = 'length'))
 ) as t(migration, applied)
 order by migration;

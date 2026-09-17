@@ -95,9 +95,9 @@ Children known: ${names.join(", ") || "unknown"}. Match spoken names to these wh
 For expenses set "kind": "purchase" (amount in pounds), "mileage" (miles driven, one item per journey, round trip if they say so), or "daycare" (care given: from/to clock times if the carer says them, otherwise hours; kids = the child cared for, overnight true if they stayed the night). Daycare and overnight are always ONE ITEM PER CHILD, even when several children were cared for on the same occasion at the same time. Overnight is set INDIVIDUALLY per child based on what actually happened to THAT child.
 For meds, set "medName", "dose", "given" (HH:MM), and "givenBy". One item per child per medicine given.
 Also set "flag" on any item that needs a follow-up: one of ${FLAG_KEYS.join(", ")}, or null. Use "reminder" only when the carer explicitly asks to be reminded — set "flagNote" to that instruction. Never set "flag" to "training". Be cautious: only set a safeguarding flag when the text actually describes that happening.
-Separately, consider whether any course from this list could help: ${courses.join(" | ")}. If plausibly useful, set "training" to {"course":"<exact title>","why":"<one short clause>"}; otherwise null.
+Separately, consider whether any courses from this list could help: ${courses.join(" | ")}. Set "training" to a list of every one plausibly useful (often none, sometimes more than one), each as {"course":"<exact title>","why":"<one short clause, specific to why THIS course over the others>"}; empty list if none.
 Reason for day care, if said, is one of: ${DAYCARE_REASONS.join("/")}.
-Respond with ONLY a JSON array, no prose, no markdown: [{"bucket":"diary","child":"name or empty","text":"...","kind":"purchase|mileage|daycare|null","amount":number|null,"miles":number|null,"from":"HH:MM or null","to":"HH:MM or null","reason":"string or null","hours":number|null,"kids":["names"],"overnight":false,"medName":"string or null","dose":"string or null","given":"HH:MM or null","givenBy":"string or null","flag":"string or null","flagNote":"string or null","training":{"course":"string","why":"string"} or null}]`;
+Respond with ONLY a JSON array, no prose, no markdown: [{"bucket":"diary","child":"name or empty","text":"...","kind":"purchase|mileage|daycare|null","amount":number|null,"miles":number|null,"from":"HH:MM or null","to":"HH:MM or null","reason":"string or null","hours":number|null,"kids":["names"],"overnight":false,"medName":"string or null","dose":"string or null","given":"HH:MM or null","givenBy":"string or null","flag":"string or null","flagNote":"string or null","training":[{"course":"string","why":"string"}]}]`;
 
   try {
     const anthropic = new Anthropic({ apiKey });
@@ -138,12 +138,13 @@ Respond with ONLY a JSON array, no prose, no markdown: [{"bucket":"diary","child
         }
       }
       const trainingFromFlag = flag && FLAG_TRAINING[flag as FlagKey];
+      const trainingList: { course: string; why: string }[] = Array.isArray(p.training) ? p.training : [];
       const trainingNote = trainingFromFlag
         ? ""
-        : p.training?.course && p.training?.why
-          ? `${p.training.course} — ${p.training.why}`
-          : "";
-      const trainingCourse = trainingFromFlag ? "" : p.training?.course || "";
+        : trainingList
+            .filter((t) => t?.course && t?.why)
+            .map((t) => `${t.course} — ${t.why}`)
+            .join("\n");
 
       return {
         bucket: BUCKETS[p.bucket as keyof typeof BUCKETS] ? p.bucket : "scratch",
@@ -166,7 +167,6 @@ Respond with ONLY a JSON array, no prose, no markdown: [{"bucket":"diary","child
         flag,
         flag_note: flagNote,
         training_note: trainingNote,
-        training_course: trainingCourse,
         unmatched,
       };
     });

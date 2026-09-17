@@ -12,6 +12,7 @@ type Course = {
   how: string;
   platform: string;
   url: string;
+  length: string;
   sort_order: number;
 };
 
@@ -119,6 +120,12 @@ export default function TrainingScreen() {
               >
                 <div style={{ flex: 1 }}>
                   <b>{title}</b>
+                  {course?.length && (
+                    <>
+                      {" "}
+                      <small className="muted">· {course.length}</small>
+                    </>
+                  )}
                   {info.reasons.map((r, i) => (
                     <small key={i} className="muted" style={{ display: "block", marginTop: 2 }}>
                       💡 {r}
@@ -164,7 +171,7 @@ export default function TrainingScreen() {
                   <b>{c.title}</b>
                   <br />
                   <small className="muted">
-                    {c.how} · {c.platform}
+                    {[c.how, c.platform, c.length].filter(Boolean).join(" · ")}
                   </small>
                   {status.label && (
                     <>

@@ -5,7 +5,17 @@ import { createClient } from "@/lib/supabase/client";
 import { BANDS, Rates } from "@/lib/types";
 
 type RotaRow = { date: string; name: string; phone: string };
-type Course = { id: string; group_key: string; group_label: string; title: string; how: string; platform: string; url: string; archived: boolean };
+type Course = {
+  id: string;
+  group_key: string;
+  group_label: string;
+  title: string;
+  how: string;
+  platform: string;
+  url: string;
+  length: string;
+  archived: boolean;
+};
 type Platform = { name: string; url: string };
 
 const GROUP_LABELS: Record<string, string> = {
@@ -161,14 +171,14 @@ export default function AdminSharedContent() {
       .filter(Boolean);
     const parsed = lines.map((line) => {
       if (line.includes("|")) {
-        const [title, rest] = line.split("|").map((s) => s.trim());
-        return { title, extra: rest || "" };
+        const [title, rest, length] = line.split("|").map((s) => s.trim());
+        return { title, extra: rest || "", length: length || "" };
       }
-      if (/^https?:\/\//i.test(line)) return { title: "", extra: line };
-      return { title: line, extra: "" };
+      if (/^https?:\/\//i.test(line)) return { title: "", extra: line, length: "" };
+      return { title: line, extra: "", length: "" };
     });
     if (!parsed.length) {
-      showToast("Nothing to import — one per line: a title, a link, or Title | link");
+      showToast("Nothing to import — one per line: a title, a link, or Title | link | length");
       return;
     }
 
@@ -178,7 +188,11 @@ export default function AdminSharedContent() {
     setBulkStatus("Saving…");
 
     const rows = parsed
-      .map((r) => ({ title: r.title || fetchedTitles[r.extra] || fallbackTitleFromUrl(r.extra), extra: r.extra }))
+      .map((r) => ({
+        title: r.title || fetchedTitles[r.extra] || fallbackTitleFromUrl(r.extra),
+        extra: r.extra,
+        length: r.length,
+      }))
       .filter((r) => r.title);
     const inserts = rows.map((r, i) => {
       const isUrl = /^https?:\/\//i.test(r.extra);
@@ -189,6 +203,7 @@ export default function AdminSharedContent() {
         title: r.title,
         platform: matchedPlatform ? matchedPlatform.name : "",
         url: !matchedPlatform && isUrl ? r.extra : "",
+        length: r.length,
         sort_order: 999 + i,
       };
     });
@@ -303,6 +318,8 @@ export default function AdminSharedContent() {
           <br />
           <code>Title | link or platform name</code> — you give the title
           <br />
+          <code>Title | link | Video, 3 min</code> — add a rough format/length too, optional
+          <br />
           <code>https://a-bare-link-with-no-title</code> — just paste the link and it fetches the page&apos;s title
           for you automatically
         </p>
@@ -378,6 +395,12 @@ export default function AdminSharedContent() {
                     onBlur={(e) => updateCourse(c.id, { url: e.target.value })}
                   />
                 )}
+                <input
+                  style={{ flex: "0 0 130px" }}
+                  defaultValue={c.length}
+                  placeholder="Video, 3 min"
+                  onBlur={(e) => updateCourse(c.id, { length: e.target.value })}
+                />
                 <button className="chip" onClick={() => updateCourse(c.id, { archived: !c.archived })}>
                   {c.archived ? "Unarchive" : "Archive"}
                 </button>
