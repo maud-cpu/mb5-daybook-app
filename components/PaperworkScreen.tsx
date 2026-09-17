@@ -16,6 +16,11 @@ export default function PaperworkScreen() {
   const [children, setChildren] = useState<Child[]>([]);
   const [rates, setRates] = useState<Rates | null>(null);
   const [claimedOpen, setClaimedOpen] = useState(false);
+  const [childFilter, setChildFilter] = useState<string[]>([]);
+
+  function toggleChildFilter(name: string) {
+    setChildFilter((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
+  }
 
   function patchRecord(id: string, patch: Partial<EntryRecord>) {
     setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -58,7 +63,10 @@ export default function PaperworkScreen() {
   }, []);
 
   const thisMonth = today().slice(0, 7);
-  const monthRecs = records.filter((r) => r.date.startsWith(thisMonth));
+  const allMonthRecs = records.filter((r) => r.date.startsWith(thisMonth));
+  const monthRecs = childFilter.length
+    ? allMonthRecs.filter((r) => r.kids.some((k) => childFilter.includes(k)))
+    : allMonthRecs;
 
   return (
     <div>
@@ -69,6 +77,25 @@ export default function PaperworkScreen() {
           </button>
         ))}
       </div>
+
+      {["month", "expenses", "meds"].includes(tab) && children.length > 0 && (
+        <div className="chips" style={{ marginTop: 10 }}>
+          {children.map((c) => (
+            <button
+              key={c.id}
+              className={`chip${childFilter.includes(c.name) ? " on" : ""}`}
+              onClick={() => toggleChildFilter(c.name)}
+            >
+              {c.name}
+            </button>
+          ))}
+          {childFilter.length > 0 && (
+            <button className="chip" onClick={() => setChildFilter([])}>
+              Clear
+            </button>
+          )}
+        </div>
+      )}
 
       {tab === "diary" && <DiaryTab />}
 
