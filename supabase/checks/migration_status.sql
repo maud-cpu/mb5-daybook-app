@@ -106,6 +106,10 @@ select migration, applied from (
 
     ('0018 household_children and household_visitors tables',
       to_regclass('public.household_children') is not null
-      and to_regclass('public.household_visitors') is not null)
+      and to_regclass('public.household_visitors') is not null),
+
+    ('0019 household_children.category column',
+      exists (select 1 from information_schema.columns
+         where table_schema = 'public' and table_name = 'household_children' and column_name = 'category'))
 ) as t(migration, applied)
 order by migration;
