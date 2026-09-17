@@ -57,9 +57,12 @@ type ParsedResource = { title: string; extra: string; length: string; descriptio
 // "* The A-Z of Therapeutic Parenting — Sarah Naish  (~352 pages)  [View on Amazon](https://...)"
 // -- title, author and page count are optional-ish but the bullet + em dash
 // is the reliable signal that a line is a book header rather than a
-// paragraph of description or a section heading.
+// paragraph of description or a section heading. The link can be a
+// markdown link (the usual case) or a bare URL -- a markdown link's own
+// square brackets are easy to lose in a copy/paste, at which point only a
+// plain https:// address is left trailing the line.
 const BOOK_HEADER_RE =
-  /^[*•-]\s+(.+?)\s*—\s*(.+?)\s*(?:\(~?(\d+(?:-\d+)?)(?:\s*per title)?\s*pages?\))?\s*(?:\[[^\]]*\]\((https?:\/\/\S+?)\))?\s*$/;
+  /^[*•-]\s+(.+?)\s*—\s*(.+?)\s*(?:\(~?(\d+(?:-\d+)?)(?:\s*per title)?\s*pages?\))?\s*(?:\[[^\]]*\]\((https?:\/\/\S+?)\)|(https?:\/\/\S+))?\s*$/;
 
 function looksLikeBookList(text: string): boolean {
   return text.split("\n").some((line) => BOOK_HEADER_RE.test(line.trim()));
@@ -95,9 +98,22 @@ function parseBookList(text: string): ParsedResource[] {
     if (!line) return;
     const m = line.match(BOOK_HEADER_RE);
     if (m) {
-      const [, title, author, pages, url] = m;
+      const [, title, author, pages, bracketUrl, bareUrl] = m;
       const cleanTitle = title.trim();
-      const cleanAuthor = author.trim();
+      let cleanAuthor = author.trim();
+      let url = bracketUrl || bareUrl || "";
+      // Belt and braces: if an even less usual format still lets a stray
+      // link or page count end up inside the author capture, pull it back
+      // out rather than leaving it sitting in the description as raw text.
+      if (!url) {
+        const strayUrl = cleanAuthor.match(/(https?:\/\/\S+)$/);
+        if (strayUrl) {
+          url = strayUrl[1].replace(/[.,;:)]+$/, "");
+          cleanAuthor = cleanAuthor.slice(0, strayUrl.index).trim();
+        }
+      }
+      const strayPages = cleanAuthor.match(/\(~?\d+(?:-\d+)?(?:\s*per title)?\s*pages?\)$/i);
+      if (!pages && strayPages) cleanAuthor = cleanAuthor.slice(0, strayPages.index).trim();
       current = {
         title: cleanTitle,
         extra: url || amazonSearchUrl(cleanTitle, cleanAuthor),
@@ -359,9 +375,22 @@ export default function AdminSharedContent() {
       }
     }
     for (const c of linklessBooks) {
-      const authorMatch = c.description.match(/^By (.+?)\./);
-      const url = amazonSearchUrl(c.title, authorMatch ? authorMatch[1] : "");
-      await supabase.from("shared_training_catalog").update({ url }).eq("id", c.id);
+      // A book saved before the link-parsing fix can have the actual link
+      // sitting as raw text inside its own description (it got swallowed
+      // there instead of being recognised as a link) -- pull it back out
+      // and clean the description up, rather than just adding a second,
+      // freshly-built link alongside the stray one.
+      const patch: Partial<Course> = {};
+      const strayUrl = c.description.match(/(https?:\/\/\S+)/);
+      const strayUrlClean = strayUrl ? strayUrl[1].replace(/[.,;:)]+$/, "") : "";
+      let description = c.description;
+      if (strayUrl) {
+        description = description.replace(strayUrl[0], "").replace(/\s*\(~?\d+(?:-\d+)?(?:\s*per title)?\s*pages?\)\s*/i, " ").replace(/\s+\.?\s*$/, ".").trim();
+        if (description !== c.description) patch.description = description;
+      }
+      const authorMatch = description.match(/^By (.+?)\./);
+      patch.url = strayUrlClean || amazonSearchUrl(c.title, authorMatch ? authorMatch[1] : "");
+      await supabase.from("shared_training_catalog").update(patch).eq("id", c.id);
       updated++;
     }
     showToast(updated ? `Updated ${updated} of ${targets.length + linklessBooks.length}` : "Nothing new to add for any of them");
