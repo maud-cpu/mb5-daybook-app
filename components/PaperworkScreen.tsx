@@ -9,6 +9,14 @@ import HandoverTab from "@/components/HandoverTab";
 
 type Tab = "month" | "expenses" | "meds" | "diary" | "handover";
 
+function fmtDate(iso: string): string {
+  return new Date(iso + "T12:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+function fmtMonthLabel(ym: string): string {
+  return new Date(ym + "-01").toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+}
+
 export default function PaperworkScreen() {
   const supabase = createClient();
   const [tab, setTab] = useState<Tab>("month");
@@ -103,7 +111,7 @@ export default function PaperworkScreen() {
 
       {tab === "expenses" && rates && (
         <div className="card">
-          <h3>Expenses — {thisMonth}</h3>
+          <h3>Expenses — {fmtMonthLabel(thisMonth)}</h3>
           {(() => {
             const all = monthRecs.filter((r) => r.bucket === "expenses");
             const unclaimed = all.filter((r) => !r.claimed);
@@ -168,13 +176,13 @@ export default function PaperworkScreen() {
 
       {tab === "meds" && (
         <div className="card">
-          <h3>Medication log — {thisMonth}</h3>
+          <h3>Medication log — {fmtMonthLabel(thisMonth)}</h3>
           {monthRecs.filter((r) => r.bucket === "meds").length === 0 && <p className="empty">Nothing this month.</p>}
           {monthRecs
             .filter((r) => r.bucket === "meds")
             .map((r) => (
               <div className="rec" key={r.id}>
-                {describeMeds(r)} <small className="muted">— {r.date}</small>
+                {describeMeds(r)} <small className="muted">— {fmtDate(r.date)}</small>
               </div>
             ))}
         </div>
@@ -197,7 +205,7 @@ function MonthReport({
   thisMonth: string;
 }) {
   const [copyMsg, setCopyMsg] = useState("");
-  const monthLabel = new Date(thisMonth + "-01").toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  const monthLabel = fmtMonthLabel(thisMonth);
 
   const text = (() => {
     let out = `Everyone — ${monthLabel}\n`;
@@ -206,10 +214,10 @@ function MonthReport({
       if (!rs.length) return;
       out += `\n${BUCKETS[k].toUpperCase()}\n`;
       if (k === "expenses") {
-        rs.forEach((r) => (out += `  ${r.date}: ${describeExpense(rates, kids, r)}\n`));
+        rs.forEach((r) => (out += `  ${fmtDate(r.date)}: ${describeExpense(rates, kids, r)}\n`));
         out += `Total: ${gbp(expenseTotals(rates, kids, rs).total)}\n`;
       } else {
-        rs.forEach((r) => (out += `  ${r.date}${r.child ? ` (${r.child})` : ""}: ${r.bucket === "meds" ? describeMeds(r) : r.text}${r.done ? " ✓" : ""}\n`));
+        rs.forEach((r) => (out += `  ${fmtDate(r.date)}${r.child ? ` (${r.child})` : ""}: ${r.bucket === "meds" ? describeMeds(r) : r.text}${r.done ? " ✓" : ""}\n`));
       }
     });
     return out;
