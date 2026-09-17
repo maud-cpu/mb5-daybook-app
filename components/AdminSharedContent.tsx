@@ -224,9 +224,12 @@ export default function AdminSharedContent() {
   }
 
   async function backfillLengths() {
-    const targets = courses.filter((c) => c.url && !c.length);
+    // Re-checks every linked resource, not just ones with nothing at all --
+    // this is how an earlier medium-only tag (e.g. "Podcast") picks up a
+    // provider name once that's supported, without needing a re-import.
+    const targets = courses.filter((c) => c.url);
     if (!targets.length) {
-      showToast("Nothing to fill in — every linked resource already has one, or none have their own link.");
+      showToast("No resources have their own link to check.");
       return;
     }
     setBulkBusy(true);
@@ -235,14 +238,48 @@ export default function AdminSharedContent() {
     let updated = 0;
     for (const c of targets) {
       const length = fetched[c.url]?.length;
-      if (length) {
+      if (length && length !== c.length) {
         await supabase.from("shared_training_catalog").update({ length }).eq("id", c.id);
         updated++;
       }
     }
-    showToast(updated ? `Filled in ${updated} of ${targets.length}` : "Couldn't work out a medium for any of them");
+    showToast(updated ? `Updated ${updated} of ${targets.length}` : "Nothing new to add for any of them");
     setBulkBusy(false);
     setBulkStatus("");
+    load();
+  }
+
+  async function removeDuplicateCourses() {
+    const groups = new Map<string, Course[]>();
+    courses.forEach((c) => {
+      const key = (c.url || c.title).trim().toLowerCase();
+      if (!key) return;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(c);
+    });
+    const toDelete: Course[] = [];
+    groups.forEach((group) => {
+      if (group.length < 2) return;
+      const [, ...rest] = [...group].sort((a, b) => {
+        const score = (c: Course) => (c.url ? 2 : 0) + (c.length ? 1 : 0) + (/^https?:\/\//i.test(c.title) ? -5 : 0);
+        return score(b) - score(a);
+      });
+      toDelete.push(...rest);
+    });
+    if (!toDelete.length) {
+      showToast("No duplicates found.");
+      return;
+    }
+    if (!confirm(`Delete ${toDelete.length} duplicate resource${toDelete.length > 1 ? "s" : ""}? This can't be undone.`)) return;
+    setBulkBusy(true);
+    setBulkStatus("Removing duplicates…");
+    const { error } = await supabase
+      .from("shared_training_catalog")
+      .delete()
+      .in("id", toDelete.map((c) => c.id));
+    setBulkBusy(false);
+    setBulkStatus("");
+    showToast(error ? "Couldn't remove duplicates: " + error.message : `Removed ${toDelete.length} duplicate${toDelete.length > 1 ? "s" : ""}`);
     load();
   }
 
@@ -372,12 +409,14 @@ export default function AdminSharedContent() {
           {bulkBusy ? bulkStatus || "Importing…" : "Import"}
         </button>
         <p className="note" style={{ marginTop: 10 }}>
-          Already have resources with a link but no medium/length tag (e.g. added before this existed)? This works it
-          out for those, best-effort — many pages don&apos;t expose a runtime, so some will only get a medium (Video,
-          Podcast, Article).
+          Re-checks every linked resource for its medium, best-effort duration, and (for YouTube/Spotify/Vimeo) the
+          channel or show name — safe to re-run any time, e.g. after this gains a new capability.
         </p>
         <button className="chip" disabled={bulkBusy} onClick={backfillLengths}>
-          {bulkBusy ? bulkStatus || "Working…" : "Fill in missing medium/length"}
+          {bulkBusy ? bulkStatus || "Working…" : "Update medium/length for all linked resources"}
+        </button>{" "}
+        <button className="chip" disabled={bulkBusy} onClick={removeDuplicateCourses}>
+          Remove duplicate resources
         </button>
       </div>
 
