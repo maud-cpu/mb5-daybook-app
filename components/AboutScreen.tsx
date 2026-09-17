@@ -8,12 +8,8 @@ import { Child, LIVES_CATS, livesHereOf, MB_OPTIONS, VISITS_CATS } from "@/lib/t
 const ADULT_ROLES = ["Foster carer", "Adult child", "Live-in grandparent", "Other"];
 const VISITOR_ROLES = ["Mockingbird hub carer", "Respite support worker", "Family friend / helper", "Other"];
 
-function categoryLabel(cat: string): string {
-  return [...LIVES_CATS, ...VISITS_CATS].find(([k]) => k === cat)?.[1] || cat;
-}
-
 type Adult = { id: string; name: string; phone: string; email: string; role: string };
-type HouseholdChild = { id: string; name: string; born: string | null; notes: string };
+type HouseholdChild = { id: string; name: string; born: string | null; category: string; notes: string };
 type Visitor = { id: string; name: string; phone: string; email: string; role: string };
 
 type Household = {
@@ -46,10 +42,12 @@ export default function AboutScreen() {
   const [newAdult, setNewAdult] = useState({ name: "", phone: "", email: "", role: ADULT_ROLES[0] });
   const [householdChildren, setHouseholdChildren] = useState<HouseholdChild[]>([]);
   const [addingHouseholdChild, setAddingHouseholdChild] = useState(false);
-  const [newHouseholdChild, setNewHouseholdChild] = useState({ name: "", born: "", notes: "" });
+  const [newHouseholdChild, setNewHouseholdChild] = useState({ name: "", born: "", category: "", notes: "" });
   const [visitors, setVisitors] = useState<Visitor[]>([]);
   const [addingVisitor, setAddingVisitor] = useState(false);
   const [newVisitor, setNewVisitor] = useState({ name: "", phone: "", email: "", role: VISITOR_ROLES[0] });
+  const [addingVisitingChild, setAddingVisitingChild] = useState(false);
+  const [newVisitingChild, setNewVisitingChild] = useState({ name: "", born: "", category: VISITS_CATS[0][0] as string });
   const [openChild, setOpenChild] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState("");
 
@@ -127,7 +125,7 @@ export default function AboutScreen() {
   async function addHouseholdChild() {
     if (!newHouseholdChild.name.trim()) return;
     await supabase.from("household_children").insert({ ...newHouseholdChild, born: newHouseholdChild.born || null });
-    setNewHouseholdChild({ name: "", born: "", notes: "" });
+    setNewHouseholdChild({ name: "", born: "", category: "", notes: "" });
     setAddingHouseholdChild(false);
     load();
   }
@@ -158,6 +156,19 @@ export default function AboutScreen() {
   async function removeVisitor(id: string) {
     setVisitors((prev) => prev.filter((v) => v.id !== id));
     await supabase.from("household_visitors").delete().eq("id", id);
+  }
+
+  async function addVisitingChild() {
+    if (!newVisitingChild.name.trim()) return;
+    await supabase.from("children").insert({
+      name: newVisitingChild.name.trim(),
+      born: newVisitingChild.born || null,
+      category: newVisitingChild.category,
+      lives_here: false,
+    });
+    setNewVisitingChild({ name: "", born: "", category: VISITS_CATS[0][0] });
+    setAddingVisitingChild(false);
+    load();
   }
 
   return (
@@ -213,8 +224,11 @@ export default function AboutScreen() {
       </div>
 
       <div className="card">
-        <h3>Your own children living here</h3>
-        <p className="hint">Your birth or adopted children in the household — not in placement, so separate from the children list below.</p>
+        <h3>Children in your household</h3>
+        <p className="hint">
+          Children living here who aren&apos;t an active fostering placement in the list below — your own, adopted,
+          kinship, SGO, or a child who themselves fosters.
+        </p>
         {householdChildren.map((c) => (
           <div className="item" key={c.id}>
             <div className="row">
@@ -229,11 +243,21 @@ export default function AboutScreen() {
                 ×
               </button>
             </div>
-            <input
-              placeholder="Notes (optional)"
-              value={c.notes}
-              onChange={(e) => updateHouseholdChild(c.id, { notes: e.target.value })}
-            />
+            <div className="row">
+              <select value={c.category} onChange={(e) => updateHouseholdChild(c.id, { category: e.target.value })}>
+                <option value="">— category —</option>
+                {LIVES_CATS.map(([k, l]) => (
+                  <option key={k} value={k}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+              <input
+                placeholder="Notes (optional)"
+                value={c.notes}
+                onChange={(e) => updateHouseholdChild(c.id, { notes: e.target.value })}
+              />
+            </div>
           </div>
         ))}
         {addingHouseholdChild ? (
@@ -252,6 +276,17 @@ export default function AboutScreen() {
               />
             </div>
             <div className="row" style={{ marginTop: 6 }}>
+              <select
+                value={newHouseholdChild.category}
+                onChange={(e) => setNewHouseholdChild({ ...newHouseholdChild, category: e.target.value })}
+              >
+                <option value="">— category —</option>
+                {LIVES_CATS.map(([k, l]) => (
+                  <option key={k} value={k}>
+                    {l}
+                  </option>
+                ))}
+              </select>
               <input
                 placeholder="Notes (optional)"
                 value={newHouseholdChild.notes}
@@ -276,20 +311,68 @@ export default function AboutScreen() {
         <h3>People who come and visit regularly</h3>
         <p className="hint">Respite/daycare children and other adults connected to the household who don&apos;t live here.</p>
         <b style={{ display: "block", marginTop: 8 }}>Children</b>
-        {children.filter((c) => livesHereOf(c) === false).length === 0 && (
-          <p className="empty">
-            None marked as visiting yet — set a child&apos;s living arrangement to &quot;Visits&quot; in their own
-            section below.
-          </p>
-        )}
         {children
           .filter((c) => livesHereOf(c) === false)
           .map((c) => (
-            <div className="rec" key={c.id}>
-              {c.name}
-              {c.category && <small className="muted"> — {categoryLabel(c.category)}</small>}
+            <div className="item" key={c.id}>
+              <div className="row">
+                <input value={c.name} onChange={(e) => saveChild(c.id, { name: e.target.value })} />
+                <input
+                  type="date"
+                  style={{ flex: "0 0 150px" }}
+                  value={c.born || ""}
+                  onChange={(e) => saveChild(c.id, { born: e.target.value || null })}
+                />
+              </div>
+              <select value={c.category} onChange={(e) => saveChild(c.id, { category: e.target.value })}>
+                <option value="">— category —</option>
+                {VISITS_CATS.map(([k, l]) => (
+                  <option key={k} value={k}>
+                    {l}
+                  </option>
+                ))}
+              </select>
             </div>
           ))}
+        {addingVisitingChild ? (
+          <div style={{ marginTop: 8 }}>
+            <div className="row">
+              <input
+                placeholder="Name"
+                value={newVisitingChild.name}
+                onChange={(e) => setNewVisitingChild({ ...newVisitingChild, name: e.target.value })}
+              />
+              <input
+                type="date"
+                style={{ flex: "0 0 150px" }}
+                value={newVisitingChild.born}
+                onChange={(e) => setNewVisitingChild({ ...newVisitingChild, born: e.target.value })}
+              />
+            </div>
+            <div className="row" style={{ marginTop: 6 }}>
+              <select
+                value={newVisitingChild.category}
+                onChange={(e) => setNewVisitingChild({ ...newVisitingChild, category: e.target.value })}
+              >
+                {VISITS_CATS.map(([k, l]) => (
+                  <option key={k} value={k}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+              <button className="chip" style={{ flex: "0 0 auto" }} onClick={addVisitingChild}>
+                Add
+              </button>
+              <button className="x" onClick={() => setAddingVisitingChild(false)}>
+                ×
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button className="chip add" onClick={() => setAddingVisitingChild(true)}>
+            + child
+          </button>
+        )}
 
         <b style={{ display: "block", marginTop: 14 }}>Adults</b>
         {visitors.map((v) => (
