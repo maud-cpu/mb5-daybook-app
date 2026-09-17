@@ -25,6 +25,15 @@ const MONTH_NAMES = [
 const CURRENT_YEAR = new Date().getFullYear();
 const BIRTH_YEARS = Array.from({ length: 26 }, (_, i) => String(CURRENT_YEAR - i));
 
+function openLabel(length: string): string {
+  const medium = (length.split(/,|—/)[0] || "").trim().toLowerCase();
+  if (medium === "book") return "Open book ↗";
+  if (medium === "video") return "Open video ↗";
+  if (medium === "podcast") return "Open podcast ↗";
+  if (medium === "article") return "Open article ↗";
+  return "Open course ↗";
+}
+
 export default function CaptureScreen() {
   const supabase = createClient();
   const [children, setChildren] = useState<Child[]>([]);
@@ -545,7 +554,7 @@ export default function CaptureScreen() {
                           <>
                             {" "}
                             <a href={info.url} target="_blank" rel="noopener noreferrer">
-                              Open course ↗
+                              {openLabel(info.length)}
                             </a>
                           </>
                         )}

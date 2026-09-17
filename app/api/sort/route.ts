@@ -82,6 +82,7 @@ export async function POST(req: NextRequest) {
     const description = (c.description as string) || "";
     return description ? `${title} (${description})` : title;
   });
+  const courseTitles = new Set((courseRows ?? []).map((c) => (c.title as string).trim().toLowerCase()));
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -100,7 +101,7 @@ Children known: ${names.join(", ") || "unknown"}. Match spoken names to these wh
 For expenses set "kind": "purchase" (amount in pounds), "mileage" (miles driven, one item per journey, round trip if they say so), or "daycare" (care given: from/to clock times if the carer says them, otherwise hours; kids = the child cared for, overnight true if they stayed the night). Daycare and overnight are always ONE ITEM PER CHILD, even when several children were cared for on the same occasion at the same time. Overnight is set INDIVIDUALLY per child based on what actually happened to THAT child.
 For meds, set "medName", "dose", "given" (HH:MM), and "givenBy". One item per child per medicine given.
 Also set "flag" on any item that needs a follow-up: one of ${FLAG_KEYS.join(", ")}, or null. Use "reminder" only when the carer explicitly asks to be reminded — set "flagNote" to that instruction. Never set "flag" to "training". Set a safeguarding flag both when the text describes something happening, AND when the carer is asking or wondering whether a behaviour or mark might be a sign of one of these things (e.g. "is this a sign of abuse?") — that question is itself exactly the kind of concern that needs the guidance and support surfaced, not just a literal account of abuse having occurred. Still be cautious about flagging things that are clearly unrelated.
-Separately, consider whether any courses from this list could help (title, with what it covers in brackets where known): ${courses.join(" | ")}. Set "training" to a list of every one plausibly useful (often none, sometimes more than one), each as {"course":"<the exact title only, without the bracketed description>","why":"<one short clause, specific to why THIS course over the others>"}; empty list if none.
+Separately, consider whether any courses from this list could help (title, with what it covers in brackets where known): ${courses.join(" | ")}. Only ever pick a title that appears verbatim in this list -- never suggest a book, article, video or course that isn't in it, even if you recognise a similarly-named real one; if nothing in the list actually fits, return an empty list rather than inventing something. Set "training" to a list of every one plausibly useful (often none, sometimes more than one), each as {"course":"<the exact title only, without the bracketed description>","why":"<one short clause, specific to why THIS course over the others>"}; empty list if none.
 Reason for day care, if said, is one of: ${DAYCARE_REASONS.join("/")}.
 Respond with ONLY a JSON array, no prose, no markdown: [{"bucket":"diary","child":"name or empty","text":"...","kind":"purchase|mileage|daycare|null","amount":number|null,"miles":number|null,"from":"HH:MM or null","to":"HH:MM or null","reason":"string or null","hours":number|null,"kids":["names"],"overnight":false,"medName":"string or null","dose":"string or null","given":"HH:MM or null","givenBy":"string or null","flag":"string or null","flagNote":"string or null","training":[{"course":"string","why":"string"}]}]`;
 
@@ -143,7 +144,17 @@ Respond with ONLY a JSON array, no prose, no markdown: [{"bucket":"diary","child
         }
       }
       const trainingFromFlag = flag && FLAG_TRAINING[flag as FlagKey];
-      const aiTrainingList: { course: string; why: string }[] = Array.isArray(p.training) ? p.training : [];
+      // Belt and braces: drop anything the AI suggests that isn't actually
+      // in the catalogue it was given, in case it names a real-sounding
+      // book/course despite being told not to invent one -- a suggestion
+      // like that can never have a working link anyway, so it's just
+      // confusing to show. The flag-triggered recommendation below is
+      // deliberately never filtered this way, since it's meant to guide
+      // the carer even before the matching course has been added.
+      const aiTrainingRaw: { course: string; why: string }[] = Array.isArray(p.training) ? p.training : [];
+      const aiTrainingList = aiTrainingRaw.filter(
+        (t) => t?.course && courseTitles.has(String(t.course).trim().toLowerCase()),
+      );
       const trainingList = trainingFromFlag
         ? [trainingFromFlag, ...aiTrainingList.filter((t) => t?.course && t.course !== trainingFromFlag.course)]
         : aiTrainingList;
