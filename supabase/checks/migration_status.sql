@@ -110,6 +110,10 @@ select migration, applied from (
 
     ('0019 household_children.category column',
       exists (select 1 from information_schema.columns
-         where table_schema = 'public' and table_name = 'household_children' and column_name = 'category'))
+         where table_schema = 'public' and table_name = 'household_children' and column_name = 'category')),
+
+    ('0020 shared_training_catalog.description column',
+      exists (select 1 from information_schema.columns
+         where table_schema = 'public' and table_name = 'shared_training_catalog' and column_name = 'description'))
 ) as t(migration, applied)
 order by migration;

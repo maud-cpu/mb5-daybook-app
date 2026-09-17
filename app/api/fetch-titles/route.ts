@@ -80,6 +80,30 @@ function parseSpotifyMeta(html: string): { seconds: number | null; show: string 
   return { seconds, show };
 }
 
+function metaContent(html: string, key: "name" | "property", value: string): string {
+  const re = new RegExp(`<meta[^>]+${key}=["']${value}["'][^>]+content=["']([^"']*)["']`, "i");
+  const reversed = new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]+${key}=["']${value}["']`, "i");
+  const m = html.match(re) || html.match(reversed);
+  return m ? decodeHtmlEntities(m[1]) : "";
+}
+
+/**
+ * Grabs whatever blurb the page already shows about itself -- the standard
+ * meta description tag (what most articles and YouTube use), falling back
+ * to og:description elsewhere. Spotify's og:description is often just
+ * "Podcast · Show Name · 45 min" rather than an actual description, so
+ * that shape is skipped in favour of leaving it blank.
+ */
+function parseDescription(html: string): string {
+  let desc = metaContent(html, "name", "description");
+  if (!desc) {
+    const og = metaContent(html, "property", "og:description");
+    if (og && !/^(?:Podcast|Album|Song|Episode)\s*·/i.test(og)) desc = og;
+  }
+  if (desc.length > 400) desc = desc.slice(0, 400).replace(/\s+\S*$/, "") + "…";
+  return desc;
+}
+
 /** Provider name (podcast show, YouTube channel) via the platform's own oEmbed endpoint. No API key needed for these. */
 async function fetchProvider(url: string, host: string): Promise<string> {
   let oembedUrl = "";
@@ -101,7 +125,7 @@ async function fetchProvider(url: string, host: string): Promise<string> {
   }
 }
 
-async function fetchTitle(url: string): Promise<{ title: string; length: string }> {
+async function fetchTitle(url: string): Promise<{ title: string; length: string; description: string }> {
   const medium = guessMedium(url);
   let host = "";
   try {
@@ -112,6 +136,7 @@ async function fetchTitle(url: string): Promise<{ title: string; length: string 
   let provider = await fetchProvider(url, host);
 
   let title = "";
+  let description = "";
   let seconds: number | null = null;
   try {
     const controller = new AbortController();
@@ -124,6 +149,7 @@ async function fetchTitle(url: string): Promise<{ title: string; length: string 
     if (res.ok) {
       const html = await res.text();
       seconds = parseDurationSeconds(html);
+      description = parseDescription(html);
       if (host === "open.spotify.com") {
         const spotifyMeta = parseSpotifyMeta(html);
         if (!seconds && spotifyMeta.seconds) seconds = spotifyMeta.seconds;
@@ -137,18 +163,18 @@ async function fetchTitle(url: string): Promise<{ title: string; length: string 
       }
     }
   } catch {
-    // title/seconds stay at their defaults; medium/provider (already fetched) still apply
+    // title/seconds/description stay at their defaults; medium/provider (already fetched) still apply
   }
 
   const base = medium && seconds ? `${medium}, ${formatDuration(seconds)}` : medium;
   const length = provider ? (base ? `${base} — ${provider}` : provider) : base;
-  return { title, length };
+  return { title, length, description };
 }
 
-// Admin-only: fetches each URL's page title (and, best-effort, its medium
-// and duration) server-side -- the browser can't due to cross-origin
-// restrictions -- so a bulk paste of bare links can be auto-tagged instead
-// of typed out by hand one at a time.
+// Admin-only: fetches each URL's page title, description, and (best-effort)
+// its medium and duration server-side -- the browser can't due to
+// cross-origin restrictions -- so a bulk paste of bare links can be
+// auto-tagged instead of typed out by hand one at a time.
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const {
