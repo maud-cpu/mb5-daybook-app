@@ -73,7 +73,7 @@ export default function CaptureScreen() {
       (platforms ?? []).forEach((p: { name: string; url: string }) => (urlByPlatform[p.name] = p.url));
       const byCourse: Record<string, { url: string; length: string }> = {};
       (courses ?? []).forEach((c: { title: string; platform: string; url: string; length: string }) => {
-        byCourse[c.title] = { url: c.url || urlByPlatform[c.platform] || "", length: c.length || "" };
+        byCourse[c.title.trim().toLowerCase()] = { url: c.url || urlByPlatform[c.platform] || "", length: c.length || "" };
       });
       setCourseInfo(byCourse);
     });
@@ -535,7 +535,7 @@ export default function CaptureScreen() {
                 p.training_note.split("\n").map((line, lineIdx) => {
                   const idx = line.indexOf(" — ");
                   const title = idx === -1 ? "" : line.slice(0, idx);
-                  const info = title ? courseInfo[title] : undefined;
+                  const info = title ? courseInfo[title.trim().toLowerCase()] : undefined;
                   return (
                     <div className="note" key={lineIdx} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <span style={{ flex: 1 }}>

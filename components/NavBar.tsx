@@ -8,7 +8,7 @@ const TABS = [
   { href: "/dashboard", icon: "✍️", label: "Capture" },
   { href: "/dashboard/entries", icon: "🗂️", label: "Entries" },
   { href: "/dashboard/paperwork", icon: "📄", label: "Paperwork" },
-  { href: "/dashboard/training", icon: "🎓", label: "Training" },
+  { href: "/dashboard/training", icon: "🎓", label: "Training & Resources" },
   { href: "/dashboard/about", icon: "👪", label: "About us" },
   { href: "/dashboard/rates", icon: "⚙️", label: "Rates" },
 ];

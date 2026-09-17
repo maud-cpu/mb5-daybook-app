@@ -86,14 +86,19 @@ export default function TrainingScreen() {
 
     const personalMap: Record<string, PersonalSuggestion> = {};
     (notes ?? []).forEach((r: { training_note: string; date: string }) => {
-      const idx = r.training_note.indexOf(" — ");
-      if (idx === -1) return;
-      const title = r.training_note.slice(0, idx).trim();
-      const why = r.training_note.slice(idx + 3).trim();
-      if (!title || !why) return;
-      if (!personalMap[title]) personalMap[title] = { reasons: [], dates: [] };
-      if (!personalMap[title].reasons.includes(why)) personalMap[title].reasons.push(why);
-      personalMap[title].dates.push(r.date);
+      // training_note can hold more than one suggestion, one per line --
+      // read every line rather than just the first so a note with several
+      // suggested courses surfaces all of them, not only the first.
+      r.training_note.split("\n").forEach((line) => {
+        const idx = line.indexOf(" — ");
+        if (idx === -1) return;
+        const title = line.slice(0, idx).trim();
+        const why = line.slice(idx + 3).trim();
+        if (!title || !why) return;
+        if (!personalMap[title]) personalMap[title] = { reasons: [], dates: [] };
+        if (!personalMap[title].reasons.includes(why)) personalMap[title].reasons.push(why);
+        personalMap[title].dates.push(r.date);
+      });
     });
     setPersonal(personalMap);
   }
@@ -116,6 +121,7 @@ export default function TrainingScreen() {
   const platformUrl = (name: string) => platforms.find((p) => p.name === name)?.url || "";
 
   const mediaOptions = Array.from(new Set(courses.map((c) => mediumOf(c)).filter(Boolean))).sort();
+  const personalTitles = new Set(Object.keys(personal).map((t) => t.trim().toLowerCase()));
 
   function matchesFilters(c: Course): boolean {
     if (search.trim() && !c.title.toLowerCase().includes(search.trim().toLowerCase())) return false;
@@ -127,10 +133,12 @@ export default function TrainingScreen() {
   const groups = GROUP_ORDER.map((key) => ({
     key,
     label: courses.find((c) => c.group_key === key)?.group_label || key,
-    rows: courses.filter((c) => c.group_key === key && !personal[c.title] && matchesFilters(c)),
+    rows: courses.filter(
+      (c) => c.group_key === key && !personalTitles.has(c.title.trim().toLowerCase()) && matchesFilters(c),
+    ),
   })).filter((g) => g.rows.length);
   const personalEntries = Object.entries(personal).filter(([title]) => {
-    const course = courses.find((c) => c.title === title);
+    const course = courses.find((c) => c.title.trim().toLowerCase() === title.trim().toLowerCase());
     return course ? matchesFilters(course) : title.toLowerCase().includes(search.trim().toLowerCase());
   });
   const filtersActive = search.trim() || mediaFilter || lengthFilter;
@@ -138,7 +146,7 @@ export default function TrainingScreen() {
   return (
     <div>
       <div className="card">
-        <h3>Training</h3>
+        <h3>Training &amp; Resources</h3>
         <p className="note">
           Enter the date you completed each course; 3-yearly ones show when they&apos;re due for renewal.
           ⭐ marks the courses that are mandatory rather than just suggested.
@@ -183,7 +191,7 @@ export default function TrainingScreen() {
           <h3>Suggested from your notes</h3>
           <p className="note">These came up because of something you actually wrote, not just the general list below.</p>
           {personalEntries.map(([title, info]) => {
-            const course = courses.find((c) => c.title === title);
+            const course = courses.find((c) => c.title.trim().toLowerCase() === title.trim().toLowerCase());
             const completedOn = progress[title];
             const status = course ? statusFor(course, completedOn) : { label: "", color: "" };
             const url = course ? course.url || platformUrl(course.platform) : "";
