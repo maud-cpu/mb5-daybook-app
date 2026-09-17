@@ -27,6 +27,7 @@ function guessMedium(url: string): string {
     )
   )
     return "Podcast";
+  if (["amazon.co.uk", "amazon.com"].some((h) => host === h || host.endsWith("." + h))) return "Book";
   return "Article";
 }
 

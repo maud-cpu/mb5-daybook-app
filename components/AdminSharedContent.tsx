@@ -51,6 +51,56 @@ function parseRotaPaste(text: string): RotaRow[] {
   return out;
 }
 
+type ParsedResource = { title: string; extra: string; length: string; description: string };
+
+// Matches a bulleted "reading list" entry like:
+// "* The A-Z of Therapeutic Parenting — Sarah Naish  (~352 pages)  [View on Amazon](https://...)"
+// -- title, author and page count are optional-ish but the bullet + em dash
+// is the reliable signal that a line is a book header rather than a
+// paragraph of description or a section heading.
+const BOOK_HEADER_RE =
+  /^[*•-]\s+(.+?)\s*—\s*(.+?)\s*(?:\(~?(\d+(?:-\d+)?)(?:\s*per title)?\s*pages?\))?\s*(?:\[[^\]]*\]\((https?:\/\/\S+?)\))?\s*$/;
+
+function looksLikeBookList(text: string): boolean {
+  return text.split("\n").some((line) => BOOK_HEADER_RE.test(line.trim()));
+}
+
+/**
+ * A reading list pasted as one book per bullet, with a short description
+ * (and optionally a "Keywords: ..." line) underneath each one, and section
+ * headings/intro paragraphs in between -- exactly the shape a curated book
+ * list tends to come in. Anything before the first recognised book header
+ * (a title page, an intro paragraph) is skipped rather than imported as
+ * junk; each book's own description/keywords lines are folded together so
+ * the AI training-matcher has real context to match against, the same as
+ * a manually-written course description.
+ */
+function parseBookList(text: string): ParsedResource[] {
+  const books: ParsedResource[] = [];
+  let current: ParsedResource | null = null;
+  text.split("\n").forEach((raw) => {
+    const line = raw.trim();
+    if (!line) return;
+    const m = line.match(BOOK_HEADER_RE);
+    if (m) {
+      const [, title, author, pages, url] = m;
+      current = {
+        title: title.trim(),
+        extra: url || "",
+        length: pages ? `Book, ~${pages} pages` : "Book",
+        description: author ? `By ${author.trim()}.` : "",
+      };
+      books.push(current);
+      return;
+    }
+    if (!current) return;
+    const keywordsMatch = line.match(/^keywords\s*:\s*(.+)$/i);
+    const extra = keywordsMatch ? `Keywords: ${keywordsMatch[1]}` : line;
+    current.description = current.description ? `${current.description} ${extra}` : extra;
+  });
+  return books;
+}
+
 export default function AdminSharedContent() {
   const supabase = createClient();
   const [rates, setRates] = useState<Rates | null>(null);
@@ -168,71 +218,91 @@ export default function AdminSharedContent() {
   }
 
   async function bulkImportCourses(groupKey: string, text: string) {
-    const lines = text
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean);
-    const parsed = lines.map((line) => {
-      if (line.includes("|")) {
-        const [title, rest, length] = line.split("|").map((s) => s.trim());
-        return { title, extra: rest || "", length: length || "" };
-      }
-      if (/^https?:\/\//i.test(line)) return { title: "", extra: line, length: "" };
-      return { title: line, extra: "", length: "" };
-    });
-    if (!parsed.length) {
-      showToast("Nothing to import — one per line: a title, a link, or Title | link | length");
-      return;
-    }
-
-    setBulkBusy(true);
-    // Fetch metadata for every URL, not just ones missing a title -- a line
-    // that already gives "Title | link" still benefits from an auto-pulled
-    // description/length, it just keeps the title as typed.
-    const urlsToFetch = [...new Set(parsed.filter((r) => /^https?:\/\//i.test(r.extra)).map((r) => r.extra))];
-    const fetched = urlsToFetch.length ? await fetchTitlesFor(urlsToFetch) : {};
-    setBulkStatus("Saving…");
-
-    const rows = parsed
-      .map((r) => {
-        const isUrl = /^https?:\/\//i.test(r.extra);
-        const meta = isUrl ? fetched[r.extra] : undefined;
-        return {
-          title: r.title || meta?.title || fallbackTitleFromUrl(r.extra),
-          extra: r.extra,
-          length: r.length || meta?.length || "",
-          description: meta?.description || "",
-        };
-      })
-      .filter((r) => r.title);
-    const inserts = rows.map((r, i) => {
-      const isUrl = /^https?:\/\//i.test(r.extra);
-      const matchedPlatform = platforms.find((p) => p.name.toLowerCase() === r.extra.toLowerCase());
-      return {
-        group_key: groupKey,
-        group_label: GROUP_LABELS[groupKey],
-        title: r.title,
-        platform: matchedPlatform ? matchedPlatform.name : "",
-        url: !matchedPlatform && isUrl ? r.extra : "",
-        length: r.length,
-        description: r.description,
-        sort_order: 999 + i,
-      };
-    });
-    for (let i = 0; i < inserts.length; i += 500) {
-      const { error } = await supabase.from("shared_training_catalog").insert(inserts.slice(i, i + 500));
-      if (error) {
-        showToast(`Import stopped after ${i} of ${inserts.length}: ${error.message}`);
-        setBulkBusy(false);
-        setBulkStatus("");
-        load();
+    try {
+      const isBookList = looksLikeBookList(text);
+      const parsed: ParsedResource[] = isBookList
+        ? parseBookList(text)
+        : text
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .map((line) => {
+              if (line.includes("|")) {
+                const [title, rest, length] = line.split("|").map((s) => s.trim());
+                return { title, extra: rest || "", length: length || "", description: "" };
+              }
+              if (/^https?:\/\//i.test(line)) return { title: "", extra: line, length: "", description: "" };
+              return { title: line, extra: "", length: "", description: "" };
+            });
+      if (!parsed.length) {
+        showToast(
+          isBookList
+            ? "Couldn't find any books in that list — check each one has a title, an em dash, and a link like the example."
+            : "Nothing to import — one per line: a title, a link, or Title | link | length",
+        );
         return;
       }
+
+      setBulkBusy(true);
+      // Fetch metadata for every URL, not just ones missing a title -- a line
+      // that already gives "Title | link" still benefits from an auto-pulled
+      // description/length, it just keeps the title as typed. A book list
+      // already carries its own length/description straight from the paste,
+      // so there's nothing to fetch for those.
+      const urlsToFetch = isBookList
+        ? []
+        : [...new Set(parsed.filter((r) => /^https?:\/\//i.test(r.extra)).map((r) => r.extra))];
+      const fetched = urlsToFetch.length ? await fetchTitlesFor(urlsToFetch) : {};
+      setBulkStatus("Saving…");
+
+      const rows = parsed
+        .map((r) => {
+          const isUrl = /^https?:\/\//i.test(r.extra);
+          const meta = isUrl ? fetched[r.extra] : undefined;
+          return {
+            title: r.title || meta?.title || fallbackTitleFromUrl(r.extra),
+            extra: r.extra,
+            length: r.length || meta?.length || "",
+            description: r.description || meta?.description || "",
+          };
+        })
+        .filter((r) => r.title);
+      const inserts = rows.map((r, i) => {
+        const isUrl = /^https?:\/\//i.test(r.extra);
+        const matchedPlatform = platforms.find((p) => p.name.toLowerCase() === r.extra.toLowerCase());
+        return {
+          group_key: groupKey,
+          group_label: GROUP_LABELS[groupKey],
+          title: r.title,
+          platform: matchedPlatform ? matchedPlatform.name : "",
+          url: !matchedPlatform && isUrl ? r.extra : "",
+          length: r.length,
+          description: r.description,
+          sort_order: 999 + i,
+        };
+      });
+      for (let i = 0; i < inserts.length; i += 500) {
+        const { error } = await supabase.from("shared_training_catalog").insert(inserts.slice(i, i + 500));
+        if (error) {
+          showToast(`Import stopped after ${i} of ${inserts.length}: ${error.message}`);
+          setBulkBusy(false);
+          setBulkStatus("");
+          load();
+          return;
+        }
+      }
+      showToast(`Imported ${inserts.length} resource${inserts.length > 1 ? "s" : ""}`);
+      setBulkBusy(false);
+      setBulkStatus("");
+      load();
+    } catch (e) {
+      // Belt and braces: a bulk paste should never fail completely silently --
+      // if anything unexpected goes wrong, say so rather than leaving the
+      // button stuck on "Saving…" with nothing to show for it.
+      showToast(`Import failed: ${e instanceof Error ? e.message : "unknown error"}`);
+      setBulkBusy(false);
+      setBulkStatus("");
     }
-    showToast(`Imported ${inserts.length} resource${inserts.length > 1 ? "s" : ""}`);
-    setBulkBusy(false);
-    setBulkStatus("");
-    load();
   }
 
   async function backfillLengths() {
@@ -407,6 +477,10 @@ export default function AdminSharedContent() {
           <br />
           <code>https://a-bare-link-with-no-title</code> — just paste the link and it fetches the page&apos;s title
           for you automatically
+          <br />
+          Or paste a whole reading list — one book per bullet, e.g. <code>* Title — Author (~300 pages) [View on
+          Amazon](link)</code>, with its description underneath — and it&apos;ll pull out each book, its page count,
+          and its description automatically. Section headings and intro text in between are skipped.
         </p>
         <select value={bulkGroup} onChange={(e) => setBulkGroup(e.target.value)} disabled={bulkBusy}>
           {Object.entries(GROUP_LABELS).map(([k, l]) => (
