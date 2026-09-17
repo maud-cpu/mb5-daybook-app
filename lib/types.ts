@@ -228,6 +228,4 @@ export type PendingItem = Partial<EntryRecord> & {
   unmatched?: string[];
   /** Kids whose Mockingbird hub carer should be emailed once this item is saved. */
   send_hub?: string[];
-  /** Exact shared_training_catalog title behind training_note, if any — used to link straight to the course. */
-  training_course?: string;
 };
