@@ -14,6 +14,7 @@ type Course = {
   platform: string;
   url: string;
   length: string;
+  description: string;
   archived: boolean;
 };
 type Platform = { name: string; url: string };
@@ -142,8 +143,10 @@ export default function AdminSharedContent() {
     }
   }
 
-  async function fetchTitlesFor(urls: string[]): Promise<Record<string, { title: string; length: string }>> {
-    const map: Record<string, { title: string; length: string }> = {};
+  async function fetchTitlesFor(
+    urls: string[],
+  ): Promise<Record<string, { title: string; length: string; description: string }>> {
+    const map: Record<string, { title: string; length: string; description: string }> = {};
     for (let i = 0; i < urls.length; i += 25) {
       const batch = urls.slice(i, i + 25);
       setBulkStatus(`Fetching titles — ${Math.min(i + 25, urls.length)} of ${urls.length}…`);
@@ -154,8 +157,8 @@ export default function AdminSharedContent() {
           body: JSON.stringify({ urls: batch }),
         });
         const data = await res.json();
-        (data.results ?? []).forEach((r: { url: string; title: string; length: string }) => {
-          map[r.url] = { title: r.title, length: r.length || "" };
+        (data.results ?? []).forEach((r: { url: string; title: string; length: string; description: string }) => {
+          map[r.url] = { title: r.title, length: r.length || "", description: r.description || "" };
         });
       } catch {
         // leave this batch untitled — fallbackTitleFromUrl covers it
@@ -183,16 +186,24 @@ export default function AdminSharedContent() {
     }
 
     setBulkBusy(true);
-    const needTitle = [...new Set(parsed.filter((r) => !r.title && r.extra).map((r) => r.extra))];
-    const fetched = needTitle.length ? await fetchTitlesFor(needTitle) : {};
+    // Fetch metadata for every URL, not just ones missing a title -- a line
+    // that already gives "Title | link" still benefits from an auto-pulled
+    // description/length, it just keeps the title as typed.
+    const urlsToFetch = [...new Set(parsed.filter((r) => /^https?:\/\//i.test(r.extra)).map((r) => r.extra))];
+    const fetched = urlsToFetch.length ? await fetchTitlesFor(urlsToFetch) : {};
     setBulkStatus("Saving…");
 
     const rows = parsed
-      .map((r) => ({
-        title: r.title || fetched[r.extra]?.title || fallbackTitleFromUrl(r.extra),
-        extra: r.extra,
-        length: r.length || fetched[r.extra]?.length || "",
-      }))
+      .map((r) => {
+        const isUrl = /^https?:\/\//i.test(r.extra);
+        const meta = isUrl ? fetched[r.extra] : undefined;
+        return {
+          title: r.title || meta?.title || fallbackTitleFromUrl(r.extra),
+          extra: r.extra,
+          length: r.length || meta?.length || "",
+          description: meta?.description || "",
+        };
+      })
       .filter((r) => r.title);
     const inserts = rows.map((r, i) => {
       const isUrl = /^https?:\/\//i.test(r.extra);
@@ -204,6 +215,7 @@ export default function AdminSharedContent() {
         platform: matchedPlatform ? matchedPlatform.name : "",
         url: !matchedPlatform && isUrl ? r.extra : "",
         length: r.length,
+        description: r.description,
         sort_order: 999 + i,
       };
     });
@@ -247,6 +259,10 @@ export default function AdminSharedContent() {
       if (fetchedTitle && /&(?:#\d+|#x[0-9a-f]+|amp|apos|quot|lt|gt);/i.test(c.title) && fetchedTitle !== c.title) {
         patch.title = fetchedTitle;
       }
+      // Only fills a blank description -- never overwrites one someone
+      // wrote or edited themselves.
+      const fetchedDescription = fetched[c.url]?.description;
+      if (fetchedDescription && !c.description) patch.description = fetchedDescription;
       if (Object.keys(patch).length) {
         await supabase.from("shared_training_catalog").update(patch).eq("id", c.id);
         updated++;
@@ -418,11 +434,13 @@ export default function AdminSharedContent() {
           {bulkBusy ? bulkStatus || "Importing…" : "Import"}
         </button>
         <p className="note" style={{ marginTop: 10 }}>
-          Re-checks every linked resource for its medium, best-effort duration, and (for YouTube/Spotify/Vimeo) the
-          channel or show name — safe to re-run any time, e.g. after this gains a new capability.
+          Re-checks every linked resource for its medium, best-effort duration, (for YouTube/Spotify/Vimeo) the
+          channel or show name, and — if it doesn&apos;t have one yet — a description pulled from the page itself
+          (e.g. the blurb shown under a Spotify episode). Never overwrites a description you&apos;ve written or
+          edited yourself. Safe to re-run any time, e.g. after this gains a new capability.
         </p>
         <button className="chip" disabled={bulkBusy} onClick={backfillLengths}>
-          {bulkBusy ? bulkStatus || "Working…" : "Update medium/length for all linked resources"}
+          {bulkBusy ? bulkStatus || "Working…" : "Update medium/length/description for all linked resources"}
         </button>{" "}
         <button className="chip" disabled={bulkBusy} onClick={removeDuplicateCourses}>
           Remove duplicate resources
@@ -446,43 +464,51 @@ export default function AdminSharedContent() {
           {courses
             .filter((c) => c.group_key === g && (courseTab === "archived" ? c.archived : !c.archived))
             .map((c) => (
-              <div key={c.id} className="row" style={{ alignItems: "center" }}>
-                <input
-                  style={{ flex: 2 }}
-                  defaultValue={c.title}
-                  onBlur={(e) => updateCourse(c.id, { title: e.target.value })}
-                />
-                <input
-                  style={{ flex: 1 }}
-                  defaultValue={c.how}
-                  placeholder="Online/In person/Either"
-                  onBlur={(e) => updateCourse(c.id, { how: e.target.value })}
-                />
-                <select value={c.platform} onChange={(e) => updateCourse(c.id, { platform: e.target.value })}>
-                  <option value="">platform…</option>
-                  {platforms.map((p) => (
-                    <option key={p.name} value={p.name}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-                {!c.platform && (
+              <div key={c.id} style={{ borderBottom: "1px solid #eee", padding: "6px 0" }}>
+                <div className="row" style={{ alignItems: "center" }}>
+                  <input
+                    style={{ flex: 2 }}
+                    defaultValue={c.title}
+                    onBlur={(e) => updateCourse(c.id, { title: e.target.value })}
+                  />
                   <input
                     style={{ flex: 1 }}
-                    defaultValue={c.url}
-                    placeholder="or paste a direct link (YouTube, TED talk, podcast…)"
-                    onBlur={(e) => updateCourse(c.id, { url: e.target.value })}
+                    defaultValue={c.how}
+                    placeholder="Online/In person/Either"
+                    onBlur={(e) => updateCourse(c.id, { how: e.target.value })}
                   />
-                )}
+                  <select value={c.platform} onChange={(e) => updateCourse(c.id, { platform: e.target.value })}>
+                    <option value="">platform…</option>
+                    {platforms.map((p) => (
+                      <option key={p.name} value={p.name}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                  {!c.platform && (
+                    <input
+                      style={{ flex: 1 }}
+                      defaultValue={c.url}
+                      placeholder="or paste a direct link (YouTube, TED talk, podcast…)"
+                      onBlur={(e) => updateCourse(c.id, { url: e.target.value })}
+                    />
+                  )}
+                  <input
+                    style={{ flex: "0 0 130px" }}
+                    defaultValue={c.length}
+                    placeholder="Video, 3 min"
+                    onBlur={(e) => updateCourse(c.id, { length: e.target.value })}
+                  />
+                  <button className="chip" onClick={() => updateCourse(c.id, { archived: !c.archived })}>
+                    {c.archived ? "Unarchive" : "Archive"}
+                  </button>
+                </div>
                 <input
-                  style={{ flex: "0 0 130px" }}
-                  defaultValue={c.length}
-                  placeholder="Video, 3 min"
-                  onBlur={(e) => updateCourse(c.id, { length: e.target.value })}
+                  style={{ width: "100%", marginTop: 4 }}
+                  defaultValue={c.description}
+                  placeholder="What it covers (optional) — helps the AI recommend it accurately; auto-filled where possible"
+                  onBlur={(e) => updateCourse(c.id, { description: e.target.value })}
                 />
-                <button className="chip" onClick={() => updateCourse(c.id, { archived: !c.archived })}>
-                  {c.archived ? "Unarchive" : "Archive"}
-                </button>
               </div>
             ))}
           {courseTab === "active" && (

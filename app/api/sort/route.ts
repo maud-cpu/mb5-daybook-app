@@ -74,10 +74,14 @@ export async function POST(req: NextRequest) {
   const { data: children } = await supabase.from("children").select("name");
   const { data: courseRows } = await supabase
     .from("shared_training_catalog")
-    .select("title")
+    .select("title, description")
     .eq("archived", false);
   const names = (children ?? []).map((c) => c.name as string);
-  const courses = (courseRows ?? []).map((c) => c.title as string);
+  const courses = (courseRows ?? []).map((c) => {
+    const title = c.title as string;
+    const description = (c.description as string) || "";
+    return description ? `${title} (${description})` : title;
+  });
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -96,7 +100,7 @@ Children known: ${names.join(", ") || "unknown"}. Match spoken names to these wh
 For expenses set "kind": "purchase" (amount in pounds), "mileage" (miles driven, one item per journey, round trip if they say so), or "daycare" (care given: from/to clock times if the carer says them, otherwise hours; kids = the child cared for, overnight true if they stayed the night). Daycare and overnight are always ONE ITEM PER CHILD, even when several children were cared for on the same occasion at the same time. Overnight is set INDIVIDUALLY per child based on what actually happened to THAT child.
 For meds, set "medName", "dose", "given" (HH:MM), and "givenBy". One item per child per medicine given.
 Also set "flag" on any item that needs a follow-up: one of ${FLAG_KEYS.join(", ")}, or null. Use "reminder" only when the carer explicitly asks to be reminded — set "flagNote" to that instruction. Never set "flag" to "training". Set a safeguarding flag both when the text describes something happening, AND when the carer is asking or wondering whether a behaviour or mark might be a sign of one of these things (e.g. "is this a sign of abuse?") — that question is itself exactly the kind of concern that needs the guidance and support surfaced, not just a literal account of abuse having occurred. Still be cautious about flagging things that are clearly unrelated.
-Separately, consider whether any courses from this list could help: ${courses.join(" | ")}. Set "training" to a list of every one plausibly useful (often none, sometimes more than one), each as {"course":"<exact title>","why":"<one short clause, specific to why THIS course over the others>"}; empty list if none.
+Separately, consider whether any courses from this list could help (title, with what it covers in brackets where known): ${courses.join(" | ")}. Set "training" to a list of every one plausibly useful (often none, sometimes more than one), each as {"course":"<the exact title only, without the bracketed description>","why":"<one short clause, specific to why THIS course over the others>"}; empty list if none.
 Reason for day care, if said, is one of: ${DAYCARE_REASONS.join("/")}.
 Respond with ONLY a JSON array, no prose, no markdown: [{"bucket":"diary","child":"name or empty","text":"...","kind":"purchase|mileage|daycare|null","amount":number|null,"miles":number|null,"from":"HH:MM or null","to":"HH:MM or null","reason":"string or null","hours":number|null,"kids":["names"],"overnight":false,"medName":"string or null","dose":"string or null","given":"HH:MM or null","givenBy":"string or null","flag":"string or null","flagNote":"string or null","training":[{"course":"string","why":"string"}]}]`;
 
