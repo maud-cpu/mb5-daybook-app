@@ -62,6 +62,24 @@ function parseDurationSeconds(html: string): number | null {
   return null;
 }
 
+/**
+ * Spotify's oEmbed doesn't reliably include a show name, but the page's own
+ * og:description (rendered for social-share previews, so present even
+ * though the rest of the page is a JS app) typically reads like
+ * "Podcast · Show Name · 45 min" -- pulls both the show name and a rough
+ * duration out of that in one go when present.
+ */
+function parseSpotifyMeta(html: string): { seconds: number | null; show: string } {
+  const desc = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']*)["']/i);
+  if (!desc) return { seconds: null, show: "" };
+  const text = decodeHtmlEntities(desc[1]);
+  const minMatch = text.match(/(\d+)\s*min/i);
+  const seconds = minMatch ? Number(minMatch[1]) * 60 : null;
+  const showMatch = text.match(/^(?:Podcast\s*·\s*)?([^·]+?)\s*·/);
+  const show = showMatch ? showMatch[1].trim() : "";
+  return { seconds, show };
+}
+
 /** Provider name (podcast show, YouTube channel) via the platform's own oEmbed endpoint. No API key needed for these. */
 async function fetchProvider(url: string, host: string): Promise<string> {
   let oembedUrl = "";
@@ -91,7 +109,7 @@ async function fetchTitle(url: string): Promise<{ title: string; length: string 
   } catch {
     // fall through with an empty host; fetchProvider/guessMedium already handle this
   }
-  const provider = await fetchProvider(url, host);
+  let provider = await fetchProvider(url, host);
 
   let title = "";
   let seconds: number | null = null;
@@ -106,6 +124,11 @@ async function fetchTitle(url: string): Promise<{ title: string; length: string 
     if (res.ok) {
       const html = await res.text();
       seconds = parseDurationSeconds(html);
+      if (host === "open.spotify.com") {
+        const spotifyMeta = parseSpotifyMeta(html);
+        if (!seconds && spotifyMeta.seconds) seconds = spotifyMeta.seconds;
+        if (!provider && spotifyMeta.show) provider = spotifyMeta.show;
+      }
       const og = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']*)["']/i);
       if (og?.[1]) title = decodeHtmlEntities(og[1]);
       else {

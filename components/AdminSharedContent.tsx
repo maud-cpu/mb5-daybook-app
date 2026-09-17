@@ -237,9 +237,18 @@ export default function AdminSharedContent() {
     setBulkStatus("Saving…");
     let updated = 0;
     for (const c of targets) {
+      const patch: Partial<Course> = {};
       const length = fetched[c.url]?.length;
-      if (length && length !== c.length) {
-        await supabase.from("shared_training_catalog").update({ length }).eq("id", c.id);
+      if (length && length !== c.length) patch.length = length;
+      // Only overwrite the title if the stored one looks broken (still has
+      // a raw HTML entity in it) -- never touches a title someone typed or
+      // edited themselves.
+      const fetchedTitle = fetched[c.url]?.title;
+      if (fetchedTitle && /&(?:#\d+|#x[0-9a-f]+|amp|apos|quot|lt|gt);/i.test(c.title) && fetchedTitle !== c.title) {
+        patch.title = fetchedTitle;
+      }
+      if (Object.keys(patch).length) {
+        await supabase.from("shared_training_catalog").update(patch).eq("id", c.id);
         updated++;
       }
     }
