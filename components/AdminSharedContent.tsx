@@ -142,8 +142,8 @@ export default function AdminSharedContent() {
     }
   }
 
-  async function fetchTitlesFor(urls: string[]): Promise<Record<string, string>> {
-    const map: Record<string, string> = {};
+  async function fetchTitlesFor(urls: string[]): Promise<Record<string, { title: string; length: string }>> {
+    const map: Record<string, { title: string; length: string }> = {};
     for (let i = 0; i < urls.length; i += 25) {
       const batch = urls.slice(i, i + 25);
       setBulkStatus(`Fetching titles — ${Math.min(i + 25, urls.length)} of ${urls.length}…`);
@@ -154,8 +154,8 @@ export default function AdminSharedContent() {
           body: JSON.stringify({ urls: batch }),
         });
         const data = await res.json();
-        (data.results ?? []).forEach((r: { url: string; title: string }) => {
-          if (r.title) map[r.url] = r.title;
+        (data.results ?? []).forEach((r: { url: string; title: string; length: string }) => {
+          map[r.url] = { title: r.title, length: r.length || "" };
         });
       } catch {
         // leave this batch untitled — fallbackTitleFromUrl covers it
@@ -184,14 +184,14 @@ export default function AdminSharedContent() {
 
     setBulkBusy(true);
     const needTitle = [...new Set(parsed.filter((r) => !r.title && r.extra).map((r) => r.extra))];
-    const fetchedTitles = needTitle.length ? await fetchTitlesFor(needTitle) : {};
+    const fetched = needTitle.length ? await fetchTitlesFor(needTitle) : {};
     setBulkStatus("Saving…");
 
     const rows = parsed
       .map((r) => ({
-        title: r.title || fetchedTitles[r.extra] || fallbackTitleFromUrl(r.extra),
+        title: r.title || fetched[r.extra]?.title || fallbackTitleFromUrl(r.extra),
         extra: r.extra,
-        length: r.length,
+        length: r.length || fetched[r.extra]?.length || "",
       }))
       .filter((r) => r.title);
     const inserts = rows.map((r, i) => {
@@ -218,6 +218,29 @@ export default function AdminSharedContent() {
       }
     }
     showToast(`Imported ${inserts.length} resource${inserts.length > 1 ? "s" : ""}`);
+    setBulkBusy(false);
+    setBulkStatus("");
+    load();
+  }
+
+  async function backfillLengths() {
+    const targets = courses.filter((c) => c.url && !c.length);
+    if (!targets.length) {
+      showToast("Nothing to fill in — every linked resource already has one, or none have their own link.");
+      return;
+    }
+    setBulkBusy(true);
+    const fetched = await fetchTitlesFor([...new Set(targets.map((c) => c.url))]);
+    setBulkStatus("Saving…");
+    let updated = 0;
+    for (const c of targets) {
+      const length = fetched[c.url]?.length;
+      if (length) {
+        await supabase.from("shared_training_catalog").update({ length }).eq("id", c.id);
+        updated++;
+      }
+    }
+    showToast(updated ? `Filled in ${updated} of ${targets.length}` : "Couldn't work out a medium for any of them");
     setBulkBusy(false);
     setBulkStatus("");
     load();
@@ -347,6 +370,14 @@ export default function AdminSharedContent() {
           }}
         >
           {bulkBusy ? bulkStatus || "Importing…" : "Import"}
+        </button>
+        <p className="note" style={{ marginTop: 10 }}>
+          Already have resources with a link but no medium/length tag (e.g. added before this existed)? This works it
+          out for those, best-effort — many pages don&apos;t expose a runtime, so some will only get a medium (Video,
+          Podcast, Article).
+        </p>
+        <button className="chip" disabled={bulkBusy} onClick={backfillLengths}>
+          {bulkBusy ? bulkStatus || "Working…" : "Fill in missing medium/length"}
         </button>
       </div>
 
