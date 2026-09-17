@@ -353,14 +353,21 @@ export default function AdminSharedContent() {
     // Re-checks every linked resource, not just ones with nothing at all --
     // this is how an earlier medium-only tag (e.g. "Podcast") picks up a
     // provider name once that's supported, without needing a re-import.
-    const targets = courses.filter((c) => c.url);
+    // A book saved from an even earlier failed import can have its whole
+    // raw pasted line -- title, author, page count and link all together
+    // -- sitting in the title field itself, never split apart at all.
+    // Checked first, and excluded from the other two below, so a row like
+    // this is only ever repaired once rather than having a later pass
+    // overwrite the fix using its still-stale title.
+    const unsplitBooks = courses.filter((c) => looksUnsplit(c));
+    const targets = courses.filter((c) => c.url && !looksUnsplit(c));
     // A book saved with no link at all -- typically because a markdown
     // link's href didn't survive being pasted (a browser paste into a plain
     // text box commonly keeps only the visible link text) -- gets the same
     // Amazon search link rebuilt from its own title/author instead of
     // needing the whole list re-pasted.
-    const linklessBooks = courses.filter((c) => !c.url && /^Book(,|$)/.test(c.length));
-    if (!targets.length && !linklessBooks.length) {
+    const linklessBooks = courses.filter((c) => !c.url && /^Book(,|$)/.test(c.length) && !looksUnsplit(c));
+    if (!targets.length && !linklessBooks.length && !unsplitBooks.length) {
       showToast("No resources have their own link to check.");
       return;
     }
@@ -368,6 +375,17 @@ export default function AdminSharedContent() {
     const fetched = targets.length ? await fetchTitlesFor([...new Set(targets.map((c) => c.url))]) : {};
     setBulkStatus("Saving…");
     let updated = 0;
+    for (const c of unsplitBooks) {
+      const header = parseBookHeader(`* ${c.title}`)!;
+      const patch: Partial<Course> = {
+        title: header.title,
+        url: amazonSearchUrl(header.title, header.author),
+        length: header.pages ? `Book, ~${header.pages} pages` : c.length || "Book",
+      };
+      if (!c.description && header.author) patch.description = `By ${header.author}.`;
+      await supabase.from("shared_training_catalog").update(patch).eq("id", c.id);
+      updated++;
+    }
     for (const c of targets) {
       const patch: Partial<Course> = {};
       const length = fetched[c.url]?.length;
@@ -408,16 +426,46 @@ export default function AdminSharedContent() {
       await supabase.from("shared_training_catalog").update(patch).eq("id", c.id);
       updated++;
     }
-    showToast(updated ? `Updated ${updated} of ${targets.length + linklessBooks.length}` : "Nothing new to add for any of them");
+    showToast(
+      updated
+        ? `Updated ${updated} of ${targets.length + linklessBooks.length + unsplitBooks.length}`
+        : "Nothing new to add for any of them",
+    );
     setBulkBusy(false);
     setBulkStatus("");
     load();
   }
 
+  // A book saved from an earlier broken import can still have the whole
+  // raw pasted line sitting in its title field (author, page count and
+  // link never got split off), so its own title is effectively unique and
+  // won't naturally match a properly-parsed copy of the same book by
+  // title or link. For any row that looks like a book -- either its
+  // length already says so, or its title still contains the tell-tale
+  // "Title — Author (~N pages)" shape -- group by the book's own core
+  // title (re-extracting it from the raw text where needed) instead of
+  // by link, so a clean copy and a leftover broken copy of the same book
+  // land in the same group and get deduplicated against each other.
+  function bookCoreTitle(c: Course): string | null {
+    const header = parseBookHeader(`* ${c.title}`);
+    if (/^Book(,|$)/.test(c.length)) return (header ? header.title : c.title).trim().toLowerCase();
+    if (header && header.pages) return header.title.trim().toLowerCase();
+    return null;
+  }
+
+  function dedupKey(c: Course): string {
+    return bookCoreTitle(c) ?? (c.url || c.title).trim().toLowerCase();
+  }
+
+  function looksUnsplit(c: Course): boolean {
+    const header = parseBookHeader(`* ${c.title}`);
+    return !!header && header.title.toLowerCase() !== c.title.trim().toLowerCase();
+  }
+
   async function removeDuplicateCourses() {
     const groups = new Map<string, Course[]>();
     courses.forEach((c) => {
-      const key = (c.url || c.title).trim().toLowerCase();
+      const key = dedupKey(c);
       if (!key) return;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(c);
@@ -426,7 +474,8 @@ export default function AdminSharedContent() {
     groups.forEach((group) => {
       if (group.length < 2) return;
       const [, ...rest] = [...group].sort((a, b) => {
-        const score = (c: Course) => (c.url ? 2 : 0) + (c.length ? 1 : 0) + (/^https?:\/\//i.test(c.title) ? -5 : 0);
+        const score = (c: Course) =>
+          (c.url ? 2 : 0) + (c.length ? 1 : 0) + (/^https?:\/\//i.test(c.title) ? -5 : 0) + (looksUnsplit(c) ? -5 : 0);
         return score(b) - score(a);
       });
       toDelete.push(...rest);
