@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { trainingStatus } from "@/lib/domain";
+import { today, trainingStatus } from "@/lib/domain";
 import {
   DueItem,
   bandChangeItems,
@@ -26,6 +26,14 @@ type FollowUp = {
 };
 
 type DoneFollowUp = FollowUp & { flag_done_at: string };
+type DismissedDue = { key: string; text: string; dismissed_at: string };
+
+// inv-monthend/inv-send/payday recur every month with the same key -- dismiss
+// them for THIS month only, not forever, so next month's nudge still shows.
+const RECURRING_DUE_KEYS = ["inv-monthend", "inv-send", "payday"];
+function dismissKeyFor(key: string): string {
+  return RECURRING_DUE_KEYS.includes(key) ? `${key}:${today().slice(0, 7)}` : key;
+}
 
 function followUpLabel(f: FollowUp): string {
   if (f.flag && f.flag in FLAGS) return FLAGS[f.flag as keyof typeof FLAGS].label;
@@ -51,6 +59,7 @@ export default function ThingsToDoCard() {
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
   const [doneFollowUps, setDoneFollowUps] = useState<DoneFollowUp[]>([]);
   const [doneReminders, setDoneReminders] = useState<Reminder[]>([]);
+  const [dismissedDue, setDismissedDue] = useState<DismissedDue[]>([]);
   const [showDone, setShowDone] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [newText, setNewText] = useState("");
@@ -68,6 +77,7 @@ export default function ThingsToDoCard() {
       { data: reminders },
       { data: openRecords },
       { data: closedRecords },
+      { data: dismissed },
     ] = await Promise.all([
       supabase.from("records").select("id, text, created_at, reported").eq("bucket", "incident"),
       supabase.from("children").select("id, name, born, family, basics"),
@@ -83,6 +93,7 @@ export default function ThingsToDoCard() {
         .eq("flag_done", true)
         .order("flag_done_at", { ascending: false })
         .limit(20),
+      supabase.from("dismissed_todos").select("key, text, dismissed_at").order("dismissed_at", { ascending: false }).limit(20),
     ]);
     const { data: unpaidClaimed } = await supabase
       .from("records")
@@ -100,16 +111,21 @@ export default function ThingsToDoCard() {
       .map((x) => ({ key: "train-" + x.title, urgent: x.status.s === "over", text: `Training: ${x.title} — ${x.status.label}` }));
 
     const remindersList = (reminders as Reminder[]) ?? [];
+    const dismissedList = (dismissed as DismissedDue[] | null) ?? [];
+    const dismissedKeys = new Set(dismissedList.map((d) => d.key));
 
-    setDue([
-      ...unreportedIncidentItems(incidents ?? []),
-      ...invoiceMonthItems(settings?.invoice_day ?? 1, settings?.pay_day ?? 28, !!unpaidClaimed?.length),
-      ...bandChangeItems(children ?? []),
-      ...trainingItems,
-      ...missingNumbersItems(children ?? []),
-      ...edtMissingItem(household?.edt ?? ""),
-      ...dueReminders(remindersList),
-    ]);
+    setDue(
+      [
+        ...unreportedIncidentItems(incidents ?? []),
+        ...invoiceMonthItems(settings?.invoice_day ?? 1, settings?.pay_day ?? 28, !!unpaidClaimed?.length),
+        ...bandChangeItems(children ?? []),
+        ...trainingItems,
+        ...missingNumbersItems(children ?? []),
+        ...edtMissingItem(household?.edt ?? ""),
+        ...dueReminders(remindersList),
+      ].filter((x) => !dismissedKeys.has(dismissKeyFor(x.key))),
+    );
+    setDismissedDue(dismissedList);
     setUpcoming(upcomingReminders(remindersList));
     setAllReminders(remindersList.filter((r) => !r.done));
     setFollowUps(
@@ -138,10 +154,20 @@ export default function ThingsToDoCard() {
     load();
   }
 
-  async function doneReminder(key: string) {
-    if (!key.startsWith("rem-")) return;
-    const id = key.slice(4);
-    await supabase.from("reminders").update({ done: true, done_at: new Date().toISOString() }).eq("id", id);
+  async function dismissDue(item: DueItem) {
+    if (item.key.startsWith("rem-")) {
+      const id = item.key.slice(4);
+      await supabase.from("reminders").update({ done: true, done_at: new Date().toISOString() }).eq("id", id);
+    } else {
+      await supabase
+        .from("dismissed_todos")
+        .upsert({ key: dismissKeyFor(item.key), text: item.text }, { onConflict: "user_id,key" });
+    }
+    load();
+  }
+
+  async function reopenDue(key: string) {
+    await supabase.from("dismissed_todos").delete().eq("key", key);
     load();
   }
 
@@ -180,7 +206,10 @@ export default function ThingsToDoCard() {
     load();
   }
 
-  if (!loaded || (!due.length && !upcoming.length && !followUps.length && !doneFollowUps.length && !doneReminders.length))
+  if (
+    !loaded ||
+    (!due.length && !upcoming.length && !followUps.length && !doneFollowUps.length && !doneReminders.length && !dismissedDue.length)
+  )
     return null;
 
   const anyUrgent = due.some((x) => x.urgent) || followUps.some((f) => FLAGS[f.flag as keyof typeof FLAGS]?.urgent);
@@ -189,14 +218,13 @@ export default function ThingsToDoCard() {
     <div className="card" style={{ borderLeft: `4px solid ${anyUrgent ? "var(--danger)" : "var(--marker)"}` }}>
       <h3>Things to do{anyUrgent ? " ⚠" : ""}</h3>
       {due.map((x) => (
-        <div
-          key={x.key}
-          className="rec"
-          style={x.urgent ? { color: "var(--danger)" } : undefined}
-          onClick={() => doneReminder(x.key)}
-        >
-          {x.text}
-          {x.key.startsWith("rem-") && <small> (tap when done)</small>}
+        <div key={x.key} className="rec" style={x.urgent ? { color: "var(--danger)" } : undefined}>
+          <span onClick={() => dismissDue(x)} style={{ cursor: "pointer" }}>
+            {x.text}
+          </span>
+          <button className="chip" style={{ marginLeft: 8 }} onClick={() => dismissDue(x)}>
+            {x.key.startsWith("rem-") ? "Done" : "Dismiss"}
+          </button>
         </div>
       ))}
       {upcoming.slice(0, 3).map((r) => (
@@ -254,14 +282,28 @@ export default function ThingsToDoCard() {
         );
       })}
 
-      {(doneFollowUps.length > 0 || doneReminders.length > 0) && (
+      {(doneFollowUps.length > 0 || doneReminders.length > 0 || dismissedDue.length > 0) && (
         <>
           <p className="hint" style={{ marginTop: 10, cursor: "pointer" }} onClick={() => setShowDone(!showDone)}>
-            {showDone ? "▾" : "▸"} Recently done ({doneFollowUps.length + doneReminders.length}) — tap to{" "}
-            {showDone ? "hide" : "show"}
+            {showDone ? "▾" : "▸"} Recently done ({doneFollowUps.length + doneReminders.length + dismissedDue.length}) —
+            tap to {showDone ? "hide" : "show"}
           </p>
           {showDone && (
             <>
+              {dismissedDue.map((d) => (
+                <div key={d.key} className="rec" style={{ opacity: 0.7, display: "flex", justifyContent: "space-between", gap: 8 }}>
+                  <span>
+                    {d.text}
+                    <small className="muted">
+                      {" "}
+                      — dismissed {new Date(d.dismissed_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                    </small>
+                  </span>
+                  <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => reopenDue(d.key)}>
+                    Reopen
+                  </button>
+                </div>
+              ))}
               {doneReminders.map((r) => (
                 <div key={r.id} className="rec" style={{ opacity: 0.7, display: "flex", justifyContent: "space-between", gap: 8 }}>
                   <span>

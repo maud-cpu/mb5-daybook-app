@@ -95,6 +95,9 @@ select migration, applied from (
 
     ('0015 per-course length/format column',
       exists (select 1 from information_schema.columns
-         where table_schema = 'public' and table_name = 'shared_training_catalog' and column_name = 'length'))
+         where table_schema = 'public' and table_name = 'shared_training_catalog' and column_name = 'length')),
+
+    ('0016 dismissed_todos table',
+      to_regclass('public.dismissed_todos') is not null)
 ) as t(migration, applied)
 order by migration;
