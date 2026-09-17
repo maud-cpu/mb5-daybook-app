@@ -3,11 +3,18 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { BASICS_SECTIONS } from "@/lib/basics";
-import { Child, LIVES_CATS, livesHereOf, MB_OPTIONS } from "@/lib/types";
+import { Child, LIVES_CATS, livesHereOf, MB_OPTIONS, VISITS_CATS } from "@/lib/types";
 
 const ADULT_ROLES = ["Foster carer", "Adult child", "Live-in grandparent", "Other"];
+const VISITOR_ROLES = ["Mockingbird hub carer", "Respite support worker", "Family friend / helper", "Other"];
+
+function categoryLabel(cat: string): string {
+  return [...LIVES_CATS, ...VISITS_CATS].find(([k]) => k === cat)?.[1] || cat;
+}
 
 type Adult = { id: string; name: string; phone: string; email: string; role: string };
+type HouseholdChild = { id: string; name: string; born: string | null; notes: string };
+type Visitor = { id: string; name: string; phone: string; email: string; role: string };
 
 type Household = {
   ssw_name: string;
@@ -37,18 +44,28 @@ export default function AboutScreen() {
   const [adults, setAdults] = useState<Adult[]>([]);
   const [addingAdult, setAddingAdult] = useState(false);
   const [newAdult, setNewAdult] = useState({ name: "", phone: "", email: "", role: ADULT_ROLES[0] });
+  const [householdChildren, setHouseholdChildren] = useState<HouseholdChild[]>([]);
+  const [addingHouseholdChild, setAddingHouseholdChild] = useState(false);
+  const [newHouseholdChild, setNewHouseholdChild] = useState({ name: "", born: "", notes: "" });
+  const [visitors, setVisitors] = useState<Visitor[]>([]);
+  const [addingVisitor, setAddingVisitor] = useState(false);
+  const [newVisitor, setNewVisitor] = useState({ name: "", phone: "", email: "", role: VISITOR_ROLES[0] });
   const [openChild, setOpenChild] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState("");
 
   async function load() {
-    const [{ data: kids }, { data: hh }, { data: adultRows }] = await Promise.all([
+    const [{ data: kids }, { data: hh }, { data: adultRows }, { data: householdChildRows }, { data: visitorRows }] = await Promise.all([
       supabase
         .from("children")
         .select("id, name, born, family, basics, category, lives_here, mockingbird, hub_carer_name, hub_carer_phone, hub_carer_email, surrey_contact")
         .order("created_at"),
       supabase.from("household").select("*").maybeSingle(),
       supabase.from("household_adults").select("*").order("created_at"),
+      supabase.from("household_children").select("*").order("created_at"),
+      supabase.from("household_visitors").select("*").order("created_at"),
     ]);
+    setHouseholdChildren((householdChildRows as HouseholdChild[]) ?? []);
+    setVisitors((visitorRows as Visitor[]) ?? []);
     const list = (kids as (Child & { basics: Record<string, string> })[]) ?? [];
     setChildren(list);
     const b: Record<string, Record<string, string>> = {};
@@ -107,6 +124,42 @@ export default function AboutScreen() {
     await supabase.from("household_adults").delete().eq("id", id);
   }
 
+  async function addHouseholdChild() {
+    if (!newHouseholdChild.name.trim()) return;
+    await supabase.from("household_children").insert({ ...newHouseholdChild, born: newHouseholdChild.born || null });
+    setNewHouseholdChild({ name: "", born: "", notes: "" });
+    setAddingHouseholdChild(false);
+    load();
+  }
+
+  async function updateHouseholdChild(id: string, patch: Partial<HouseholdChild>) {
+    setHouseholdChildren((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+    await supabase.from("household_children").update(patch).eq("id", id);
+  }
+
+  async function removeHouseholdChild(id: string) {
+    setHouseholdChildren((prev) => prev.filter((c) => c.id !== id));
+    await supabase.from("household_children").delete().eq("id", id);
+  }
+
+  async function addVisitor() {
+    if (!newVisitor.name.trim()) return;
+    await supabase.from("household_visitors").insert(newVisitor);
+    setNewVisitor({ name: "", phone: "", email: "", role: VISITOR_ROLES[0] });
+    setAddingVisitor(false);
+    load();
+  }
+
+  async function updateVisitor(id: string, patch: Partial<Visitor>) {
+    setVisitors((prev) => prev.map((v) => (v.id === id ? { ...v, ...patch } : v)));
+    await supabase.from("household_visitors").update(patch).eq("id", id);
+  }
+
+  async function removeVisitor(id: string) {
+    setVisitors((prev) => prev.filter((v) => v.id !== id));
+    await supabase.from("household_visitors").delete().eq("id", id);
+  }
+
   return (
     <div>
       <div className="card">
@@ -154,6 +207,133 @@ export default function AboutScreen() {
           </div>
         ) : (
           <button className="chip add" onClick={() => setAddingAdult(true)}>
+            + adult
+          </button>
+        )}
+      </div>
+
+      <div className="card">
+        <h3>Your own children living here</h3>
+        <p className="hint">Your birth or adopted children in the household — not in placement, so separate from the children list below.</p>
+        {householdChildren.map((c) => (
+          <div className="item" key={c.id}>
+            <div className="row">
+              <input value={c.name} onChange={(e) => updateHouseholdChild(c.id, { name: e.target.value })} />
+              <input
+                type="date"
+                style={{ flex: "0 0 150px" }}
+                value={c.born || ""}
+                onChange={(e) => updateHouseholdChild(c.id, { born: e.target.value || null })}
+              />
+              <button className="x" onClick={() => removeHouseholdChild(c.id)}>
+                ×
+              </button>
+            </div>
+            <input
+              placeholder="Notes (optional)"
+              value={c.notes}
+              onChange={(e) => updateHouseholdChild(c.id, { notes: e.target.value })}
+            />
+          </div>
+        ))}
+        {addingHouseholdChild ? (
+          <div style={{ marginTop: 8 }}>
+            <div className="row">
+              <input
+                placeholder="Name"
+                value={newHouseholdChild.name}
+                onChange={(e) => setNewHouseholdChild({ ...newHouseholdChild, name: e.target.value })}
+              />
+              <input
+                type="date"
+                style={{ flex: "0 0 150px" }}
+                value={newHouseholdChild.born}
+                onChange={(e) => setNewHouseholdChild({ ...newHouseholdChild, born: e.target.value })}
+              />
+            </div>
+            <div className="row" style={{ marginTop: 6 }}>
+              <input
+                placeholder="Notes (optional)"
+                value={newHouseholdChild.notes}
+                onChange={(e) => setNewHouseholdChild({ ...newHouseholdChild, notes: e.target.value })}
+              />
+              <button className="chip" style={{ flex: "0 0 auto" }} onClick={addHouseholdChild}>
+                Add
+              </button>
+              <button className="x" onClick={() => setAddingHouseholdChild(false)}>
+                ×
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button className="chip add" onClick={() => setAddingHouseholdChild(true)}>
+            + child
+          </button>
+        )}
+      </div>
+
+      <div className="card">
+        <h3>People who come and visit regularly</h3>
+        <p className="hint">Respite/daycare children and other adults connected to the household who don&apos;t live here.</p>
+        <b style={{ display: "block", marginTop: 8 }}>Children</b>
+        {children.filter((c) => livesHereOf(c) === false).length === 0 && (
+          <p className="empty">
+            None marked as visiting yet — set a child&apos;s living arrangement to &quot;Visits&quot; in their own
+            section below.
+          </p>
+        )}
+        {children
+          .filter((c) => livesHereOf(c) === false)
+          .map((c) => (
+            <div className="rec" key={c.id}>
+              {c.name}
+              {c.category && <small className="muted"> — {categoryLabel(c.category)}</small>}
+            </div>
+          ))}
+
+        <b style={{ display: "block", marginTop: 14 }}>Adults</b>
+        {visitors.map((v) => (
+          <div className="item" key={v.id}>
+            <div className="row">
+              <input value={v.name} onChange={(e) => updateVisitor(v.id, { name: e.target.value })} />
+              <select value={v.role} onChange={(e) => updateVisitor(v.id, { role: e.target.value })}>
+                {VISITOR_ROLES.map((r) => (
+                  <option key={r}>{r}</option>
+                ))}
+              </select>
+              <button className="x" onClick={() => removeVisitor(v.id)}>
+                ×
+              </button>
+            </div>
+            <div className="row">
+              <input placeholder="Phone" value={v.phone} onChange={(e) => updateVisitor(v.id, { phone: e.target.value })} />
+              <input placeholder="Email" value={v.email} onChange={(e) => updateVisitor(v.id, { email: e.target.value })} />
+            </div>
+          </div>
+        ))}
+        {addingVisitor ? (
+          <div style={{ marginTop: 8 }}>
+            <input placeholder="Name" value={newVisitor.name} onChange={(e) => setNewVisitor({ ...newVisitor, name: e.target.value })} />
+            <div className="row" style={{ marginTop: 6 }}>
+              <input placeholder="Phone" value={newVisitor.phone} onChange={(e) => setNewVisitor({ ...newVisitor, phone: e.target.value })} />
+              <input placeholder="Email" value={newVisitor.email} onChange={(e) => setNewVisitor({ ...newVisitor, email: e.target.value })} />
+            </div>
+            <div className="row" style={{ marginTop: 6 }}>
+              <select value={newVisitor.role} onChange={(e) => setNewVisitor({ ...newVisitor, role: e.target.value })}>
+                {VISITOR_ROLES.map((r) => (
+                  <option key={r}>{r}</option>
+                ))}
+              </select>
+              <button className="chip" style={{ flex: "0 0 auto" }} onClick={addVisitor}>
+                Add
+              </button>
+              <button className="x" onClick={() => setAddingVisitor(false)}>
+                ×
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button className="chip add" onClick={() => setAddingVisitor(true)}>
             + adult
           </button>
         )}

@@ -102,6 +102,10 @@ select migration, applied from (
 
     ('0017 records.flag_dismissed column',
       exists (select 1 from information_schema.columns
-         where table_schema = 'public' and table_name = 'records' and column_name = 'flag_dismissed'))
+         where table_schema = 'public' and table_name = 'records' and column_name = 'flag_dismissed')),
+
+    ('0018 household_children and household_visitors tables',
+      to_regclass('public.household_children') is not null
+      and to_regclass('public.household_visitors') is not null)
 ) as t(migration, applied)
 order by migration;
