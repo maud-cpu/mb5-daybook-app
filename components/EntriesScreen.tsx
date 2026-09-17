@@ -34,6 +34,7 @@ export default function EntriesScreen() {
   const [rates, setRates] = useState<Rates | null>(null);
   const [tab, setTab] = useState<"all" | Bucket>("all");
   const [erange, setErange] = useState("7d");
+  const [childFilter, setChildFilter] = useState<string[]>([]);
   const [editId, setEditId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const searchParams = useSearchParams();
@@ -75,7 +76,10 @@ export default function EntriesScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const inRangeRecs = useMemo(() => records.filter((r) => inRange(r.date, erange)), [records, erange]);
+  const inRangeRecs = useMemo(() => {
+    const byDate = records.filter((r) => inRange(r.date, erange));
+    return childFilter.length ? byDate.filter((r) => r.kids.some((k) => childFilter.includes(k))) : byDate;
+  }, [records, erange, childFilter]);
   const shown = useMemo(
     () =>
       tab === "all"
@@ -83,6 +87,10 @@ export default function EntriesScreen() {
         : inRangeRecs.filter((r) => r.bucket === tab || (r.also_in || []).includes(tab)),
     [inRangeRecs, tab],
   );
+
+  function toggleChildFilter(name: string) {
+    setChildFilter((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
+  }
 
   async function del(id: string) {
     if (!confirm("Delete this entry?")) return;
@@ -173,6 +181,24 @@ export default function EntriesScreen() {
           </option>
         ))}
       </select>
+      {children.length > 0 && (
+        <div className="chips" style={{ marginBottom: 10 }}>
+          {children.map((c) => (
+            <button
+              key={c.id}
+              className={`chip${childFilter.includes(c.name) ? " on" : ""}`}
+              onClick={() => toggleChildFilter(c.name)}
+            >
+              {c.name}
+            </button>
+          ))}
+          {childFilter.length > 0 && (
+            <button className="chip" onClick={() => setChildFilter([])}>
+              Clear
+            </button>
+          )}
+        </div>
+      )}
       <button
         className="chip"
         style={{ marginBottom: 10, marginLeft: 8 }}
