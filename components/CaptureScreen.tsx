@@ -532,22 +532,39 @@ export default function CaptureScreen() {
                 </div>
               )}
               {p.training_note &&
-                p.training_note.split("\n").map((line, i) => {
+                p.training_note.split("\n").map((line, lineIdx) => {
                   const idx = line.indexOf(" — ");
                   const title = idx === -1 ? "" : line.slice(0, idx);
                   const info = title ? courseInfo[title] : undefined;
                   return (
-                    <div className="note" key={i}>
-                      💡 {line}
-                      {info?.length && <span className="muted"> ({info.length})</span>}
-                      {info?.url && (
-                        <>
-                          {" "}
-                          <a href={info.url} target="_blank" rel="noopener noreferrer">
-                            Open course ↗
-                          </a>
-                        </>
-                      )}
+                    <div className="note" key={lineIdx} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ flex: 1 }}>
+                        💡 {line}
+                        {info?.length && <span className="muted"> ({info.length})</span>}
+                        {info?.url && (
+                          <>
+                            {" "}
+                            <a href={info.url} target="_blank" rel="noopener noreferrer">
+                              Open course ↗
+                            </a>
+                          </>
+                        )}
+                      </span>
+                      <button
+                        className="x"
+                        style={{ flex: "0 0 auto" }}
+                        title="Don't save this suggestion"
+                        onClick={() =>
+                          updatePending(i, {
+                            training_note: p.training_note!
+                              .split("\n")
+                              .filter((_, idx2) => idx2 !== lineIdx)
+                              .join("\n"),
+                          })
+                        }
+                      >
+                        ×
+                      </button>
                     </div>
                   );
                 })}
