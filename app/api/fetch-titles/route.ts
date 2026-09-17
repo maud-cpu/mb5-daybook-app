@@ -3,8 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 
 function decodeHtmlEntities(s: string): string {
   return s
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)))
     .replace(/&amp;/g, "&")
-    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&apos;/g, "'")
     .replace(/&quot;/g, '"')
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
@@ -49,15 +51,50 @@ function parseDurationSeconds(html: string): number | null {
   if (seconds) return Number(seconds[1]);
   const ms = html.match(/"approxDurationMs":"(\d+)"/);
   if (ms) return Math.round(Number(ms[1]) / 1000);
-  const ogSeconds = html.match(/<meta[^>]+property=["']video:duration["'][^>]+content=["'](\d+)["']/i);
+  const ogSeconds = html.match(/<meta[^>]+property=["'](?:video|music):duration["'][^>]+content=["'](\d+)["']/i);
   if (ogSeconds) return Number(ogSeconds[1]);
-  const iso = html.match(/<meta[^>]+itemprop=["']duration["'][^>]+content=["']PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?["']/i);
-  if (iso) return (Number(iso[1] || 0) * 3600) + (Number(iso[2] || 0) * 60) + Number(iso[3] || 0);
+  const metaIso = html.match(/<meta[^>]+itemprop=["']duration["'][^>]+content=["']PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?["']/i);
+  if (metaIso) return Number(metaIso[1] || 0) * 3600 + Number(metaIso[2] || 0) * 60 + Number(metaIso[3] || 0);
+  // Schema.org JSON-LD often embeds duration as "duration":"PT18M43S" rather
+  // than as a meta tag -- catch that shape too.
+  const jsonIso = html.match(/"duration"\s*:\s*"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?"/i);
+  if (jsonIso) return Number(jsonIso[1] || 0) * 3600 + Number(jsonIso[2] || 0) * 60 + Number(jsonIso[3] || 0);
   return null;
+}
+
+/** Provider name (podcast show, YouTube channel) via the platform's own oEmbed endpoint. No API key needed for these. */
+async function fetchProvider(url: string, host: string): Promise<string> {
+  let oembedUrl = "";
+  if (host === "open.spotify.com") oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`;
+  else if (host === "youtube.com" || host === "youtu.be" || host === "www.youtube.com")
+    oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
+  else if (host === "vimeo.com") oembedUrl = `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}`;
+  else return "";
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(oembedUrl, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!res.ok) return "";
+    const data = await res.json();
+    return data?.author_name ? decodeHtmlEntities(String(data.author_name)) : "";
+  } catch {
+    return "";
+  }
 }
 
 async function fetchTitle(url: string): Promise<{ title: string; length: string }> {
   const medium = guessMedium(url);
+  let host = "";
+  try {
+    host = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    // fall through with an empty host; fetchProvider/guessMedium already handle this
+  }
+  const provider = await fetchProvider(url, host);
+
+  let title = "";
+  let seconds: number | null = null;
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 6000);
@@ -66,18 +103,23 @@ async function fetchTitle(url: string): Promise<{ title: string; length: string 
       headers: { "User-Agent": "Mozilla/5.0 (compatible; MB5DayBook/1.0)" },
     });
     clearTimeout(timeout);
-    if (!res.ok) return { title: "", length: medium };
-    const html = await res.text();
-    const seconds = parseDurationSeconds(html);
-    const length = medium && seconds ? `${medium}, ${formatDuration(seconds)}` : medium;
-    const og = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']*)["']/i);
-    if (og?.[1]) return { title: decodeHtmlEntities(og[1]), length };
-    const title = html.match(/<title[^>]*>([^<]*)<\/title>/i);
-    if (title?.[1]) return { title: decodeHtmlEntities(title[1]), length };
-    return { title: "", length };
+    if (res.ok) {
+      const html = await res.text();
+      seconds = parseDurationSeconds(html);
+      const og = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']*)["']/i);
+      if (og?.[1]) title = decodeHtmlEntities(og[1]);
+      else {
+        const t = html.match(/<title[^>]*>([^<]*)<\/title>/i);
+        if (t?.[1]) title = decodeHtmlEntities(t[1]);
+      }
+    }
   } catch {
-    return { title: "", length: medium };
+    // title/seconds stay at their defaults; medium/provider (already fetched) still apply
   }
+
+  const base = medium && seconds ? `${medium}, ${formatDuration(seconds)}` : medium;
+  const length = provider ? (base ? `${base} — ${provider}` : provider) : base;
+  return { title, length };
 }
 
 // Admin-only: fetches each URL's page title (and, best-effort, its medium
