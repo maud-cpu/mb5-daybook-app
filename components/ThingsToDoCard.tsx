@@ -218,17 +218,90 @@ export default function ThingsToDoCard() {
     load();
   }
 
-  if (
-    !loaded ||
-    (!due.length && !upcoming.length && !followUps.length && !doneFollowUps.length && !doneReminders.length && !dismissedDue.length)
-  )
-    return null;
+  // The documents & forms reference below is always useful, even with an
+  // empty list, so this only waits for the initial load rather than hiding
+  // the whole card whenever there's nothing currently due.
+  if (!loaded) return null;
 
   const anyUrgent = due.some((x) => x.urgent) || followUps.some((f) => FLAGS[f.flag as keyof typeof FLAGS]?.urgent);
 
   return (
     <div className="card" style={{ borderLeft: `4px solid ${anyUrgent ? "var(--danger)" : "var(--marker)"}` }}>
       <h3>Things to do{anyUrgent ? " ⚠" : ""}</h3>
+
+      <details>
+        <summary>📄 Useful documents & forms — what to have to hand as a foster carer</summary>
+        <div>
+          <b>For a placement</b>
+          <ul>
+            <li>
+              <b>Placement Plan / Placement Agreement</b> — the day-to-day arrangements for that child, agreed with
+              the CSW; where the delegated authority for that placement actually lives.
+            </li>
+            <li>
+              <b>Delegated Authority Decision Support Record</b> — what you can consent to yourself (school trips,
+              haircuts, sleepovers, routine medical/dental) versus what needs the CSW or a parent&apos;s sign-off.
+            </li>
+            <li>
+              <b>Health/medical consent record</b> — who can consent to what for that child&apos;s routine and
+              non-routine healthcare, set out alongside the Placement Plan.
+            </li>
+          </ul>
+          <b>Safeguarding</b>
+          <ul>
+            <li>
+              <b>Missing from care/home protocol</b> — what to do and who to call first if a child goes missing.
+            </li>
+            <li>
+              <b>Allegations & complaints procedure</b> — what happens if an allegation is made against you, and
+              your right to independent support (e.g. Fosterline, Foster Talk) separate from your own agency.
+            </li>
+            <li>
+              <b>Your household&apos;s Safer Caring policy</b> — your own written plan, reviewed with your SSW.
+            </li>
+          </ul>
+          <b>Your own approval</b>
+          <ul>
+            <li>
+              <b>Foster Carer Agreement & annual review paperwork</b> — the terms of your approval, reviewed yearly
+              by the fostering panel.
+            </li>
+            <li>
+              <b>DBS renewal</b> — for you and every adult in the household, usually every 3 years.
+            </li>
+            <li>
+              <b>Household risk assessment (fire safety, pets, etc.)</b> — reviewed with your SSW, typically annually.
+            </li>
+          </ul>
+          <b>Money & the child&apos;s own records</b>
+          <ul>
+            <li>
+              <b>Expenses & allowances claim form</b> — see the Rates tab for what&apos;s claimable.
+            </li>
+            <li>
+              <b>Passport/travel consent</b> — extra written consent is needed before taking a looked-after child
+              abroad; ask your CSW early, it isn&apos;t quick to arrange.
+            </li>
+            <li>
+              <b>Life story work / memory box materials</b> — an ongoing record for the child to keep, separate from
+              your day-to-day diary entries here.
+            </li>
+          </ul>
+          <p className="hint" style={{ marginTop: 8 }}>
+            Most of these live inside your council&apos;s own Foster Carers Handbook rather than as a standalone
+            download — if you&apos;re with Surrey, that&apos;s the{" "}
+            <a href="https://surreyfch.trixonline.co.uk/" target="_blank" rel="noopener noreferrer">
+              Surrey Foster Carers Handbook ↗
+            </a>{" "}
+            (policies, procedures and the forms themselves), alongside the general{" "}
+            <a href="https://www.surreycc.gov.uk/children/social-care/fostering" target="_blank" rel="noopener noreferrer">
+              Surrey fostering pages ↗
+            </a>
+            . For anything not there, your SSW can point you to the right one.
+          </p>
+        </div>
+      </details>
+
       {due.map((x) => {
         // A "fill this in" item (missing basics for a child) points at where to
         // actually go do it -- it should only ever leave this list once that
