@@ -82,6 +82,8 @@ export default function HandoverTab() {
   const [thisStay, setThisStay] = useState("");
   const [returnNotes, setReturnNotes] = useState("");
   const [savedAt, setSavedAt] = useState("");
+  const [draftingFor, setDraftingFor] = useState<string | null>(null);
+  const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
 
   async function load() {
     const [{ data: kids }, { data: profileRows }, { data: hh }] = await Promise.all([
@@ -169,6 +171,33 @@ export default function HandoverTab() {
     flashSaved();
   }
 
+  async function draftFromNotes(childId: string, childName: string) {
+    setDraftingFor(childId);
+    setDraftErrors((prev) => ({ ...prev, [childId]: "" }));
+    try {
+      const res = await fetch("/api/draft-handover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ childName }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setDraftErrors((prev) => ({ ...prev, [childId]: data.error }));
+        return;
+      }
+      const saved = profiles[childId] || blankProfile();
+      for (const [k] of PROFILE_FIELDS) {
+        const value = data.sections?.[k];
+        if (!saved[k]?.trim() && value?.trim()) {
+          await saveProfileField(childId, k, value);
+        }
+      }
+    } catch {
+      setDraftErrors((prev) => ({ ...prev, [childId]: "Couldn't reach the drafting service — try again in a moment." }));
+    }
+    setDraftingFor(null);
+  }
+
   async function saveHouseholdField(key: string, value: string) {
     setHousehold((prev) => ({ ...prev, [key]: value }));
     await supabase.from("household").upsert({ [key]: value, updated_at: new Date().toISOString() });
@@ -187,7 +216,13 @@ export default function HandoverTab() {
   }
 
   function householdOf(): Profile {
-    const selectedChildren = sortedSelected.map((n) => children.find((c) => c.name === n)).filter(Boolean) as ChildRow[];
+    // Falls back to every child in the household when none is selected yet
+    // for a plan -- these fields (CSW, GP, hub carer, delegated authority)
+    // are useful reference info on their own, not just once a specific
+    // child has been picked to go somewhere.
+    const selectedChildren = sortedSelected.length
+      ? (sortedSelected.map((n) => children.find((c) => c.name === n)).filter(Boolean) as ChildRow[])
+      : children;
     const suggested = suggestHousehold(selectedChildren, aboutHousehold);
     const merged: Profile = { ...household };
     (Object.keys(suggested) as string[]).forEach((k) => {
@@ -290,6 +325,11 @@ ${sortedSelected
         return (
           <div className="card" key={child.id}>
             <h3>{n}</h3>
+            <button className="chip" onClick={() => draftFromNotes(child.id, n)} disabled={draftingFor === child.id}>
+              {draftingFor === child.id ? "Drafting…" : "Draft from your notes"}
+            </button>
+            <p className="note">Fills empty boxes only, from what&apos;s actually in your diary entries about {n}.</p>
+            {draftErrors[child.id] && <p style={{ color: "var(--danger)", fontSize: 14 }}>{draftErrors[child.id]}</p>}
             {PROFILE_FIELDS.map(([k, label, hint]) => (
               <div key={k} style={{ marginBottom: 10 }}>
                 <b>{label}</b>
@@ -297,6 +337,7 @@ ${sortedSelected
                   {hint}
                 </p>
                 <textarea
+                  key={`${k}-${profiles[child.id]?.[k] ?? ""}`}
                   placeholder={`Nothing yet — ${hint}`}
                   defaultValue={p[k]}
                   onBlur={(e) => saveProfileField(child.id, k, e.target.value)}
