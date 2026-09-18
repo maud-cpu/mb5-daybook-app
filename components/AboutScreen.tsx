@@ -120,6 +120,7 @@ function ChildBasicsPanel({
             ) : (
               <input
                 key={f.key}
+                type={f.type || "text"}
                 style={{ marginTop: 6 }}
                 placeholder={f.placeholder ? `${f.label} — ${f.placeholder}` : f.label}
                 defaultValue={basics[f.key] || ""}

@@ -42,10 +42,12 @@ export default function QuickAccessButtons() {
       const edtPhone = extractPhone(household?.edt);
       if (edtPhone) out.push({ label: "Emergency Duty Team", name: "", value: edtPhone });
       allKids.forEach((c) => {
-        const p = extractPhone(c.basics?.csw);
-        if (p) out.push({ label: `${c.name}'s CSW`, name: "", value: p });
-        const pm = extractPhone(c.basics?.cswm);
-        if (pm) out.push({ label: `${c.name}'s CSW's manager`, name: "", value: pm });
+        const p = c.basics?.csw_phone || extractPhone(c.basics?.csw);
+        if (p) out.push({ label: `${c.name}'s CSW`, name: c.basics?.csw || "", value: p });
+        const pm = c.basics?.cswm_phone || extractPhone(c.basics?.cswm);
+        if (pm) out.push({ label: `${c.name}'s CSW's manager`, name: c.basics?.cswm || "", value: pm });
+        const pi = c.basics?.iro_phone;
+        if (pi) out.push({ label: `${c.name}'s IRO`, name: c.basics?.iro || "", value: pi });
       });
       (contacts as { label: string; name: string; phone: string }[] | null)
         ?.filter((c) => c.phone)
@@ -55,10 +57,12 @@ export default function QuickAccessButtons() {
       if (household?.ssw_manager_email) out.push({ label: "SSW's manager", name: household.ssw_manager_name || "", value: household.ssw_manager_email });
       if (household?.hub_leader_email) out.push({ label: "Mockingbird hub leader", name: household.hub_leader_name || "", value: household.hub_leader_email });
       allKids.forEach((c) => {
-        const e = extractEmail(c.basics?.csw);
-        if (e) out.push({ label: `${c.name}'s CSW`, name: "", value: e });
-        const em = extractEmail(c.basics?.cswm);
-        if (em) out.push({ label: `${c.name}'s CSW's manager`, name: "", value: em });
+        const e = c.basics?.csw_email || extractEmail(c.basics?.csw);
+        if (e) out.push({ label: `${c.name}'s CSW`, name: c.basics?.csw || "", value: e });
+        const em = c.basics?.cswm_email || extractEmail(c.basics?.cswm);
+        if (em) out.push({ label: `${c.name}'s CSW's manager`, name: c.basics?.cswm || "", value: em });
+        const ei = c.basics?.iro_email;
+        if (ei) out.push({ label: `${c.name}'s IRO`, name: c.basics?.iro || "", value: ei });
       });
       const seen = new Set(out.map((o) => o.value.toLowerCase()));
       (contacts as { label: string; name: string; email: string }[] | null)
