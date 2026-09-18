@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { today, trainingStatus } from "@/lib/domain";
 import {
@@ -228,16 +229,28 @@ export default function ThingsToDoCard() {
   return (
     <div className="card" style={{ borderLeft: `4px solid ${anyUrgent ? "var(--danger)" : "var(--marker)"}` }}>
       <h3>Things to do{anyUrgent ? " ⚠" : ""}</h3>
-      {due.map((x) => (
-        <div key={x.key} className="rec" style={x.urgent ? { color: "var(--danger)" } : undefined}>
-          <span onClick={() => dismissDue(x)} style={{ cursor: "pointer" }}>
-            {x.text}
-          </span>
-          <button className="chip" style={{ marginLeft: 8 }} onClick={() => dismissDue(x)}>
-            {x.key.startsWith("rem-") ? "Done" : "Dismiss"}
-          </button>
-        </div>
-      ))}
+      {due.map((x) => {
+        // A "fill this in" item (missing basics for a child) points at where to
+        // actually go do it -- it should only ever leave this list once that
+        // field is filled in and this stops being generated, never just from
+        // being tapped. Every other item has nowhere to "go do", so tapping the
+        // text is a shortcut for the Dismiss/Done button next to it.
+        const goTo = x.key.startsWith("nums-") ? "/dashboard/about" : null;
+        return (
+          <div key={x.key} className="rec" style={x.urgent ? { color: "var(--danger)" } : undefined}>
+            {goTo ? (
+              <Link href={goTo}>{x.text}</Link>
+            ) : (
+              <span onClick={() => dismissDue(x)} style={{ cursor: "pointer" }}>
+                {x.text}
+              </span>
+            )}
+            <button className="chip" style={{ marginLeft: 8 }} onClick={() => dismissDue(x)}>
+              {x.key.startsWith("rem-") ? "Done" : "Dismiss"}
+            </button>
+          </div>
+        );
+      })}
       {upcoming.slice(0, 3).map((r) => (
         <div className="rec" style={{ opacity: 0.7 }} key={r.id}>
           {new Date(r.date + "T12:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })} — {r.text}
