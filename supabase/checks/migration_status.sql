@@ -119,6 +119,12 @@ select migration, applied from (
     ('0021 external ratings + training_feedback table',
       exists (select 1 from information_schema.columns
          where table_schema = 'public' and table_name = 'shared_training_catalog' and column_name = 'external_rating')
-      and to_regclass('public.training_feedback') is not null)
+      and to_regclass('public.training_feedback') is not null),
+
+    ('0022 household_children basics/mockingbird columns',
+      exists (select 1 from information_schema.columns
+         where table_schema = 'public' and table_name = 'household_children' and column_name = 'basics')
+      and exists (select 1 from information_schema.columns
+         where table_schema = 'public' and table_name = 'household_children' and column_name = 'mockingbird'))
 ) as t(migration, applied)
 order by migration;
