@@ -173,7 +173,15 @@ export default function TrainingScreen() {
       supabase.from("training_feedback").select("course_id, user_id, rating, comment"),
       supabase.auth.getUser(),
     ]);
-    setCourses((c as Course[]) ?? []);
+    setCourses(
+      ((c as Course[]) ?? []).map((row) => ({
+        ...row,
+        // shared_training_catalog.external_rating is a Postgres "numeric" column, which
+        // PostgREST returns as a JSON string (e.g. "3.9") to avoid losing precision --
+        // without this it silently breaks course.external_rating.toFixed(1) below.
+        external_rating: row.external_rating == null ? null : Number(row.external_rating),
+      })),
+    );
     setPlatforms((pl as Platform[]) ?? []);
     setFeedback((fb as Feedback[]) ?? []);
     setMyUserId(userData?.user?.id ?? "");
