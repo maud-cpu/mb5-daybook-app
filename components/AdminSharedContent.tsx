@@ -350,8 +350,12 @@ export default function AdminSharedContent() {
           length: r.length,
           description: r.description,
           sort_order: 999 + i,
-          ...(r.externalRating != null ? { external_rating: r.externalRating } : {}),
-          ...(r.externalRatingNote ? { external_rating_note: r.externalRatingNote } : {}),
+          // Always send both keys, even when there's no rating for this row --
+          // a bulk insert with rows that don't all share the same keys sends an
+          // explicit NULL (not the column default) for whichever rows omit a
+          // key, which trips external_rating_note's not-null constraint.
+          external_rating: r.externalRating ?? null,
+          external_rating_note: r.externalRatingNote ?? "",
         };
       });
       for (let i = 0; i < inserts.length; i += 500) {
