@@ -14,9 +14,13 @@ type Course = {
   url: string;
   length: string;
   sort_order: number;
+  external_rating: number | null;
+  external_rating_note: string;
 };
 
 type Platform = { name: string; url: string };
+
+type Feedback = { course_id: string; user_id: string; rating: number; comment: string };
 
 const GROUP_ORDER = ["next", "pre", "once", "3yr"] as const;
 const LENGTH_BUCKETS = ["Under 15 min", "15–30 min", "30–60 min", "Over 1 hour", "Not timed"] as const;
@@ -61,6 +65,93 @@ function statusFor(course: Course, completedOn: string | undefined) {
 
 type PersonalSuggestion = { reasons: string[]; dates: string[] };
 
+function StarPicker({ value, onPick }: { value: number; onPick: (n: number) => void }) {
+  return (
+    <span>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          onClick={() => onPick(n)}
+          title={`${n} star${n > 1 ? "s" : ""}`}
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            fontSize: 20,
+            padding: "0 1px",
+            color: n <= value ? "var(--marker)" : "#ccc",
+          }}
+        >
+          ★
+        </button>
+      ))}
+    </span>
+  );
+}
+
+function RatingWidget({
+  course,
+  feedback,
+  myUserId,
+  onRate,
+}: {
+  course: Course;
+  feedback: Feedback[];
+  myUserId: string;
+  onRate: (courseId: string, rating: number, comment: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const mine = feedback.find((f) => f.course_id === course.id && f.user_id === myUserId);
+  const [comment, setComment] = useState(mine?.comment || "");
+  const householdRatings = feedback.filter((f) => f.course_id === course.id);
+  const householdAvg = householdRatings.length
+    ? householdRatings.reduce((s, f) => s + f.rating, 0) / householdRatings.length
+    : null;
+
+  const summary = [
+    course.external_rating
+      ? `⭐ ${course.external_rating.toFixed(1)}${course.external_rating_note ? ` (${course.external_rating_note})` : ""}`
+      : "",
+    householdAvg !== null
+      ? `👪 ${householdAvg.toFixed(1)} from ${householdRatings.length} carer${householdRatings.length > 1 ? "s" : ""}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <div style={{ marginTop: 4 }}>
+      {summary && (
+        <small className="muted" style={{ display: "block" }}>
+          {summary}
+        </small>
+      )}
+      <button className="chip" onClick={() => setOpen(!open)}>
+        {mine ? "Update your rating" : "Rate this"}
+      </button>
+      {open && (
+        <div style={{ marginTop: 6 }}>
+          <StarPicker value={mine?.rating || 0} onPick={(n) => onRate(course.id, n, comment)} />
+          <input
+            placeholder="Optional comment for other carers"
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            onBlur={() => mine && onRate(course.id, mine.rating, comment)}
+            style={{ marginTop: 4 }}
+          />
+          {householdRatings
+            .filter((f) => f.comment.trim())
+            .map((f, i) => (
+              <p key={i} className="note" style={{ marginTop: 4 }}>
+                {"★".repeat(f.rating)} {f.comment}
+              </p>
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TrainingScreen() {
   const supabase = createClient();
   const [courses, setCourses] = useState<Course[]>([]);
@@ -70,16 +161,22 @@ export default function TrainingScreen() {
   const [search, setSearch] = useState("");
   const [mediaFilter, setMediaFilter] = useState("");
   const [lengthFilter, setLengthFilter] = useState("");
+  const [feedback, setFeedback] = useState<Feedback[]>([]);
+  const [myUserId, setMyUserId] = useState("");
 
   async function load() {
-    const [{ data: c }, { data: pl }, { data: pr }, { data: notes }] = await Promise.all([
+    const [{ data: c }, { data: pl }, { data: pr }, { data: notes }, { data: fb }, { data: userData }] = await Promise.all([
       supabase.from("shared_training_catalog").select("*").eq("archived", false).order("sort_order"),
       supabase.from("shared_training_platforms").select("*"),
       supabase.from("training_progress").select("course_title, completed_on"),
       supabase.from("records").select("training_note, date").neq("training_note", ""),
+      supabase.from("training_feedback").select("course_id, user_id, rating, comment"),
+      supabase.auth.getUser(),
     ]);
     setCourses((c as Course[]) ?? []);
     setPlatforms((pl as Platform[]) ?? []);
+    setFeedback((fb as Feedback[]) ?? []);
+    setMyUserId(userData?.user?.id ?? "");
     const map: Record<string, string> = {};
     (pr ?? []).forEach((row: { course_title: string; completed_on: string }) => (map[row.course_title] = row.completed_on));
     setProgress(map);
@@ -116,6 +213,17 @@ export default function TrainingScreen() {
       await supabase.from("training_progress").delete().eq("course_title", title);
     }
     setProgress((prev) => ({ ...prev, [title]: date }));
+  }
+
+  async function rateCourse(courseId: string, rating: number, comment: string) {
+    if (!myUserId) return;
+    await supabase
+      .from("training_feedback")
+      .upsert({ course_id: courseId, user_id: myUserId, rating, comment }, { onConflict: "course_id,user_id" });
+    setFeedback((prev) => [
+      ...prev.filter((f) => !(f.course_id === courseId && f.user_id === myUserId)),
+      { course_id: courseId, user_id: myUserId, rating, comment },
+    ]);
   }
 
   const platformUrl = (name: string) => platforms.find((p) => p.name === name)?.url || "";
@@ -223,6 +331,7 @@ export default function TrainingScreen() {
                       <small style={{ color: status.color }}>{status.label}</small>
                     </>
                   )}
+                  {course && <RatingWidget course={course} feedback={feedback} myUserId={myUserId} onRate={rateCourse} />}
                 </div>
                 {url && (
                   <a className="chip" style={{ flex: "0 0 auto" }} href={url} target="_blank" rel="noopener noreferrer">
@@ -268,6 +377,7 @@ export default function TrainingScreen() {
                       <small style={{ color: status.color }}>{status.label}</small>
                     </>
                   )}
+                  <RatingWidget course={c} feedback={feedback} myUserId={myUserId} onRate={rateCourse} />
                 </div>
                 {url && (
                   <a className="chip" style={{ flex: "0 0 auto" }} href={url} target="_blank" rel="noopener noreferrer">

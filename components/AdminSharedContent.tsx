@@ -15,6 +15,8 @@ type Course = {
   url: string;
   length: string;
   description: string;
+  external_rating: number | null;
+  external_rating_note: string;
   archived: boolean;
 };
 type Platform = { name: string; url: string };
@@ -731,6 +733,24 @@ export default function AdminSharedContent() {
                   placeholder="What it covers (optional) — helps the AI recommend it accurately; auto-filled where possible"
                   onBlur={(e) => updateCourse(c.id, { description: e.target.value })}
                 />
+                <div className="row" style={{ marginTop: 4 }}>
+                  <input
+                    style={{ flex: "0 0 90px" }}
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="5"
+                    defaultValue={c.external_rating ?? ""}
+                    placeholder="Rating /5"
+                    onBlur={(e) => updateCourse(c.id, { external_rating: e.target.value ? Number(e.target.value) : null })}
+                  />
+                  <input
+                    style={{ flex: 1 }}
+                    defaultValue={c.external_rating_note}
+                    placeholder="Source, e.g. 4.6/5 on Amazon (1,200+ reviews)"
+                    onBlur={(e) => updateCourse(c.id, { external_rating_note: e.target.value })}
+                  />
+                </div>
               </div>
             ))}
           {courseTab === "active" && (
