@@ -53,7 +53,14 @@ function parseRotaPaste(text: string): RotaRow[] {
   return out;
 }
 
-type ParsedResource = { title: string; extra: string; length: string; description: string };
+type ParsedResource = {
+  title: string;
+  extra: string;
+  length: string;
+  description: string;
+  externalRating?: number;
+  externalRatingNote?: string;
+};
 
 /**
  * Builds the same "search Amazon for this title" link the reading list
@@ -281,8 +288,16 @@ export default function AdminSharedContent() {
             .filter(Boolean)
             .map((line) => {
               if (line.includes("|")) {
-                const [title, rest, length] = line.split("|").map((s) => s.trim());
-                return { title, extra: rest || "", length: length || "", description: "" };
+                const [title, rest, length, rating] = line.split("|").map((s) => s.trim());
+                const ratingMatch = rating ? rating.match(/^(\d+(?:\.\d+)?)/) : null;
+                return {
+                  title,
+                  extra: rest || "",
+                  length: length || "",
+                  description: "",
+                  externalRating: ratingMatch ? Number(ratingMatch[1]) : undefined,
+                  externalRatingNote: ratingMatch ? rating : undefined,
+                };
               }
               if (/^https?:\/\//i.test(line)) return { title: "", extra: line, length: "", description: "" };
               return { title: line, extra: "", length: "", description: "" };
@@ -317,6 +332,8 @@ export default function AdminSharedContent() {
             extra: r.extra,
             length: r.length || meta?.length || "",
             description: r.description || meta?.description || "",
+            externalRating: r.externalRating,
+            externalRatingNote: r.externalRatingNote,
           };
         })
         .filter((r) => r.title);
@@ -332,6 +349,8 @@ export default function AdminSharedContent() {
           length: r.length,
           description: r.description,
           sort_order: 999 + i,
+          ...(r.externalRating != null ? { external_rating: r.externalRating } : {}),
+          ...(r.externalRatingNote ? { external_rating_note: r.externalRatingNote } : {}),
         };
       });
       for (let i = 0; i < inserts.length; i += 500) {
@@ -602,6 +621,10 @@ export default function AdminSharedContent() {
           <code>Title | link or platform name</code> — you give the title
           <br />
           <code>Title | link | Video, 3 min</code> — add a rough format/length too, optional
+          <br />
+          <code>Title | link | Book, ~250 pages | 4.3/5 Goodreads, 950 ratings</code> — add a real external rating
+          too, optional (the number at the start of that 4th part is stored as the star rating, the whole thing as
+          its source note)
           <br />
           <code>https://a-bare-link-with-no-title</code> — just paste the link and it fetches the page&apos;s title
           for you automatically
