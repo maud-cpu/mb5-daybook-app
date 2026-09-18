@@ -9,7 +9,123 @@ const ADULT_ROLES = ["Foster carer", "Adult child", "Live-in grandparent", "Othe
 const VISITOR_ROLES = ["Mockingbird hub carer", "Respite support worker", "Family friend / helper", "Other"];
 
 type Adult = { id: string; name: string; phone: string; email: string; role: string };
-type HouseholdChild = { id: string; name: string; born: string | null; category: string; notes: string };
+type HouseholdChild = {
+  id: string;
+  name: string;
+  born: string | null;
+  category: string;
+  notes: string;
+  basics: Record<string, string>;
+  mockingbird: string;
+  hub_carer_name: string;
+  hub_carer_phone: string;
+  hub_carer_email: string;
+  surrey_contact: string;
+};
+
+// Shared by every list a child can appear in (lives here, visits, or in your
+// household but not an active placement) -- Mockingbird/hub-carer details,
+// the Surrey contact for an SGO/adopted child, and the full basics form.
+// Kept in one place so the three lists can't quietly drift out of sync.
+function ChildBasicsPanel({
+  mockingbird,
+  onMockingbird,
+  hubCarerName,
+  hubCarerPhone,
+  hubCarerEmail,
+  onHubCarer,
+  showSurreyContact,
+  surreyContact,
+  onSurreyContact,
+  basics,
+  onBasics,
+}: {
+  mockingbird: string;
+  onMockingbird: (v: string) => void;
+  hubCarerName: string;
+  hubCarerPhone: string;
+  hubCarerEmail: string;
+  onHubCarer: (field: "hub_carer_name" | "hub_carer_phone" | "hub_carer_email", v: string) => void;
+  showSurreyContact: boolean;
+  surreyContact: string;
+  onSurreyContact: (v: string) => void;
+  basics: Record<string, string>;
+  onBasics: (key: string, value: string) => void;
+}) {
+  return (
+    <>
+      <p className="hint" style={{ marginTop: 8 }}>
+        Mockingbird
+      </p>
+      <select value={mockingbird} onChange={(e) => onMockingbird(e.target.value)}>
+        <option value="">— not set —</option>
+        {MB_OPTIONS.map(([k, l]) => (
+          <option key={k} value={k}>
+            {l}
+          </option>
+        ))}
+      </select>
+      {["mb5", "another"].includes(mockingbird) && (
+        <>
+          <p className="hint" style={{ marginTop: 6 }}>
+            Hub carer name
+          </p>
+          <input defaultValue={hubCarerName} onBlur={(e) => onHubCarer("hub_carer_name", e.target.value)} />
+          <p className="hint" style={{ marginTop: 6 }}>
+            Hub carer phone
+          </p>
+          <input type="tel" defaultValue={hubCarerPhone} onBlur={(e) => onHubCarer("hub_carer_phone", e.target.value)} />
+          <p className="hint" style={{ marginTop: 6 }}>
+            Hub carer email
+          </p>
+          <input type="email" defaultValue={hubCarerEmail} onBlur={(e) => onHubCarer("hub_carer_email", e.target.value)} />
+        </>
+      )}
+      {showSurreyContact && (
+        <>
+          <p className="hint" style={{ marginTop: 8 }}>
+            Important contact at Surrey
+          </p>
+          <textarea
+            placeholder="Name · phone · email"
+            defaultValue={surreyContact}
+            onBlur={(e) => onSurreyContact(e.target.value)}
+          />
+        </>
+      )}
+      {BASICS_SECTIONS.map((section) => (
+        <div key={section.title} style={{ marginBottom: 12, marginTop: 12 }}>
+          <b style={{ fontSize: 14 }}>{section.title}</b>
+          {section.fields.map((f) =>
+            f.select ? (
+              <select
+                key={f.key}
+                style={{ marginTop: 6 }}
+                value={basics[f.key] || ""}
+                onChange={(e) => onBasics(f.key, e.target.value)}
+              >
+                <option value="">{f.label}…</option>
+                {f.select.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                key={f.key}
+                style={{ marginTop: 6 }}
+                placeholder={f.placeholder ? `${f.label} — ${f.placeholder}` : f.label}
+                defaultValue={basics[f.key] || ""}
+                onBlur={(e) => onBasics(f.key, e.target.value)}
+              />
+            ),
+          )}
+        </div>
+      ))}
+    </>
+  );
+}
 type Visitor = { id: string; name: string; phone: string; email: string; role: string };
 
 type Household = {
@@ -49,6 +165,7 @@ export default function AboutScreen() {
   const [addingVisitingChild, setAddingVisitingChild] = useState(false);
   const [newVisitingChild, setNewVisitingChild] = useState({ name: "", born: "", category: VISITS_CATS[0][0] as string });
   const [openChild, setOpenChild] = useState<string | null>(null);
+  const [openHouseholdChild, setOpenHouseholdChild] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState("");
 
   async function load() {
@@ -96,6 +213,19 @@ export default function AboutScreen() {
   async function saveChild(childId: string, patch: Partial<Child>) {
     setChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, ...patch } : c)));
     await supabase.from("children").update(patch).eq("id", childId);
+    flashSaved();
+  }
+
+  async function removeChild(childId: string, name: string) {
+    if (!confirm(`Remove ${name || "this child"}? Their diary entries and other records are kept, just no longer linked to a child in this list.`)) return;
+    setChildren((prev) => prev.filter((c) => c.id !== childId));
+    await supabase.from("children").delete().eq("id", childId);
+  }
+
+  async function saveHouseholdChildBasics(childId: string, key: string, value: string) {
+    const next = { ...(householdChildren.find((c) => c.id === childId)?.basics || {}), [key]: value };
+    setHouseholdChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, basics: next } : c)));
+    await supabase.from("household_children").update({ basics: next }).eq("id", childId);
     flashSaved();
   }
 
@@ -227,39 +357,65 @@ export default function AboutScreen() {
         <h3>Children in your household</h3>
         <p className="hint">
           Children living here who aren&apos;t an active fostering placement in the list below — your own, adopted,
-          kinship, SGO, or a child who themselves fosters.
+          kinship, SGO, or a child who themselves fosters. Still looked after, still on an SGO, or otherwise has
+          social work/health/education details worth keeping? Expand them below to fill those in too.
         </p>
-        {householdChildren.map((c) => (
-          <div className="item" key={c.id}>
-            <div className="row">
-              <input value={c.name} onChange={(e) => updateHouseholdChild(c.id, { name: e.target.value })} />
-              <input
-                type="date"
-                style={{ flex: "0 0 150px" }}
-                value={c.born || ""}
-                onChange={(e) => updateHouseholdChild(c.id, { born: e.target.value || null })}
-              />
-              <button className="x" onClick={() => removeHouseholdChild(c.id)}>
-                ×
-              </button>
+        {householdChildren.map((c) => {
+          const open = openHouseholdChild === c.id;
+          return (
+            <div className="item" key={c.id}>
+              <div className="row">
+                <input value={c.name} onChange={(e) => updateHouseholdChild(c.id, { name: e.target.value })} />
+                <input
+                  type="date"
+                  style={{ flex: "0 0 150px" }}
+                  value={c.born || ""}
+                  onChange={(e) => updateHouseholdChild(c.id, { born: e.target.value || null })}
+                />
+                <button className="x" onClick={() => removeHouseholdChild(c.id)}>
+                  ×
+                </button>
+              </div>
+              <div className="row">
+                <select value={c.category} onChange={(e) => updateHouseholdChild(c.id, { category: e.target.value })}>
+                  <option value="">— placement type —</option>
+                  {LIVES_CATS.map(([k, l]) => (
+                    <option key={k} value={k}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  placeholder="Notes (optional)"
+                  value={c.notes}
+                  onChange={(e) => updateHouseholdChild(c.id, { notes: e.target.value })}
+                />
+              </div>
+              <p
+                className="hint"
+                style={{ marginTop: 6, cursor: "pointer" }}
+                onClick={() => setOpenHouseholdChild(open ? null : c.id)}
+              >
+                {open ? "▾ Hide" : "▸ Social work / health / education details"}
+              </p>
+              {open && (
+                <ChildBasicsPanel
+                  mockingbird={c.mockingbird}
+                  onMockingbird={(v) => updateHouseholdChild(c.id, { mockingbird: v })}
+                  hubCarerName={c.hub_carer_name}
+                  hubCarerPhone={c.hub_carer_phone}
+                  hubCarerEmail={c.hub_carer_email}
+                  onHubCarer={(field, v) => updateHouseholdChild(c.id, { [field]: v })}
+                  showSurreyContact={["sgo", "adopted"].includes(c.category)}
+                  surreyContact={c.surrey_contact}
+                  onSurreyContact={(v) => updateHouseholdChild(c.id, { surrey_contact: v })}
+                  basics={c.basics || {}}
+                  onBasics={(key, value) => saveHouseholdChildBasics(c.id, key, value)}
+                />
+              )}
             </div>
-            <div className="row">
-              <select value={c.category} onChange={(e) => updateHouseholdChild(c.id, { category: e.target.value })}>
-                <option value="">— placement type —</option>
-                {LIVES_CATS.map(([k, l]) => (
-                  <option key={k} value={k}>
-                    {l}
-                  </option>
-                ))}
-              </select>
-              <input
-                placeholder="Notes (optional)"
-                value={c.notes}
-                onChange={(e) => updateHouseholdChild(c.id, { notes: e.target.value })}
-              />
-            </div>
-          </div>
-        ))}
+          );
+        })}
         {addingHouseholdChild ? (
           <div style={{ marginTop: 8 }}>
             <div className="row">
@@ -313,27 +469,52 @@ export default function AboutScreen() {
         <b style={{ display: "block", marginTop: 8 }}>Children</b>
         {children
           .filter((c) => livesHereOf(c) === false)
-          .map((c) => (
-            <div className="item" key={c.id}>
-              <div className="row">
-                <input value={c.name} onChange={(e) => saveChild(c.id, { name: e.target.value })} />
-                <input
-                  type="date"
-                  style={{ flex: "0 0 150px" }}
-                  value={c.born || ""}
-                  onChange={(e) => saveChild(c.id, { born: e.target.value || null })}
-                />
+          .map((c) => {
+            const open = openChild === c.id;
+            const cb = basics[c.id] || {};
+            return (
+              <div className="item" key={c.id}>
+                <div className="row">
+                  <input value={c.name} onChange={(e) => saveChild(c.id, { name: e.target.value })} />
+                  <input
+                    type="date"
+                    style={{ flex: "0 0 150px" }}
+                    value={c.born || ""}
+                    onChange={(e) => saveChild(c.id, { born: e.target.value || null })}
+                  />
+                  <button className="x" onClick={() => removeChild(c.id, c.name)}>
+                    ×
+                  </button>
+                </div>
+                <select value={c.category} onChange={(e) => saveChild(c.id, { category: e.target.value })}>
+                  <option value="">— placement type —</option>
+                  {VISITS_CATS.map(([k, l]) => (
+                    <option key={k} value={k}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+                <p className="hint" style={{ marginTop: 6, cursor: "pointer" }} onClick={() => setOpenChild(open ? null : c.id)}>
+                  {open ? "▾ Hide" : "▸ Mockingbird / health / education details"}
+                </p>
+                {open && (
+                  <ChildBasicsPanel
+                    mockingbird={c.mockingbird}
+                    onMockingbird={(v) => saveChild(c.id, { mockingbird: v })}
+                    hubCarerName={c.hub_carer_name}
+                    hubCarerPhone={c.hub_carer_phone}
+                    hubCarerEmail={c.hub_carer_email}
+                    onHubCarer={(field, v) => saveChild(c.id, { [field]: v })}
+                    showSurreyContact={["sgo", "adopted"].includes(c.category)}
+                    surreyContact={c.surrey_contact}
+                    onSurreyContact={(v) => saveChild(c.id, { surrey_contact: v })}
+                    basics={cb}
+                    onBasics={(key, value) => saveChildBasics(c.id, key, value)}
+                  />
+                )}
               </div>
-              <select value={c.category} onChange={(e) => saveChild(c.id, { category: e.target.value })}>
-                <option value="">— placement type —</option>
-                {VISITS_CATS.map(([k, l]) => (
-                  <option key={k} value={k}>
-                    {l}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ))}
+            );
+          })}
         {addingVisitingChild ? (
           <div style={{ marginTop: 8 }}>
             <div className="row">
@@ -464,14 +645,21 @@ export default function AboutScreen() {
         </div>
       )}
 
-      {children.map((c) => {
+      {children
+        .filter((c) => livesHereOf(c) !== false)
+        .map((c) => {
         const open = openChild === c.id;
         const cb = basics[c.id] || {};
         return (
           <div className="card" key={c.id}>
-            <h3 onClick={() => setOpenChild(open ? null : c.id)} style={{ cursor: "pointer" }}>
-              {open ? "▾" : "▸"} {c.name}
-            </h3>
+            <div className="row" style={{ alignItems: "center" }}>
+              <h3 style={{ cursor: "pointer", flex: 1, margin: 0 }} onClick={() => setOpenChild(open ? null : c.id)}>
+                {open ? "▾" : "▸"} {c.name}
+              </h3>
+              <button className="x" onClick={() => removeChild(c.id, c.name)}>
+                ×
+              </button>
+            </div>
             {!open && (
               <div className="muted">
                 {livesHereOf(c) === false
@@ -502,78 +690,21 @@ export default function AboutScreen() {
                     ))}
                   </select>
                 )}
-                {["sgo", "adopted"].includes(c.category) && (
-                  <>
-                    <p className="hint" style={{ marginTop: 8 }}>
-                      Important contact at Surrey
-                    </p>
-                    <textarea
-                      placeholder="Name · phone · email"
-                      defaultValue={c.surrey_contact}
-                      onBlur={(e) => saveChild(c.id, { surrey_contact: e.target.value })}
-                    />
-                  </>
-                )}
-                <p className="hint" style={{ marginTop: 8 }}>
-                  Mockingbird
-                </p>
-                <select value={c.mockingbird} onChange={(e) => saveChild(c.id, { mockingbird: e.target.value })}>
-                  <option value="">— not set —</option>
-                  {MB_OPTIONS.map(([k, l]) => (
-                    <option key={k} value={k}>
-                      {l}
-                    </option>
-                  ))}
-                </select>
-                {["mb5", "another"].includes(c.mockingbird) && (
-                  <>
-                    <p className="hint" style={{ marginTop: 6 }}>
-                      Hub carer name
-                    </p>
-                    <input defaultValue={c.hub_carer_name} onBlur={(e) => saveChild(c.id, { hub_carer_name: e.target.value })} />
-                    <p className="hint" style={{ marginTop: 6 }}>
-                      Hub carer phone
-                    </p>
-                    <input type="tel" defaultValue={c.hub_carer_phone} onBlur={(e) => saveChild(c.id, { hub_carer_phone: e.target.value })} />
-                    <p className="hint" style={{ marginTop: 6 }}>
-                      Hub carer email
-                    </p>
-                    <input type="email" defaultValue={c.hub_carer_email} onBlur={(e) => saveChild(c.id, { hub_carer_email: e.target.value })} />
-                  </>
-                )}
+                <ChildBasicsPanel
+                  mockingbird={c.mockingbird}
+                  onMockingbird={(v) => saveChild(c.id, { mockingbird: v })}
+                  hubCarerName={c.hub_carer_name}
+                  hubCarerPhone={c.hub_carer_phone}
+                  hubCarerEmail={c.hub_carer_email}
+                  onHubCarer={(field, v) => saveChild(c.id, { [field]: v })}
+                  showSurreyContact={["sgo", "adopted"].includes(c.category)}
+                  surreyContact={c.surrey_contact}
+                  onSurreyContact={(v) => saveChild(c.id, { surrey_contact: v })}
+                  basics={cb}
+                  onBasics={(key, value) => saveChildBasics(c.id, key, value)}
+                />
               </div>
             )}
-            {open &&
-              BASICS_SECTIONS.map((section) => (
-                <div key={section.title} style={{ marginBottom: 12 }}>
-                  <b style={{ fontSize: 14 }}>{section.title}</b>
-                  {section.fields.map((f) =>
-                    f.select ? (
-                      <select
-                        key={f.key}
-                        style={{ marginTop: 6 }}
-                        value={cb[f.key] || ""}
-                        onChange={(e) => saveChildBasics(c.id, f.key, e.target.value)}
-                      >
-                        <option value="">{f.label}…</option>
-                        {f.select.map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        key={f.key}
-                        style={{ marginTop: 6 }}
-                        placeholder={f.placeholder ? `${f.label} — ${f.placeholder}` : f.label}
-                        defaultValue={cb[f.key] || ""}
-                        onBlur={(e) => saveChildBasics(c.id, f.key, e.target.value)}
-                      />
-                    ),
-                  )}
-                </div>
-              ))}
           </div>
         );
       })}
