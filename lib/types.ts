@@ -117,6 +117,13 @@ export type Child = {
 export const LIVES_CATS = [
   ["la_long", "Looked after (long term)"],
   ["la_short", "Looked after (short term)"],
+  ["short_break", "Short break / respite"],
+  ["parent_and_child", "Parent and child placement"],
+  ["remand", "Remand (youth justice)"],
+  ["uasc", "Unaccompanied asylum-seeking child (UASC)"],
+  ["private_fostering", "Private fostering"],
+  ["staying_put", "Staying Put (18+)"],
+  ["supported_lodgings", "Supported lodgings"],
   ["fosters", "Child who fosters"],
   ["sgo", "SGO"],
   ["adopted", "Adopted"],

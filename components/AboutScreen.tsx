@@ -245,7 +245,7 @@ export default function AboutScreen() {
             </div>
             <div className="row">
               <select value={c.category} onChange={(e) => updateHouseholdChild(c.id, { category: e.target.value })}>
-                <option value="">— category —</option>
+                <option value="">— placement type —</option>
                 {LIVES_CATS.map(([k, l]) => (
                   <option key={k} value={k}>
                     {l}
@@ -280,7 +280,7 @@ export default function AboutScreen() {
                 value={newHouseholdChild.category}
                 onChange={(e) => setNewHouseholdChild({ ...newHouseholdChild, category: e.target.value })}
               >
-                <option value="">— category —</option>
+                <option value="">— placement type —</option>
                 {LIVES_CATS.map(([k, l]) => (
                   <option key={k} value={k}>
                     {l}
@@ -325,7 +325,7 @@ export default function AboutScreen() {
                 />
               </div>
               <select value={c.category} onChange={(e) => saveChild(c.id, { category: e.target.value })}>
-                <option value="">— category —</option>
+                <option value="">— placement type —</option>
                 {VISITS_CATS.map(([k, l]) => (
                   <option key={k} value={k}>
                     {l}
@@ -494,7 +494,7 @@ export default function AboutScreen() {
                 </select>
                 {c.lives_here === true && (
                   <select style={{ marginTop: 6 }} value={c.category} onChange={(e) => saveChild(c.id, { category: e.target.value })}>
-                    <option value="">— category —</option>
+                    <option value="">— placement type —</option>
                     {LIVES_CATS.map(([k, l]) => (
                       <option key={k} value={k}>
                         {l}
