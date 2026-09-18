@@ -114,6 +114,11 @@ select migration, applied from (
 
     ('0020 shared_training_catalog.description column',
       exists (select 1 from information_schema.columns
-         where table_schema = 'public' and table_name = 'shared_training_catalog' and column_name = 'description'))
+         where table_schema = 'public' and table_name = 'shared_training_catalog' and column_name = 'description')),
+
+    ('0021 external ratings + training_feedback table',
+      exists (select 1 from information_schema.columns
+         where table_schema = 'public' and table_name = 'shared_training_catalog' and column_name = 'external_rating')
+      and to_regclass('public.training_feedback') is not null)
 ) as t(migration, applied)
 order by migration;
