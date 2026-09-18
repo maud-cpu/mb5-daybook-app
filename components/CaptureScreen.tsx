@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { daycareAmount, gbp, today } from "@/lib/domain";
+import { withAmazonAffiliateTag } from "@/lib/amazon";
 import ThingsToDoCard from "@/components/ThingsToDoCard";
 import PhotoField from "@/components/PhotoField";
 import ComposeEmail from "@/components/ComposeEmail";
@@ -82,7 +83,10 @@ export default function CaptureScreen() {
       (platforms ?? []).forEach((p: { name: string; url: string }) => (urlByPlatform[p.name] = p.url));
       const byCourse: Record<string, { url: string; length: string }> = {};
       (courses ?? []).forEach((c: { title: string; platform: string; url: string; length: string }) => {
-        byCourse[c.title.trim().toLowerCase()] = { url: c.url || urlByPlatform[c.platform] || "", length: c.length || "" };
+        byCourse[c.title.trim().toLowerCase()] = {
+          url: withAmazonAffiliateTag(c.url || urlByPlatform[c.platform] || ""),
+          length: c.length || "",
+        };
       });
       setCourseInfo(byCourse);
     });

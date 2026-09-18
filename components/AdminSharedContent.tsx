@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { BANDS, Rates } from "@/lib/types";
+import { AMAZON_ASSOCIATES_TAG } from "@/lib/amazon";
 
 type RotaRow = { date: string; name: string; phone: string };
 type Course = {
@@ -80,7 +81,7 @@ function matchesCourseSearch(c: { title: string; description: string }, search: 
 
 function amazonSearchUrl(title: string, author: string): string {
   const q = [title, author].filter(Boolean).join(" ");
-  return `https://www.amazon.co.uk/s?k=${encodeURIComponent(q)}&tag=fostercarersu-21`;
+  return `https://www.amazon.co.uk/s?k=${encodeURIComponent(q)}&tag=${AMAZON_ASSOCIATES_TAG}`;
 }
 
 /**
