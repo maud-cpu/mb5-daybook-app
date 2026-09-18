@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { trainingStatus } from "@/lib/domain";
+import { withAmazonAffiliateTag } from "@/lib/amazon";
 
 type Course = {
   id: string;
@@ -310,7 +311,7 @@ export default function TrainingScreen() {
             const course = courses.find((c) => c.title.trim().toLowerCase() === title.trim().toLowerCase());
             const completedOn = progress[title];
             const status = course ? statusFor(course, completedOn) : { label: "", color: "" };
-            const url = course ? course.url || platformUrl(course.platform) : "";
+            const url = withAmazonAffiliateTag(course ? course.url || platformUrl(course.platform) : "");
             return (
               <div
                 key={title}
@@ -363,7 +364,7 @@ export default function TrainingScreen() {
           {g.rows.map((c) => {
             const completedOn = progress[c.title];
             const status = statusFor(c, completedOn);
-            const url = c.url || platformUrl(c.platform);
+            const url = withAmazonAffiliateTag(c.url || platformUrl(c.platform));
             return (
               <div
                 key={c.id}
