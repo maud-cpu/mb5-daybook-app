@@ -1,4 +1,4 @@
-export type BasicsField = { key: string; label: string; placeholder?: string; select?: string[] };
+export type BasicsField = { key: string; label: string; placeholder?: string; select?: string[]; type?: "tel" | "email" };
 export type BasicsSection = { title: string; fields: BasicsField[] };
 
 export const LEGAL_STATUS_OPTIONS = [
@@ -25,8 +25,14 @@ export const BASICS_SECTIONS: BasicsSection[] = [
     title: "Social work team",
     fields: [
       { key: "csw", label: "Child's social worker" },
+      { key: "csw_phone", label: "CSW phone", type: "tel" },
+      { key: "csw_email", label: "CSW email", type: "email" },
       { key: "cswm", label: "CSW's manager" },
+      { key: "cswm_phone", label: "CSW's manager phone", type: "tel" },
+      { key: "cswm_email", label: "CSW's manager email", type: "email" },
       { key: "iro", label: "IRO (Independent Reviewing Officer)" },
+      { key: "iro_phone", label: "IRO phone", type: "tel" },
+      { key: "iro_email", label: "IRO email", type: "email" },
       { key: "duty", label: "Team duty line" },
     ],
   },
