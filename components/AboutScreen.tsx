@@ -431,27 +431,31 @@ export default function AboutScreen() {
                   onChange={(e) => updateHouseholdChild(c.id, { notes: e.target.value })}
                 />
               </div>
-              <p
-                className="hint"
-                style={{ marginTop: 6, cursor: "pointer" }}
-                onClick={() => setOpenHouseholdChild(open ? null : c.id)}
-              >
-                {open ? "▾ Hide" : "▸ Social work / health / education details"}
-              </p>
-              {open && (
-                <ChildBasicsPanel
-                  mockingbird={c.mockingbird}
-                  onMockingbird={(v) => updateHouseholdChild(c.id, { mockingbird: v })}
-                  hubCarerName={c.hub_carer_name}
-                  hubCarerPhone={c.hub_carer_phone}
-                  hubCarerEmail={c.hub_carer_email}
-                  onHubCarer={(field, v) => updateHouseholdChild(c.id, { [field]: v })}
-                  showSurreyContact={["sgo", "adopted"].includes(c.category)}
-                  surreyContact={c.surrey_contact}
-                  onSurreyContact={(v) => updateHouseholdChild(c.id, { surrey_contact: v })}
-                  basics={c.basics || {}}
-                  onBasics={(key, value) => saveHouseholdChildBasics(c.id, key, value)}
-                />
+              {c.category !== "fosters" && (
+                <>
+                  <p
+                    className="hint"
+                    style={{ marginTop: 6, cursor: "pointer" }}
+                    onClick={() => setOpenHouseholdChild(open ? null : c.id)}
+                  >
+                    {open ? "▾ Hide" : "▸ Social work / health / education details"}
+                  </p>
+                  {open && (
+                    <ChildBasicsPanel
+                      mockingbird={c.mockingbird}
+                      onMockingbird={(v) => updateHouseholdChild(c.id, { mockingbird: v })}
+                      hubCarerName={c.hub_carer_name}
+                      hubCarerPhone={c.hub_carer_phone}
+                      hubCarerEmail={c.hub_carer_email}
+                      onHubCarer={(field, v) => updateHouseholdChild(c.id, { [field]: v })}
+                      showSurreyContact={["sgo", "adopted"].includes(c.category)}
+                      surreyContact={c.surrey_contact}
+                      onSurreyContact={(v) => updateHouseholdChild(c.id, { surrey_contact: v })}
+                      basics={c.basics || {}}
+                      onBasics={(key, value) => saveHouseholdChildBasics(c.id, key, value)}
+                    />
+                  )}
+                </>
               )}
             </div>
           );
@@ -730,19 +734,32 @@ export default function AboutScreen() {
                     ))}
                   </select>
                 )}
-                <ChildBasicsPanel
-                  mockingbird={c.mockingbird}
-                  onMockingbird={(v) => saveChild(c.id, { mockingbird: v })}
-                  hubCarerName={c.hub_carer_name}
-                  hubCarerPhone={c.hub_carer_phone}
-                  hubCarerEmail={c.hub_carer_email}
-                  onHubCarer={(field, v) => saveChild(c.id, { [field]: v })}
-                  showSurreyContact={["sgo", "adopted"].includes(c.category)}
-                  surreyContact={c.surrey_contact}
-                  onSurreyContact={(v) => saveChild(c.id, { surrey_contact: v })}
-                  basics={cb}
-                  onBasics={(key, value) => saveChildBasics(c.id, key, value)}
-                />
+                {c.category === "fosters" ? (
+                  <>
+                    <p className="hint" style={{ marginTop: 8 }}>
+                      Notes
+                    </p>
+                    <textarea
+                      placeholder="Anything worth noting — no CSW/health/education details needed for a child who themselves fosters"
+                      defaultValue={cb.notes || ""}
+                      onBlur={(e) => saveChildBasics(c.id, "notes", e.target.value)}
+                    />
+                  </>
+                ) : (
+                  <ChildBasicsPanel
+                    mockingbird={c.mockingbird}
+                    onMockingbird={(v) => saveChild(c.id, { mockingbird: v })}
+                    hubCarerName={c.hub_carer_name}
+                    hubCarerPhone={c.hub_carer_phone}
+                    hubCarerEmail={c.hub_carer_email}
+                    onHubCarer={(field, v) => saveChild(c.id, { [field]: v })}
+                    showSurreyContact={["sgo", "adopted"].includes(c.category)}
+                    surreyContact={c.surrey_contact}
+                    onSurreyContact={(v) => saveChild(c.id, { surrey_contact: v })}
+                    basics={cb}
+                    onBasics={(key, value) => saveChildBasics(c.id, key, value)}
+                  />
+                )}
               </div>
             )}
           </div>
