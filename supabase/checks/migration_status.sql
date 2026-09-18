@@ -125,6 +125,12 @@ select migration, applied from (
       exists (select 1 from information_schema.columns
          where table_schema = 'public' and table_name = 'household_children' and column_name = 'basics')
       and exists (select 1 from information_schema.columns
-         where table_schema = 'public' and table_name = 'household_children' and column_name = 'mockingbird'))
+         where table_schema = 'public' and table_name = 'household_children' and column_name = 'mockingbird')),
+
+    ('0023 household.is_mockingbird + hub leader columns',
+      exists (select 1 from information_schema.columns
+         where table_schema = 'public' and table_name = 'household' and column_name = 'is_mockingbird')
+      and exists (select 1 from information_schema.columns
+         where table_schema = 'public' and table_name = 'household' and column_name = 'hub_leader_name'))
 ) as t(migration, applied)
 order by migration;

@@ -136,6 +136,10 @@ type Household = {
   ssw_manager_phone: string;
   ssw_manager_email: string;
   edt: string;
+  is_mockingbird: boolean | null;
+  hub_leader_name: string;
+  hub_leader_phone: string;
+  hub_leader_email: string;
 };
 
 const emptyHousehold: Household = {
@@ -146,6 +150,10 @@ const emptyHousehold: Household = {
   ssw_manager_phone: "",
   ssw_manager_email: "",
   edt: "",
+  is_mockingbird: null,
+  hub_leader_name: "",
+  hub_leader_phone: "",
+  hub_leader_email: "",
 };
 
 export default function AboutScreen() {
@@ -350,6 +358,38 @@ export default function AboutScreen() {
           <button className="chip add" onClick={() => setAddingAdult(true)}>
             + adult
           </button>
+        )}
+      </div>
+
+      <div className="card">
+        <h3>Your Mockingbird</h3>
+        <p className="hint">Are you part of a Mockingbird constellation?</p>
+        <select
+          value={household.is_mockingbird === null ? "" : household.is_mockingbird ? "1" : "0"}
+          onChange={(e) => saveHousehold({ is_mockingbird: e.target.value === "" ? null : e.target.value === "1" })}
+        >
+          <option value="">— not set —</option>
+          <option value="1">Yes</option>
+          <option value="0">No</option>
+        </select>
+        {household.is_mockingbird && (
+          <div className="row" style={{ marginTop: 8 }}>
+            <input
+              placeholder="Hub leader name"
+              value={household.hub_leader_name}
+              onChange={(e) => saveHousehold({ hub_leader_name: e.target.value })}
+            />
+            <input
+              placeholder="Hub leader phone"
+              value={household.hub_leader_phone}
+              onChange={(e) => saveHousehold({ hub_leader_phone: e.target.value })}
+            />
+            <input
+              placeholder="Hub leader email"
+              value={household.hub_leader_email}
+              onChange={(e) => saveHousehold({ hub_leader_email: e.target.value })}
+            />
+          </div>
         )}
       </div>
 
