@@ -28,6 +28,7 @@ type HouseholdChild = {
 // the Surrey contact for an SGO/adopted child, and the full basics form.
 // Kept in one place so the three lists can't quietly drift out of sync.
 function ChildBasicsPanel({
+  showMockingbird,
   mockingbird,
   onMockingbird,
   hubCarerName,
@@ -40,6 +41,7 @@ function ChildBasicsPanel({
   basics,
   onBasics,
 }: {
+  showMockingbird: boolean;
   mockingbird: string;
   onMockingbird: (v: string) => void;
   hubCarerName: string;
@@ -54,31 +56,35 @@ function ChildBasicsPanel({
 }) {
   return (
     <>
-      <p className="hint" style={{ marginTop: 8 }}>
-        Mockingbird
-      </p>
-      <select value={mockingbird} onChange={(e) => onMockingbird(e.target.value)}>
-        <option value="">— not set —</option>
-        {MB_OPTIONS.map(([k, l]) => (
-          <option key={k} value={k}>
-            {l}
-          </option>
-        ))}
-      </select>
-      {["mb5", "another"].includes(mockingbird) && (
+      {showMockingbird && (
         <>
-          <p className="hint" style={{ marginTop: 6 }}>
-            Hub carer name
+          <p className="hint" style={{ marginTop: 8 }}>
+            Mockingbird
           </p>
-          <input defaultValue={hubCarerName} onBlur={(e) => onHubCarer("hub_carer_name", e.target.value)} />
-          <p className="hint" style={{ marginTop: 6 }}>
-            Hub carer phone
-          </p>
-          <input type="tel" defaultValue={hubCarerPhone} onBlur={(e) => onHubCarer("hub_carer_phone", e.target.value)} />
-          <p className="hint" style={{ marginTop: 6 }}>
-            Hub carer email
-          </p>
-          <input type="email" defaultValue={hubCarerEmail} onBlur={(e) => onHubCarer("hub_carer_email", e.target.value)} />
+          <select value={mockingbird} onChange={(e) => onMockingbird(e.target.value)}>
+            <option value="">— not set —</option>
+            {MB_OPTIONS.map(([k, l]) => (
+              <option key={k} value={k}>
+                {l}
+              </option>
+            ))}
+          </select>
+          {["mb5", "another"].includes(mockingbird) && (
+            <>
+              <p className="hint" style={{ marginTop: 6 }}>
+                Hub carer name
+              </p>
+              <input defaultValue={hubCarerName} onBlur={(e) => onHubCarer("hub_carer_name", e.target.value)} />
+              <p className="hint" style={{ marginTop: 6 }}>
+                Hub carer phone
+              </p>
+              <input type="tel" defaultValue={hubCarerPhone} onBlur={(e) => onHubCarer("hub_carer_phone", e.target.value)} />
+              <p className="hint" style={{ marginTop: 6 }}>
+                Hub carer email
+              </p>
+              <input type="email" defaultValue={hubCarerEmail} onBlur={(e) => onHubCarer("hub_carer_email", e.target.value)} />
+            </>
+          )}
         </>
       )}
       {showSurreyContact && (
@@ -442,6 +448,7 @@ export default function AboutScreen() {
                   </p>
                   {open && (
                     <ChildBasicsPanel
+                      showMockingbird={false}
                       mockingbird={c.mockingbird}
                       onMockingbird={(v) => updateHouseholdChild(c.id, { mockingbird: v })}
                       hubCarerName={c.hub_carer_name}
@@ -543,6 +550,7 @@ export default function AboutScreen() {
                 </p>
                 {open && (
                   <ChildBasicsPanel
+                    showMockingbird={true}
                     mockingbird={c.mockingbird}
                     onMockingbird={(v) => saveChild(c.id, { mockingbird: v })}
                     hubCarerName={c.hub_carer_name}
@@ -747,6 +755,11 @@ export default function AboutScreen() {
                   </>
                 ) : (
                   <ChildBasicsPanel
+                    // A child confirmed as living in this household is automatically part of
+                    // whichever Mockingbird constellation the household itself belongs to (see
+                    // "Your Mockingbird" above) -- no need to ask again per child. Left showing
+                    // for "not set yet" since we don't know their living arrangement yet.
+                    showMockingbird={c.lives_here !== true}
                     mockingbird={c.mockingbird}
                     onMockingbird={(v) => saveChild(c.id, { mockingbird: v })}
                     hubCarerName={c.hub_carer_name}
