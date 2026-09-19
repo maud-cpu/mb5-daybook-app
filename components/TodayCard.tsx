@@ -186,7 +186,6 @@ export default function TodayCard() {
           {reminderCategoryLabel(r.category)} {r.text}
           {r.series_id ? " 🔁" : ""}
           {r.child ? ` · ${r.child}` : ""}
-          {r.amount != null ? ` · £${Number(r.amount).toFixed(2)}` : ""}
           {r.date !== t && <small className="muted"> — {fmtDate(r.date)}</small>}
         </span>
         <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => markDone(r.id)}>
