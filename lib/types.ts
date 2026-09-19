@@ -226,7 +226,21 @@ export type Reminder = {
   date: string;
   done: boolean;
   done_at: string | null;
+  category: string;
+  child: string;
+  amount: number | null;
 };
+
+export const REMINDER_CATEGORIES = [
+  ["school", "🏫 School"],
+  ["club", "⚽ Club"],
+  ["surrey", "🏛️ Surrey / agency"],
+  ["personal", "📌 Personal"],
+] as const;
+
+export function reminderCategoryLabel(cat: string): string {
+  return REMINDER_CATEGORIES.find(([k]) => k === cat)?.[1] ?? "📌 Other";
+}
 
 export type PendingItem = Partial<EntryRecord> & {
   bucket: Bucket;

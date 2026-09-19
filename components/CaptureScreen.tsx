@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { daycareAmount, gbp, today } from "@/lib/domain";
 import { withAmazonAffiliateTag } from "@/lib/amazon";
 import ThingsToDoCard from "@/components/ThingsToDoCard";
+import TodayCard from "@/components/TodayCard";
 import PhotoField from "@/components/PhotoField";
 import ComposeEmail from "@/components/ComposeEmail";
 import {
@@ -617,6 +618,8 @@ export default function CaptureScreen() {
           </button>
         </div>
       )}
+
+      <TodayCard />
 
       <ThingsToDoCard />
 

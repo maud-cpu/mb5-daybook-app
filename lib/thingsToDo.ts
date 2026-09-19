@@ -87,8 +87,3 @@ export function dueReminders(reminders: Reminder[]): DueItem[] {
       text: r.text + (r.date < t ? ` (overdue ${r.date})` : ""),
     }));
 }
-
-export function upcomingReminders(reminders: Reminder[]): Reminder[] {
-  const t = today();
-  return reminders.filter((r) => !r.done && r.date > t).sort((a, b) => a.date.localeCompare(b.date));
-}
