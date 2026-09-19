@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
 import { REMINDER_CATEGORIES, REPEAT_OPTIONS, Reminder, reminderCategoryLabel } from "@/lib/types";
-import { occurrenceDates } from "@/lib/calendarHelpers";
+import { addDays, occurrenceDates } from "@/lib/calendarHelpers";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -333,7 +333,19 @@ export default function CalendarScreen() {
                 />
               </div>
               <div className="row" style={{ marginTop: 6 }}>
-                <select value={repeat} onChange={(e) => setRepeat(e.target.value)}>
+                <select
+                  value={repeat}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setRepeat(val);
+                    // "Until" defaulted to the start date itself is indistinguishable from
+                    // "just this once" -- occurrenceDates() stops as soon as the next date
+                    // would be after "until", so it never generated a second occurrence.
+                    // Bump it forward whenever repeat is turned on and it hasn't already
+                    // been set to something meaningfully later than the start date.
+                    if (val !== "none" && until <= draft.date) setUntil(addDays(draft.date, 12 * 7));
+                  }}
+                >
                   {REPEAT_OPTIONS.map(([k, l]) => (
                     <option key={k} value={k}>
                       {l}
@@ -357,7 +369,7 @@ export default function CalendarScreen() {
               style={{ marginTop: 8 }}
               onClick={() => {
                 setDraft(emptyDraft(selected));
-                setUntil(selected);
+                setUntil(addDays(selected, 12 * 7));
                 setAdding(true);
               }}
             >

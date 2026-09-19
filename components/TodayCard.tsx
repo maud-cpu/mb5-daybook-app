@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
 import { REMINDER_CATEGORIES, REPEAT_OPTIONS, Reminder, reminderCategoryLabel } from "@/lib/types";
-import { fmtDate, occurrenceDates } from "@/lib/calendarHelpers";
+import { addDays, fmtDate, occurrenceDates } from "@/lib/calendarHelpers";
 
 function inNextDays(days: number): string {
   const d = new Date();
@@ -249,7 +249,18 @@ export default function TodayCard() {
             />
           </div>
           <div className="row" style={{ marginTop: 6 }}>
-            <select value={repeat} onChange={(e) => setRepeat(e.target.value)}>
+            <select
+              value={repeat}
+              onChange={(e) => {
+                const val = e.target.value;
+                setRepeat(val);
+                // "Until" no later than the start date is indistinguishable from "just
+                // this once" -- occurrenceDates() stops before generating a second
+                // occurrence. Bump it forward if it hasn't already been set to
+                // something meaningfully later than the (possibly just-changed) date.
+                if (val !== "none" && until <= date) setUntil(addDays(date, 12 * 7));
+              }}
+            >
               {REPEAT_OPTIONS.map(([k, l]) => (
                 <option key={k} value={k}>
                   {l}
