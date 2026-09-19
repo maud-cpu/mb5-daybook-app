@@ -241,7 +241,7 @@ export const REPEAT_OPTIONS = [
 
 export const REMINDER_CATEGORIES = [
   ["school", "🏫 School"],
-  ["club", "⚽ Club"],
+  ["club", "🧩 Club"],
   ["surrey", "🏛️ Surrey / agency"],
   ["personal", "📌 Personal"],
 ] as const;
