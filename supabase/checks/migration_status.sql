@@ -152,6 +152,18 @@ select migration, applied from (
     ('0027 handover_child_profiles.child_id no longer FK-restricted to children',
       not exists (select 1 from information_schema.table_constraints
          where table_schema = 'public' and table_name = 'handover_child_profiles'
-         and constraint_name = 'handover_child_profiles_child_id_fkey'))
+         and constraint_name = 'handover_child_profiles_child_id_fkey')),
+
+    ('0028 reminders.source_text column',
+      exists (select 1 from information_schema.columns
+         where table_schema = 'public' and table_name = 'reminders' and column_name = 'source_text')),
+
+    ('0029 training session date columns',
+      exists (select 1 from information_schema.columns
+         where table_schema = 'public' and table_name = 'shared_training_catalog' and column_name = 'is_face_to_face')
+      and exists (select 1 from information_schema.columns
+         where table_schema = 'public' and table_name = 'shared_training_catalog' and column_name = 'session_date')
+      and exists (select 1 from information_schema.columns
+         where table_schema = 'public' and table_name = 'training_progress' and column_name = 'session_date'))
 ) as t(migration, applied)
 order by migration;

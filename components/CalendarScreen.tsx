@@ -1,12 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
 import { REMINDER_CATEGORIES, REPEAT_OPTIONS, Reminder, reminderCategoryLabel } from "@/lib/types";
 import { addDays, occurrenceDates } from "@/lib/calendarHelpers";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+// A face-to-face training session isn't a real row in reminders -- it's
+// read-only here, merged in from the Training tab so it shows on the same
+// grid without needing a second place to look. Marked by this id prefix.
+const F2F_PREFIX = "f2f:";
+function f2fReminder(id: string, text: string, date: string): Reminder {
+  return { id: F2F_PREFIX + id, text, date, done: false, done_at: null, category: "", child: "", amount: null, series_id: null, source_text: "" };
+}
 
 function monthLabel(year: number, month: number): string {
   return new Date(year, month, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
@@ -42,6 +51,7 @@ type ExtractedItem = {
   amount: number | null;
   repeat: string;
   until: string | null;
+  source: string;
 };
 
 export default function CalendarScreen() {
@@ -64,16 +74,29 @@ export default function CalendarScreen() {
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState("");
   const [extracted, setExtracted] = useState<ExtractedItem[]>([]);
+  const [showSourceFor, setShowSourceFor] = useState<string | null>(null);
 
   async function load() {
     const from = isoOf(year, month, 1);
     const to = isoOf(year, month, daysInMonth(year, month));
-    const [{ data: rem }, { data: kids }, { data: hhKids }] = await Promise.all([
+    const [{ data: rem }, { data: kids }, { data: hhKids }, { data: f2fCourses }, { data: f2fProgress }] = await Promise.all([
       supabase.from("reminders").select("*").gte("date", from).lte("date", to).order("date"),
       supabase.from("children").select("name").order("name"),
       supabase.from("household_children").select("name").order("name"),
+      supabase.from("shared_training_catalog").select("id, title, session_date").eq("is_face_to_face", true).eq("archived", false),
+      supabase.from("training_progress").select("course_title, session_date").not("session_date", "is", null),
     ]);
-    setReminders((rem as Reminder[]) ?? []);
+    const myDateByTitle: Record<string, string> = {};
+    (f2fProgress ?? []).forEach((p: { course_title: string; session_date: string | null }) => {
+      if (p.session_date) myDateByTitle[p.course_title] = p.session_date;
+    });
+    const f2fReminders = (f2fCourses ?? [])
+      .map((c: { id: string; title: string; session_date: string | null }) => {
+        const date = myDateByTitle[c.title] || c.session_date;
+        return date && date >= from && date <= to ? f2fReminder(c.id, c.title, date) : null;
+      })
+      .filter((r): r is Reminder => r !== null);
+    setReminders([...((rem as Reminder[]) ?? []), ...f2fReminders]);
     setChildNames([
       ...((kids as { name: string }[] | null) ?? []).map((c) => c.name),
       ...((hhKids as { name: string }[] | null) ?? []).map((c) => c.name),
@@ -148,7 +171,11 @@ export default function CalendarScreen() {
       } else if (!data.items?.length) {
         setExtractError("Couldn't find any dates, payments or events in that.");
       } else {
-        setExtracted((prev) => [...prev, ...data.items.map((it: Omit<ExtractedItem, "_k">) => ({ ...it, _k: crypto.randomUUID() }))]);
+        const source = pasteText;
+        setExtracted((prev) => [
+          ...prev,
+          ...data.items.map((it: Omit<ExtractedItem, "_k" | "source">) => ({ ...it, _k: crypto.randomUUID(), source })),
+        ]);
         setPasteText("");
       }
     } catch {
@@ -167,7 +194,7 @@ export default function CalendarScreen() {
 
   async function commitExtracted(items: ExtractedItem[]) {
     for (const it of items) {
-      const base = { text: it.text, category: it.category, child: it.child, amount: it.amount };
+      const base = { text: it.text, category: it.category, child: it.child, amount: it.amount, source_text: it.source };
       if (it.repeat === "none" || !it.until) {
         await supabase.from("reminders").insert({ ...base, date: it.date });
       } else {
@@ -191,6 +218,7 @@ export default function CalendarScreen() {
   }
 
   function startEdit(r: Reminder) {
+    if (r.id.startsWith(F2F_PREFIX)) return;
     setEditingId(r.id);
     setEditDraft(draftFrom(r));
   }
@@ -353,7 +381,7 @@ export default function CalendarScreen() {
                 <div style={{ fontSize: 14, lineHeight: 1.1 }}>
                   {items.slice(0, 3).map((it) => (
                     <div key={it.id} style={{ opacity: it.done ? 0.4 : 1 }}>
-                      {reminderCategoryLabel(it.category).slice(0, 2)}
+                      {it.id.startsWith(F2F_PREFIX) ? "🎓" : reminderCategoryLabel(it.category).slice(0, 2)}
                     </div>
                   ))}
                   {items.length > 3 && <small className="muted">+{items.length - 3}</small>}
@@ -425,22 +453,40 @@ export default function CalendarScreen() {
                   </>
                 )}
               </div>
+            ) : r.id.startsWith(F2F_PREFIX) ? (
+              <div key={r.id} className="rec">
+                <Link href="/dashboard/training">🎓 {r.text}</Link>
+              </div>
             ) : (
-              <div
-                key={r.id}
-                className="rec"
-                style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", opacity: r.done ? 0.5 : 1 }}
-              >
-                <span style={{ cursor: "pointer" }} onClick={() => startEdit(r)}>
-                  {reminderCategoryLabel(r.category)} {r.text}
-                  {r.series_id ? " 🔁" : ""}
-                  {r.child ? ` · ${r.child}` : ""}
-                  {r.amount != null ? ` · £${Number(r.amount).toFixed(2)}` : ""}
-                  {r.done ? " (done)" : ""}
-                </span>
-                <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => toggleDone(r)}>
-                  {r.done ? "Undo" : "Done"}
-                </button>
+              <div key={r.id} style={{ opacity: r.done ? 0.5 : 1 }}>
+                <div className="rec" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                  <span style={{ cursor: "pointer" }} onClick={() => startEdit(r)}>
+                    {reminderCategoryLabel(r.category)} {r.text}
+                    {r.series_id ? " 🔁" : ""}
+                    {r.child ? ` · ${r.child}` : ""}
+                    {r.amount != null ? ` · £${Number(r.amount).toFixed(2)}` : ""}
+                    {r.done ? " (done)" : ""}
+                  </span>
+                  <span style={{ display: "flex", gap: 4, flex: "0 0 auto" }}>
+                    {r.source_text && (
+                      <button
+                        className="chip"
+                        title="Show the original email this came from"
+                        onClick={() => setShowSourceFor(showSourceFor === r.id ? null : r.id)}
+                      >
+                        ℹ️
+                      </button>
+                    )}
+                    <button className="chip" onClick={() => toggleDone(r)}>
+                      {r.done ? "Undo" : "Done"}
+                    </button>
+                  </span>
+                </div>
+                {showSourceFor === r.id && r.source_text && (
+                  <p className="note" style={{ whiteSpace: "pre-wrap", marginTop: 4 }}>
+                    {r.source_text}
+                  </p>
+                )}
               </div>
             ),
           )}

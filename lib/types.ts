@@ -230,6 +230,7 @@ export type Reminder = {
   child: string;
   amount: number | null;
   series_id: string | null;
+  source_text: string;
 };
 
 export const REPEAT_OPTIONS = [
