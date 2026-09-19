@@ -4,14 +4,16 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { extractEmail, extractPhone, today } from "@/lib/domain";
+import { Reminder, reminderCategoryLabel } from "@/lib/types";
 
 type Item = { label: string; name: string; value: string };
 
 export default function QuickAccessButtons() {
   const supabase = createClient();
   const router = useRouter();
-  const [open, setOpen] = useState<"phone" | "email" | null>(null);
+  const [open, setOpen] = useState<"phone" | "email" | "today" | null>(null);
   const [items, setItems] = useState<Item[]>([]);
+  const [todayItems, setTodayItems] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(false);
 
   async function load(kind: "phone" | "email") {
@@ -87,6 +89,18 @@ export default function QuickAccessButtons() {
     router.push("/dashboard/entries?compose=1");
   }
 
+  async function toggleToday() {
+    if (open === "today") {
+      setOpen(null);
+      return;
+    }
+    setOpen("today");
+    setLoading(true);
+    const { data } = await supabase.from("reminders").select("*").eq("done", false).eq("date", today());
+    setTodayItems((data as Reminder[]) ?? []);
+    setLoading(false);
+  }
+
   return (
     <div>
       <div id="qaBtns">
@@ -96,7 +110,24 @@ export default function QuickAccessButtons() {
         <button onClick={openEmail} title="Compose an email">
           ✉️
         </button>
+        <button onClick={toggleToday} title="What's happening today">
+          📅
+        </button>
       </div>
+      {open === "today" && (
+        <div id="qaPanel" className="show">
+          {loading && <p className="hint">Loading…</p>}
+          {!loading && todayItems.length === 0 && <p className="empty">Nothing on the calendar today.</p>}
+          {!loading &&
+            todayItems.map((r) => (
+              <div className="qi" key={r.id}>
+                <b>{reminderCategoryLabel(r.category)}</b> {r.text}
+                {r.child ? ` · ${r.child}` : ""}
+                {r.amount != null ? ` · £${Number(r.amount).toFixed(2)}` : ""}
+              </div>
+            ))}
+        </div>
+      )}
       {open === "phone" && (
         <div id="qaPanel" className="show">
           {loading && <p className="hint">Loading…</p>}

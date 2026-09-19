@@ -131,6 +131,12 @@ select migration, applied from (
       exists (select 1 from information_schema.columns
          where table_schema = 'public' and table_name = 'household' and column_name = 'is_mockingbird')
       and exists (select 1 from information_schema.columns
-         where table_schema = 'public' and table_name = 'household' and column_name = 'hub_leader_name'))
+         where table_schema = 'public' and table_name = 'household' and column_name = 'hub_leader_name')),
+
+    ('0024 reminders.category/child/amount columns',
+      exists (select 1 from information_schema.columns
+         where table_schema = 'public' and table_name = 'reminders' and column_name = 'category')
+      and exists (select 1 from information_schema.columns
+         where table_schema = 'public' and table_name = 'reminders' and column_name = 'amount'))
 ) as t(migration, applied)
 order by migration;

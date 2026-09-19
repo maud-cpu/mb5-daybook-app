@@ -12,7 +12,6 @@ import {
   invoiceMonthItems,
   missingNumbersItems,
   unreportedIncidentItems,
-  upcomingReminders,
 } from "@/lib/thingsToDo";
 import { FLAGS, Reminder } from "@/lib/types";
 
@@ -55,7 +54,6 @@ function followUpGuidance(f: FollowUp): string {
 export default function ThingsToDoCard() {
   const supabase = createClient();
   const [due, setDue] = useState<DueItem[]>([]);
-  const [upcoming, setUpcoming] = useState<Reminder[]>([]);
   const [allReminders, setAllReminders] = useState<Reminder[]>([]);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
   const [doneFollowUps, setDoneFollowUps] = useState<DoneFollowUp[]>([]);
@@ -63,8 +61,6 @@ export default function ThingsToDoCard() {
   const [dismissedDue, setDismissedDue] = useState<DismissedDue[]>([]);
   const [showDone, setShowDone] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [newText, setNewText] = useState("");
-  const [newDate, setNewDate] = useState("");
   const [loaded, setLoaded] = useState(false);
 
   async function load() {
@@ -127,7 +123,6 @@ export default function ThingsToDoCard() {
       ].filter((x) => !dismissedKeys.has(dismissKeyFor(x.key))),
     );
     setDismissedDue(dismissedList);
-    setUpcoming(upcomingReminders(remindersList));
     setAllReminders(remindersList.filter((r) => !r.done));
     setFollowUps(
       ((openRecords as FollowUp[] | null) ?? []).filter((r) => (r.flag && r.flag !== "reminder") || r.training_note),
@@ -146,14 +141,6 @@ export default function ThingsToDoCard() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  async function addReminder() {
-    if (!newText.trim() || !newDate) return;
-    await supabase.from("reminders").insert({ text: newText.trim(), date: newDate });
-    setNewText("");
-    setNewDate("");
-    load();
-  }
 
   async function dismissDue(item: DueItem) {
     if (item.key.startsWith("rem-")) {
@@ -324,22 +311,6 @@ export default function ThingsToDoCard() {
           </div>
         );
       })}
-      {upcoming.slice(0, 3).map((r) => (
-        <div className="rec" style={{ opacity: 0.7 }} key={r.id}>
-          {new Date(r.date + "T12:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })} — {r.text}
-        </div>
-      ))}
-      <div className="row">
-        <input
-          placeholder="Add a reminder (e.g. CLA review, meds, training renewal)"
-          value={newText}
-          onChange={(e) => setNewText(e.target.value)}
-        />
-        <input type="date" style={{ flex: "0 0 140px" }} value={newDate} onChange={(e) => setNewDate(e.target.value)} />
-        <button className="chip" style={{ flex: "0 0 auto" }} onClick={addReminder}>
-          Add
-        </button>
-      </div>
       {allReminders.length > 0 && (
         <p className="muted">
           Tap a reminder to add it to your phone calendar for an alert:{" "}
