@@ -71,7 +71,11 @@ function suggestHousehold(selectedChildren: ChildRow[], aboutHousehold: AboutHou
 
 export default function HandoverTab() {
   const supabase = createClient();
-  const [children, setChildren] = useState<ChildRow[]>([]);
+  const [fosteredChildren, setFosteredChildren] = useState<ChildRow[]>([]);
+  const [householdChildren, setHouseholdChildren] = useState<ChildRow[]>([]);
+  // A sleepover/handover plan can include a household child (own/adopted/SGO/
+  // kinship) alongside a fostered one -- everywhere below just reads `children`.
+  const children = [...fosteredChildren, ...householdChildren];
   const [selected, setSelected] = useState<string[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [household, setHousehold] = useState<Profile>(blankHousehold());
@@ -86,20 +90,19 @@ export default function HandoverTab() {
   const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
 
   async function load() {
-    const [{ data: kids }, { data: profileRows }, { data: hh }] = await Promise.all([
+    const [{ data: kids }, { data: hhKids }, { data: profileRows }, { data: hh }] = await Promise.all([
       supabase.from("children").select("id, name, basics, hub_carer_name, hub_carer_phone").order("created_at"),
+      supabase.from("household_children").select("id, name, basics, hub_carer_name, hub_carer_phone").order("created_at"),
       supabase.from("handover_child_profiles").select("*"),
       supabase
         .from("household")
         .select("ssw_name, ssw_phone, ssw_email, csw, edt, gp, hub, school_contact, delegated, carseat")
         .maybeSingle(),
     ]);
-    setChildren(
-      ((kids as (ChildRow & { basics: Record<string, string> | null })[]) ?? []).map((c) => ({
-        ...c,
-        basics: c.basics || {},
-      })),
-    );
+    const normalise = (rows: (ChildRow & { basics: Record<string, string> | null })[] | null) =>
+      (rows ?? []).map((c) => ({ ...c, basics: c.basics || {} }));
+    setFosteredChildren(normalise(kids as (ChildRow & { basics: Record<string, string> | null })[] | null));
+    setHouseholdChildren(normalise(hhKids as (ChildRow & { basics: Record<string, string> | null })[] | null));
     if (hh) setAboutHousehold({ ssw_name: hh.ssw_name || "", ssw_phone: hh.ssw_phone || "", ssw_email: hh.ssw_email || "" });
     const byChild: Record<string, Profile> = {};
     (profileRows ?? []).forEach((p: Profile & { child_id: string }) => (byChild[p.child_id] = p));
