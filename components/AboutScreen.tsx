@@ -2,11 +2,98 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { BASICS_SECTIONS } from "@/lib/basics";
+import { BASICS_SECTIONS, RepeatableSubfield } from "@/lib/basics";
 import { Child, LIVES_CATS, livesHereOf, MB_OPTIONS, VISITS_CATS } from "@/lib/types";
 
 const ADULT_ROLES = ["Foster carer", "Adult child", "Live-in grandparent", "Other"];
 const VISITOR_ROLES = ["Mockingbird hub carer", "Respite support worker", "Family friend / helper", "Other"];
+
+type RepeatableItem = Record<string, string> & { _k: string };
+
+// A field stored as JSON in basics[key] instead of a plain string -- an open-ended
+// list of contacts, or extra dates, where a single free-text box wouldn't stretch.
+// A pre-existing plain-text value (from before a field became repeatable) is kept
+// as the first item's first subfield rather than silently discarded.
+function parseRepeatableItems(raw: string, subfields: RepeatableSubfield[]): RepeatableItem[] {
+  try {
+    const parsed = JSON.parse(raw || "[]");
+    if (Array.isArray(parsed)) return parsed.map((it) => ({ ...it, _k: crypto.randomUUID() }));
+  } catch {
+    if (raw) return [{ [subfields[0].key]: raw, _k: crypto.randomUUID() }];
+  }
+  return [];
+}
+
+function RepeatableField({
+  value,
+  onChange,
+  subfields,
+  addLabel,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  subfields: RepeatableSubfield[];
+  addLabel: string;
+}) {
+  const [items, setItems] = useState<RepeatableItem[]>(() => parseRepeatableItems(value, subfields));
+
+  function persist(next: RepeatableItem[]) {
+    setItems(next);
+    onChange(JSON.stringify(next.map((it) => Object.fromEntries(Object.entries(it).filter(([k]) => k !== "_k")))));
+  }
+
+  return (
+    <div style={{ marginTop: 6 }}>
+      {items.map((it, i) => (
+        <div className="row" key={it._k} style={{ marginTop: i ? 6 : 0 }}>
+          {subfields.map((sf) => (
+            <input
+              key={sf.key}
+              type={sf.type || "text"}
+              placeholder={sf.label}
+              defaultValue={it[sf.key] || ""}
+              onBlur={(e) => persist(items.map((x) => (x._k === it._k ? { ...x, [sf.key]: e.target.value } : x)))}
+            />
+          ))}
+          <button className="x" onClick={() => persist(items.filter((x) => x._k !== it._k))}>
+            ×
+          </button>
+        </div>
+      ))}
+      <button className="chip add" style={{ marginTop: 6 }} onClick={() => persist([...items, { _k: crypto.randomUUID() }])}>
+        + {addLabel}
+      </button>
+    </div>
+  );
+}
+
+function YesNoChecklist({ value, onChange, items }: { value: string; onChange: (v: string) => void; items: string[] }) {
+  let state: Record<string, string> = {};
+  try {
+    const parsed = JSON.parse(value || "{}");
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) state = parsed;
+  } catch {
+    // a pre-existing plain-text value can't be safely split into per-item answers -- leave everything unset
+  }
+  return (
+    <div style={{ marginTop: 6 }}>
+      {items.map((item) => (
+        <div className="row" key={item} style={{ marginTop: 4, alignItems: "center" }}>
+          <span style={{ flex: 1 }}>{item}</span>
+          <select
+            style={{ flex: "0 0 110px" }}
+            value={state[item] || ""}
+            onChange={(e) => onChange(JSON.stringify({ ...state, [item]: e.target.value }))}
+          >
+            <option value="">— not set —</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 type Adult = { id: string; name: string; phone: string; email: string; role: string };
 type HouseholdChild = {
@@ -103,7 +190,22 @@ function ChildBasicsPanel({
         <div key={section.title} style={{ marginBottom: 12, marginTop: 12 }}>
           <b style={{ fontSize: 14 }}>{section.title}</b>
           {section.fields.map((f) =>
-            f.select ? (
+            f.repeatableFields ? (
+              <div key={f.key} style={{ marginTop: 10 }}>
+                <small className="muted">{f.label}</small>
+                <RepeatableField
+                  value={basics[f.key] || ""}
+                  onChange={(v) => onBasics(f.key, v)}
+                  subfields={f.repeatableFields}
+                  addLabel={f.addLabel || "add another"}
+                />
+              </div>
+            ) : f.checklist ? (
+              <div key={f.key} style={{ marginTop: 10 }}>
+                <small className="muted">{f.label}</small>
+                <YesNoChecklist value={basics[f.key] || ""} onChange={(v) => onBasics(f.key, v)} items={f.checklist} />
+              </div>
+            ) : f.select ? (
               <select
                 key={f.key}
                 style={{ marginTop: 6 }}
@@ -218,10 +320,36 @@ export default function AboutScreen() {
     flashSaved();
   }
 
+  // A "next" statutory review/visit date should show up on the calendar and stay a
+  // single entry as it's updated, rather than piling up a new one each time -- keyed
+  // by source_key so this is an upsert, not an insert. Clearing the date removes it.
+  async function syncKeyDateReminder(childId: string, childName: string, key: string, value: string) {
+    if (key !== "review_next" && key !== "visit_next") return;
+    const sourceKey = `${key === "review_next" ? "review" : "visit"}:${childId}`;
+    if (!value) {
+      await supabase.from("reminders").delete().eq("source_key", sourceKey);
+      return;
+    }
+    const label = key === "review_next" ? "CLA review" : "SW statutory visit";
+    await supabase.from("reminders").upsert(
+      {
+        source_key: sourceKey,
+        text: `${childName ? childName + "'s " : ""}${label}`,
+        date: value,
+        category: "surrey",
+        child: childName,
+        done: false,
+        done_at: null,
+      },
+      { onConflict: "user_id,source_key" },
+    );
+  }
+
   async function saveChildBasics(childId: string, key: string, value: string) {
     const next = { ...(basics[childId] || {}), [key]: value };
     setBasics((prev) => ({ ...prev, [childId]: next }));
     await supabase.from("children").update({ basics: next }).eq("id", childId);
+    syncKeyDateReminder(childId, children.find((c) => c.id === childId)?.name || "", key, value);
     flashSaved();
   }
 
@@ -241,6 +369,7 @@ export default function AboutScreen() {
     const next = { ...(householdChildren.find((c) => c.id === childId)?.basics || {}), [key]: value };
     setHouseholdChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, basics: next } : c)));
     await supabase.from("household_children").update({ basics: next }).eq("id", childId);
+    syncKeyDateReminder(childId, householdChildren.find((c) => c.id === childId)?.name || "", key, value);
     flashSaved();
   }
 

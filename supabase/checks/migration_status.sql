@@ -141,6 +141,12 @@ select migration, applied from (
 
     ('0025 reminders.series_id column',
       exists (select 1 from information_schema.columns
-         where table_schema = 'public' and table_name = 'reminders' and column_name = 'series_id'))
+         where table_schema = 'public' and table_name = 'reminders' and column_name = 'series_id')),
+
+    ('0026 reminders.source_key column + unique index',
+      exists (select 1 from information_schema.columns
+         where table_schema = 'public' and table_name = 'reminders' and column_name = 'source_key')
+      and exists (select 1 from pg_indexes
+         where schemaname = 'public' and tablename = 'reminders' and indexname = 'reminders_user_source_key_idx'))
 ) as t(migration, applied)
 order by migration;
