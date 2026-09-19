@@ -6,6 +6,7 @@ import SignOutButton from "@/components/SignOutButton";
 
 const TABS = [
   { href: "/dashboard", icon: "✍️", label: "Capture" },
+  { href: "/dashboard/calendar", icon: "📅", label: "Calendar" },
   { href: "/dashboard/entries", icon: "🗂️", label: "Entries" },
   { href: "/dashboard/paperwork", icon: "📄", label: "Paperwork" },
   { href: "/dashboard/training", icon: "🎓", label: "Training & Resources" },
