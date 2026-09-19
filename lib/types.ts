@@ -229,7 +229,15 @@ export type Reminder = {
   category: string;
   child: string;
   amount: number | null;
+  series_id: string | null;
 };
+
+export const REPEAT_OPTIONS = [
+  ["none", "Does not repeat"],
+  ["weekly", "Weekly"],
+  ["fortnightly", "Fortnightly"],
+  ["monthly", "Monthly"],
+] as const;
 
 export const REMINDER_CATEGORIES = [
   ["school", "🏫 School"],
