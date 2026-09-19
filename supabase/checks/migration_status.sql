@@ -147,6 +147,11 @@ select migration, applied from (
       exists (select 1 from information_schema.columns
          where table_schema = 'public' and table_name = 'reminders' and column_name = 'source_key')
       and exists (select 1 from pg_indexes
-         where schemaname = 'public' and tablename = 'reminders' and indexname = 'reminders_user_source_key_idx'))
+         where schemaname = 'public' and tablename = 'reminders' and indexname = 'reminders_user_source_key_idx')),
+
+    ('0027 handover_child_profiles.child_id no longer FK-restricted to children',
+      not exists (select 1 from information_schema.table_constraints
+         where table_schema = 'public' and table_name = 'handover_child_profiles'
+         and constraint_name = 'handover_child_profiles_child_id_fkey'))
 ) as t(migration, applied)
 order by migration;
