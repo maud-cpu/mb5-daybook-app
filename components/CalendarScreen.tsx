@@ -53,12 +53,16 @@ export default function CalendarScreen() {
   async function load() {
     const from = isoOf(year, month, 1);
     const to = isoOf(year, month, daysInMonth(year, month));
-    const [{ data: rem }, { data: kids }] = await Promise.all([
+    const [{ data: rem }, { data: kids }, { data: hhKids }] = await Promise.all([
       supabase.from("reminders").select("*").gte("date", from).lte("date", to).order("date"),
       supabase.from("children").select("name").order("name"),
+      supabase.from("household_children").select("name").order("name"),
     ]);
     setReminders((rem as Reminder[]) ?? []);
-    setChildNames(((kids as { name: string }[] | null) ?? []).map((c) => c.name));
+    setChildNames([
+      ...((kids as { name: string }[] | null) ?? []).map((c) => c.name),
+      ...((hhKids as { name: string }[] | null) ?? []).map((c) => c.name),
+    ]);
     setLoaded(true);
   }
 
