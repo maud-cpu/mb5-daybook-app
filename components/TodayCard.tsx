@@ -35,12 +35,16 @@ export default function TodayCard() {
   const [loaded, setLoaded] = useState(false);
 
   async function load() {
-    const [{ data: rem }, { data: kids }] = await Promise.all([
+    const [{ data: rem }, { data: kids }, { data: hhKids }] = await Promise.all([
       supabase.from("reminders").select("*").eq("done", false).order("date"),
       supabase.from("children").select("name").order("name"),
+      supabase.from("household_children").select("name").order("name"),
     ]);
     setReminders((rem as Reminder[]) ?? []);
-    setChildNames(((kids as { name: string }[] | null) ?? []).map((c) => c.name));
+    setChildNames([
+      ...((kids as { name: string }[] | null) ?? []).map((c) => c.name),
+      ...((hhKids as { name: string }[] | null) ?? []).map((c) => c.name),
+    ]);
     setLoaded(true);
   }
 
