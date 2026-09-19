@@ -137,6 +137,10 @@ select migration, applied from (
       exists (select 1 from information_schema.columns
          where table_schema = 'public' and table_name = 'reminders' and column_name = 'category')
       and exists (select 1 from information_schema.columns
-         where table_schema = 'public' and table_name = 'reminders' and column_name = 'amount'))
+         where table_schema = 'public' and table_name = 'reminders' and column_name = 'amount')),
+
+    ('0025 reminders.series_id column',
+      exists (select 1 from information_schema.columns
+         where table_schema = 'public' and table_name = 'reminders' and column_name = 'series_id'))
 ) as t(migration, applied)
 order by migration;
