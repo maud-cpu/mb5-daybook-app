@@ -33,6 +33,17 @@ function daysInMonth(year: number, month: number): number {
 type Draft = { text: string; date: string; category: string; child: string; amount: string };
 const emptyDraft = (date: string): Draft => ({ text: "", date, category: REMINDER_CATEGORIES[0][0], child: "", amount: "" });
 
+type ExtractedItem = {
+  _k: string;
+  text: string;
+  date: string;
+  category: string;
+  child: string;
+  amount: number | null;
+  repeat: string;
+  until: string | null;
+};
+
 export default function CalendarScreen() {
   const supabase = createClient();
   const t = today();
@@ -49,6 +60,10 @@ export default function CalendarScreen() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<Draft | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState("");
+  const [extracted, setExtracted] = useState<ExtractedItem[]>([]);
 
   async function load() {
     const from = isoOf(year, month, 1);
@@ -117,6 +132,54 @@ export default function CalendarScreen() {
     load();
   }
 
+  async function extractFromPaste() {
+    if (!pasteText.trim()) return;
+    setExtracting(true);
+    setExtractError("");
+    try {
+      const res = await fetch("/api/extract-events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: pasteText }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setExtractError(data.error);
+      } else if (!data.items?.length) {
+        setExtractError("Couldn't find any dates, payments or events in that.");
+      } else {
+        setExtracted((prev) => [...prev, ...data.items.map((it: Omit<ExtractedItem, "_k">) => ({ ...it, _k: crypto.randomUUID() }))]);
+        setPasteText("");
+      }
+    } catch {
+      setExtractError("Couldn't reach the extraction service — try again in a moment.");
+    }
+    setExtracting(false);
+  }
+
+  function updateExtracted(k: string, patch: Partial<ExtractedItem>) {
+    setExtracted((prev) => prev.map((it) => (it._k === k ? { ...it, ...patch } : it)));
+  }
+
+  function discardExtracted(k: string) {
+    setExtracted((prev) => prev.filter((it) => it._k !== k));
+  }
+
+  async function commitExtracted(items: ExtractedItem[]) {
+    for (const it of items) {
+      const base = { text: it.text, category: it.category, child: it.child, amount: it.amount };
+      if (it.repeat === "none" || !it.until) {
+        await supabase.from("reminders").insert({ ...base, date: it.date });
+      } else {
+        const dates = occurrenceDates(it.date, it.until, it.repeat);
+        const seriesId = crypto.randomUUID();
+        await supabase.from("reminders").insert(dates.map((d) => ({ ...base, date: d, series_id: seriesId })));
+      }
+    }
+    setExtracted((prev) => prev.filter((it) => !items.includes(it)));
+    load();
+  }
+
   async function toggleDone(r: Reminder) {
     const done = !r.done;
     setReminders((prev) => prev.map((x) => (x.id === r.id ? { ...x, done, done_at: done ? new Date().toISOString() : null } : x)));
@@ -168,6 +231,85 @@ export default function CalendarScreen() {
 
   return (
     <div>
+      <div className="card">
+        <h3>📧 Paste an email</h3>
+        <p className="note">
+          Paste a whole email from school, a club, Surrey or anywhere else — dates, payments and events get pulled
+          out for you to check over before anything&apos;s added.
+        </p>
+        <textarea
+          rows={6}
+          placeholder="Paste the email text here…"
+          value={pasteText}
+          onChange={(e) => setPasteText(e.target.value)}
+        />
+        <button className="chip" disabled={extracting || !pasteText.trim()} onClick={extractFromPaste}>
+          {extracting ? "Reading…" : "Extract"}
+        </button>
+        {extractError && <p style={{ color: "var(--danger)", fontSize: 14, marginTop: 6 }}>{extractError}</p>}
+        {extracted.length > 0 && (
+          <div style={{ marginTop: 10 }}>
+            <div className="row" style={{ alignItems: "center", justifyContent: "space-between" }}>
+              <b>Found {extracted.length} thing{extracted.length > 1 ? "s" : ""} — check before adding</b>
+              {extracted.length > 1 && (
+                <button className="chip" onClick={() => commitExtracted(extracted)}>
+                  Add all
+                </button>
+              )}
+            </div>
+            {extracted.map((it) => (
+              <div key={it._k} style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #eee" }}>
+                <input value={it.text} onChange={(e) => updateExtracted(it._k, { text: e.target.value })} />
+                <div className="row" style={{ marginTop: 6 }}>
+                  <input
+                    type="date"
+                    style={{ flex: "0 0 150px" }}
+                    value={it.date}
+                    onChange={(e) => updateExtracted(it._k, { date: e.target.value })}
+                  />
+                  <select value={it.category} onChange={(e) => updateExtracted(it._k, { category: e.target.value })}>
+                    {REMINDER_CATEGORIES.map(([k, l]) => (
+                      <option key={k} value={k}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="row" style={{ marginTop: 6 }}>
+                  <select value={it.child} onChange={(e) => updateExtracted(it._k, { child: e.target.value })}>
+                    <option value="">— which child (optional) —</option>
+                    {childNames.map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="£ if a payment"
+                    style={{ flex: "0 0 130px" }}
+                    value={it.amount ?? ""}
+                    onChange={(e) => updateExtracted(it._k, { amount: e.target.value ? Number(e.target.value) : null })}
+                  />
+                </div>
+                {it.repeat !== "none" && (
+                  <p className="hint" style={{ marginTop: 4 }}>
+                    🔁 Looks recurring ({it.repeat}) until {it.until}
+                  </p>
+                )}
+                <button className="chip" style={{ marginTop: 6 }} onClick={() => commitExtracted([it])}>
+                  Add to calendar
+                </button>{" "}
+                <button className="chip" onClick={() => discardExtracted(it._k)}>
+                  Discard
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="card">
         <div className="row" style={{ alignItems: "center", justifyContent: "space-between" }}>
           <button className="chip" onClick={() => changeMonth(-1)}>
