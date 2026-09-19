@@ -18,6 +18,8 @@ type Course = {
   description: string;
   external_rating: number | null;
   external_rating_note: string;
+  is_face_to_face: boolean;
+  session_date: string | null;
   archived: boolean;
 };
 type Platform = { name: string; url: string };
@@ -778,6 +780,25 @@ export default function AdminSharedContent() {
                     placeholder="Source, e.g. 4.6/5 on Amazon (1,200+ reviews)"
                     onBlur={(e) => updateCourse(c.id, { external_rating_note: e.target.value })}
                   />
+                </div>
+                <div className="row" style={{ marginTop: 4, alignItems: "center" }}>
+                  <label style={{ flex: "0 0 auto" }}>
+                    <input
+                      type="checkbox"
+                      checked={c.is_face_to_face}
+                      onChange={(e) => updateCourse(c.id, { is_face_to_face: e.target.checked, session_date: e.target.checked ? c.session_date : null })}
+                    />{" "}
+                    Face to face
+                  </label>
+                  {c.is_face_to_face && (
+                    <input
+                      type="date"
+                      style={{ flex: "0 0 150px" }}
+                      value={c.session_date ?? ""}
+                      onChange={(e) => updateCourse(c.id, { session_date: e.target.value || null })}
+                    />
+                  )}
+                  {c.is_face_to_face && <small className="muted">shown to every carer&apos;s calendar</small>}
                 </div>
               </div>
             ))}

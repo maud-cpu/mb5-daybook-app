@@ -17,6 +17,8 @@ type Course = {
   sort_order: number;
   external_rating: number | null;
   external_rating_note: string;
+  is_face_to_face: boolean;
+  session_date: string | null;
 };
 
 type Platform = { name: string; url: string };
@@ -164,12 +166,13 @@ export default function TrainingScreen() {
   const [lengthFilter, setLengthFilter] = useState("");
   const [feedback, setFeedback] = useState<Feedback[]>([]);
   const [myUserId, setMyUserId] = useState("");
+  const [sessionDates, setSessionDates] = useState<Record<string, string>>({});
 
   async function load() {
     const [{ data: c }, { data: pl }, { data: pr }, { data: notes }, { data: fb }, { data: userData }] = await Promise.all([
       supabase.from("shared_training_catalog").select("*").eq("archived", false).order("sort_order"),
       supabase.from("shared_training_platforms").select("*"),
-      supabase.from("training_progress").select("course_title, completed_on"),
+      supabase.from("training_progress").select("course_title, completed_on, session_date"),
       supabase.from("records").select("training_note, date").neq("training_note", ""),
       supabase.from("training_feedback").select("course_id, user_id, rating, comment"),
       supabase.auth.getUser(),
@@ -187,8 +190,13 @@ export default function TrainingScreen() {
     setFeedback((fb as Feedback[]) ?? []);
     setMyUserId(userData?.user?.id ?? "");
     const map: Record<string, string> = {};
-    (pr ?? []).forEach((row: { course_title: string; completed_on: string }) => (map[row.course_title] = row.completed_on));
+    const sessionMap: Record<string, string> = {};
+    (pr ?? []).forEach((row: { course_title: string; completed_on: string; session_date: string | null }) => {
+      map[row.course_title] = row.completed_on;
+      if (row.session_date) sessionMap[row.course_title] = row.session_date;
+    });
     setProgress(map);
+    setSessionDates(sessionMap);
 
     const personalMap: Record<string, PersonalSuggestion> = {};
     (notes ?? []).forEach((r: { training_note: string; date: string }) => {
@@ -218,10 +226,30 @@ export default function TrainingScreen() {
   async function setCompleted(title: string, date: string) {
     if (date) {
       await supabase.from("training_progress").upsert({ course_title: title, completed_on: date });
+    } else if (sessionDates[title]) {
+      // Keep the row -- a booked session date is still worth having even
+      // once the "completed" tick is cleared.
+      await supabase.from("training_progress").update({ completed_on: null }).eq("course_title", title);
     } else {
       await supabase.from("training_progress").delete().eq("course_title", title);
     }
     setProgress((prev) => ({ ...prev, [title]: date }));
+  }
+
+  async function setSessionDate(title: string, date: string) {
+    if (date) {
+      await supabase.from("training_progress").upsert({ course_title: title, session_date: date });
+    } else if (progress[title]) {
+      await supabase.from("training_progress").update({ session_date: null }).eq("course_title", title);
+    } else {
+      await supabase.from("training_progress").delete().eq("course_title", title);
+    }
+    setSessionDates((prev) => {
+      const next = { ...prev };
+      if (date) next[title] = date;
+      else delete next[title];
+      return next;
+    });
   }
 
   async function rateCourse(courseId: string, rating: number, comment: string) {
@@ -387,6 +415,21 @@ export default function TrainingScreen() {
                     </>
                   )}
                   <RatingWidget course={c} feedback={feedback} myUserId={myUserId} onRate={rateCourse} />
+                  {c.is_face_to_face && (
+                    <div style={{ marginTop: 4 }}>
+                      <small className="muted">
+                        🎓 Face to face{c.session_date ? ` — shared date ${c.session_date}` : ""} — on your calendar once
+                        a date&apos;s set
+                      </small>
+                      <br />
+                      <input
+                        type="date"
+                        placeholder="Your session date, if different"
+                        value={sessionDates[c.title] || ""}
+                        onChange={(e) => setSessionDate(c.title, e.target.value)}
+                      />
+                    </div>
+                  )}
                 </div>
                 {url && (
                   <a className="chip" style={{ flex: "0 0 auto" }} href={url} target="_blank" rel="noopener noreferrer">
