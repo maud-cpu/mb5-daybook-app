@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { trainingStatus } from "@/lib/domain";
 import { withAmazonAffiliateTag } from "@/lib/amazon";
+import FormsReference from "@/components/FormsReference";
 
 type Course = {
   id: string;
@@ -330,6 +331,9 @@ export default function TrainingScreen() {
             ))}
           </select>
         </div>
+      </div>
+      <div className="card">
+        <FormsReference />
       </div>
       {personalEntries.length > 0 && (
         <div className="card" style={{ border: "2px solid var(--accent)" }}>
