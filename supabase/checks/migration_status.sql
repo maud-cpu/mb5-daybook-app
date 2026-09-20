@@ -171,6 +171,10 @@ select migration, applied from (
          where table_schema = 'public' and table_name = 'reminders' and column_name = 'people')),
 
     ('0031 dismissed_training_suggestions table',
-      to_regclass('public.dismissed_training_suggestions') is not null)
+      to_regclass('public.dismissed_training_suggestions') is not null),
+
+    ('0032 child_school_admin and child_clubs tables',
+      to_regclass('public.child_school_admin') is not null
+      and to_regclass('public.child_clubs') is not null)
 ) as t(migration, applied)
 order by migration;
