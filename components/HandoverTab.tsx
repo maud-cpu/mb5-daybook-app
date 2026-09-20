@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
 import { HOUSEHOLD_FIELDS, PROFILE_FIELDS } from "@/lib/handover";
+import { clubText } from "@/lib/calendarHelpers";
 
 type ChildRow = {
   id: string;
@@ -14,6 +15,38 @@ type ChildRow = {
 };
 type Profile = Record<string, string>;
 type AboutHousehold = { ssw_name: string; ssw_phone: string; ssw_email: string };
+type SchoolAdmin = Record<string, string>;
+type Club = {
+  id: string;
+  club_name: string;
+  weekday: number;
+  time_from: string;
+  time_to: string;
+  cost: string;
+  website: string;
+  contact_name: string;
+  contact_info: string;
+  notes: string;
+};
+
+const CLUB_WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+// Deliberately excludes homework_app_login -- same rule as the export note
+// below already states for card PINs/passwords/DOB: nothing that could let
+// someone into an account travels in a document that leaves the house.
+const SCHOOL_ADMIN_EXPORT_FIELDS: [string, string][] = [
+  ["lunch_payment", "Paying for school lunches"],
+  ["homework_app_name", "Homework app/website"],
+  ["homework_app_url", "Homework app link"],
+  ["class_rep_name", "Class rep"],
+  ["class_rep_contact", "Class rep contact"],
+  ["pta_name", "PTA / friends of school"],
+  ["pta_contact", "PTA contact"],
+  ["pta_facebook", "PTA Facebook / social group"],
+  ["school_office_contact", "School office"],
+  ["other_links", "Other useful links"],
+  ["notes", "Notes"],
+];
 
 function fmt(iso: string) {
   return iso ? new Date(iso + "T12:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
@@ -78,6 +111,8 @@ export default function HandoverTab() {
   const children = [...fosteredChildren, ...householdChildren];
   const [selected, setSelected] = useState<string[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
+  const [schoolAdmin, setSchoolAdmin] = useState<Record<string, SchoolAdmin>>({});
+  const [clubsByChild, setClubsByChild] = useState<Record<string, Club[]>>({});
   const [household, setHousehold] = useState<Profile>(blankHousehold());
   const [aboutHousehold, setAboutHousehold] = useState<AboutHousehold>({ ssw_name: "", ssw_phone: "", ssw_email: "" });
   const [dateFrom, setDateFrom] = useState(today());
@@ -90,15 +125,18 @@ export default function HandoverTab() {
   const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
 
   async function load() {
-    const [{ data: kids }, { data: hhKids }, { data: profileRows }, { data: hh }] = await Promise.all([
-      supabase.from("children").select("id, name, basics, hub_carer_name, hub_carer_phone").order("created_at"),
-      supabase.from("household_children").select("id, name, basics, hub_carer_name, hub_carer_phone").order("created_at"),
-      supabase.from("handover_child_profiles").select("*"),
-      supabase
-        .from("household")
-        .select("ssw_name, ssw_phone, ssw_email, csw, edt, gp, hub, school_contact, delegated, carseat")
-        .maybeSingle(),
-    ]);
+    const [{ data: kids }, { data: hhKids }, { data: profileRows }, { data: hh }, { data: schoolAdminRows }, { data: clubRows }] =
+      await Promise.all([
+        supabase.from("children").select("id, name, basics, hub_carer_name, hub_carer_phone").order("created_at"),
+        supabase.from("household_children").select("id, name, basics, hub_carer_name, hub_carer_phone").order("created_at"),
+        supabase.from("handover_child_profiles").select("*"),
+        supabase
+          .from("household")
+          .select("ssw_name, ssw_phone, ssw_email, csw, edt, gp, hub, school_contact, delegated, carseat")
+          .maybeSingle(),
+        supabase.from("child_school_admin").select("*"),
+        supabase.from("child_clubs").select("*").order("weekday"),
+      ]);
     const normalise = (rows: (ChildRow & { basics: Record<string, string> | null })[] | null) =>
       (rows ?? []).map((c) => ({ ...c, basics: c.basics || {} }));
     setFosteredChildren(normalise(kids as (ChildRow & { basics: Record<string, string> | null })[] | null));
@@ -108,6 +146,14 @@ export default function HandoverTab() {
     (profileRows ?? []).forEach((p: Profile & { child_id: string }) => (byChild[p.child_id] = p));
     setProfiles(byChild);
     if (hh) setHousehold({ ...blankHousehold(), ...hh });
+    const bySchoolAdmin: Record<string, SchoolAdmin> = {};
+    (schoolAdminRows ?? []).forEach((r: SchoolAdmin & { child_id: string }) => (bySchoolAdmin[r.child_id] = r));
+    setSchoolAdmin(bySchoolAdmin);
+    const byClubs: Record<string, Club[]> = {};
+    (clubRows as (Club & { child_id: string })[] | null)?.forEach((c) => {
+      (byClubs[c.child_id] ||= []).push(c);
+    });
+    setClubsByChild(byClubs);
   }
 
   useEffect(() => {
@@ -259,11 +305,28 @@ ${sortedSelected
   .map((n) => {
     const child = children.find((c) => c.name === n);
     const p = child ? profileOf(child.id) : blankProfile();
-    return `<h3>2. ${n} — needs & routines</h3><table>${PROFILE_FIELDS.map(([k, label, hint]) => row(label, p[k], hint)).join("")}</table>`;
+    const sa = child ? schoolAdmin[child.id] : undefined;
+    const childClubs = child ? clubsByChild[child.id] || [] : [];
+    const schoolAdminTable = sa
+      ? `<h3>2a. ${n} — school admin</h3><table>${SCHOOL_ADMIN_EXPORT_FIELDS.map(([k, label]) => row(label, sa[k] || "")).join("")}</table>`
+      : "";
+    const clubsTable = childClubs.length
+      ? `<h3>2b. ${n} — clubs</h3><table>${childClubs
+          .map((c) =>
+            row(
+              CLUB_WEEKDAYS[c.weekday] || "",
+              [clubText(c.club_name, c.time_from, c.time_to), c.cost, c.website, c.contact_name && `Contact: ${c.contact_name}${c.contact_info ? " " + c.contact_info : ""}`, c.notes]
+                .filter(Boolean)
+                .join(" — "),
+            ),
+          )
+          .join("")}</table>`
+      : "";
+    return `<h3>2. ${n} — needs & routines</h3><table>${PROFILE_FIELDS.map(([k, label, hint]) => row(label, p[k], hint)).join("")}</table>${schoolAdminTable}${clubsTable}`;
   })
   .join("")}
 <h3>3. Contacts, health & consents</h3><table>${HOUSEHOLD_FIELDS.map(([k, label, hint]) => row(label, householdOf()[k], hint)).join("")}</table>
-<p><i>Do not include card PINs, passwords or full dates of birth — hand these over in person.</i></p></body></html>`;
+<p><i>Do not include card PINs, passwords, homework-app logins or full dates of birth — hand these over in person.</i></p></body></html>`;
     const name = `Sleepover-plan-${sortedSelected.join("-") || "plan"}-${fmt(dateFrom)}`.replace(/[^a-z0-9-]+/gi, "-") + ".doc";
     const blob = new Blob(["﻿" + html], { type: "application/msword" });
     const a = document.createElement("a");
@@ -347,6 +410,27 @@ ${sortedSelected
                 />
               </div>
             ))}
+            {(schoolAdmin[child.id] || clubsByChild[child.id]?.length) && (
+              <div className="note">
+                <b>From School admin / Clubs (About us)</b>
+                {schoolAdmin[child.id] &&
+                  SCHOOL_ADMIN_EXPORT_FIELDS.filter(([k]) => schoolAdmin[child.id][k]?.trim()).map(([k, label]) => (
+                    <div key={k} style={{ marginTop: 4 }}>
+                      <b>{label}:</b> {schoolAdmin[child.id][k]}
+                    </div>
+                  ))}
+                {(clubsByChild[child.id] ?? []).map((c) => (
+                  <div key={c.id} style={{ marginTop: 4 }}>
+                    <b>{CLUB_WEEKDAYS[c.weekday]}:</b> {clubText(c.club_name, c.time_from, c.time_to)}
+                    {c.contact_name ? ` · ${c.contact_name}` : ""}
+                  </div>
+                ))}
+                <p className="hint" style={{ marginTop: 6 }}>
+                  Edit these in About us. The homework app login isn&apos;t included here or in the exported
+                  document — hand that over separately.
+                </p>
+              </div>
+            )}
           </div>
         );
       })}

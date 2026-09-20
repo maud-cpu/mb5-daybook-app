@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
 import { REMINDER_CATEGORIES, REPEAT_OPTIONS, Reminder, reminderCategoryLabel } from "@/lib/types";
-import { addDays, occurrenceDates, personColor } from "@/lib/calendarHelpers";
+import { addDays, clubText, mondayStartWeekday, occurrenceDates, personColor } from "@/lib/calendarHelpers";
 import PeoplePicker, { PersonOption } from "@/components/PeoplePicker";
 import PersonTags, { PersonDot } from "@/components/PersonTags";
 
@@ -30,6 +30,29 @@ function f2fReminder(id: string, text: string, date: string): Reminder {
     source_text: "",
   };
 }
+
+// A club a child attends isn't a real row in reminders either -- it recurs
+// every week indefinitely, so rather than pre-generating (and having to
+// clean up) months of real rows, one virtual entry is synthesised per day
+// in the visible month whenever that day's weekday matches. Edited from
+// About us, not here -- read-only, like a face-to-face training session.
+const CLUB_PREFIX = "club:";
+function clubReminder(clubId: string, text: string, date: string, childName: string): Reminder {
+  return {
+    id: `${CLUB_PREFIX}${clubId}:${date}`,
+    text,
+    date,
+    done: false,
+    done_at: null,
+    category: "club",
+    child: "",
+    people: [childName],
+    amount: null,
+    series_id: null,
+    source_text: "",
+  };
+}
+
 
 function monthLabel(year: number, month: number): string {
   return new Date(year, month, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
@@ -96,14 +119,15 @@ export default function CalendarScreen() {
   async function load() {
     const from = isoOf(year, month, 1);
     const to = isoOf(year, month, daysInMonth(year, month));
-    const [{ data: rem }, { data: kids }, { data: hhKids }, { data: adults }, { data: f2fCourses }, { data: f2fProgress }] =
+    const [{ data: rem }, { data: kids }, { data: hhKids }, { data: adults }, { data: f2fCourses }, { data: f2fProgress }, { data: clubs }] =
       await Promise.all([
         supabase.from("reminders").select("*").gte("date", from).lte("date", to).order("date"),
-        supabase.from("children").select("name").order("name"),
-        supabase.from("household_children").select("name").order("name"),
+        supabase.from("children").select("id, name").order("name"),
+        supabase.from("household_children").select("id, name").order("name"),
         supabase.from("household_adults").select("name").order("name"),
         supabase.from("shared_training_catalog").select("id, title, session_date").eq("is_face_to_face", true).eq("archived", false),
         supabase.from("training_progress").select("course_title, session_date").not("session_date", "is", null),
+        supabase.from("child_clubs").select("id, child_id, club_name, weekday, time_from, time_to"),
       ]);
     const myDateByTitle: Record<string, string> = {};
     (f2fProgress ?? []).forEach((p: { course_title: string; session_date: string | null }) => {
@@ -115,7 +139,22 @@ export default function CalendarScreen() {
         return date && date >= from && date <= to ? f2fReminder(c.id, c.title, date) : null;
       })
       .filter((r): r is Reminder => r !== null);
-    setReminders([...((rem as Reminder[]) ?? []), ...f2fReminders]);
+
+    const childNameById: Record<string, string> = {};
+    ((kids as { id: string; name: string }[] | null) ?? []).forEach((c) => (childNameById[c.id] = c.name));
+    ((hhKids as { id: string; name: string }[] | null) ?? []).forEach((c) => (childNameById[c.id] = c.name));
+    const clubReminders: Reminder[] = [];
+    (clubs ?? []).forEach((c: { id: string; child_id: string; club_name: string; weekday: number; time_from: string; time_to: string }) => {
+      const childName = childNameById[c.child_id];
+      if (!childName || !c.club_name) return;
+      const text = clubText(c.club_name, c.time_from, c.time_to);
+      for (let d = 1; d <= daysInMonth(year, month); d++) {
+        const iso = isoOf(year, month, d);
+        if (mondayStartWeekday(iso) === c.weekday) clubReminders.push(clubReminder(c.id, text, iso, childName));
+      }
+    });
+
+    setReminders([...((rem as Reminder[]) ?? []), ...f2fReminders, ...clubReminders]);
     setPersonOptions([
       ...((kids as { name: string }[] | null) ?? []).map((c) => ({ name: c.name, kind: "child" as const })),
       ...((hhKids as { name: string }[] | null) ?? []).map((c) => ({ name: c.name, kind: "child" as const })),
@@ -244,7 +283,7 @@ export default function CalendarScreen() {
   }
 
   function startEdit(r: Reminder) {
-    if (r.id.startsWith(F2F_PREFIX)) return;
+    if (r.id.startsWith(F2F_PREFIX) || r.id.startsWith(CLUB_PREFIX)) return;
     setEditingId(r.id);
     setEditDraft(draftFrom(r));
   }
@@ -402,6 +441,13 @@ export default function CalendarScreen() {
             ) : r.id.startsWith(F2F_PREFIX) ? (
               <div key={r.id} className="rec">
                 <Link href="/dashboard/training">🎓 {r.text}</Link>
+              </div>
+            ) : r.id.startsWith(CLUB_PREFIX) ? (
+              <div key={r.id} className="rec">
+                <Link href="/dashboard/about">
+                  {reminderCategoryLabel(r.category)} {r.text}
+                </Link>
+                <PersonTags people={r.people} />
               </div>
             ) : (
               <div key={r.id} style={{ opacity: r.done ? 0.5 : 1 }}>

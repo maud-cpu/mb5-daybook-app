@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { extractEmail, extractPhone, today } from "@/lib/domain";
+import { clubText, mondayStartWeekday } from "@/lib/calendarHelpers";
 import { Reminder, reminderCategoryLabel } from "@/lib/types";
 
 type Item = { label: string; name: string; value: string };
@@ -128,8 +129,34 @@ export default function QuickAccessButtons() {
     }
     setOpen("today");
     setLoading(true);
-    const { data } = await supabase.from("reminders").select("*").eq("done", false).eq("date", today());
-    setTodayItems((data as Reminder[]) ?? []);
+    const [{ data }, { data: clubs }, { data: kids }, { data: hhKids }] = await Promise.all([
+      supabase.from("reminders").select("*").eq("done", false).eq("date", today()),
+      supabase.from("child_clubs").select("id, child_id, club_name, weekday, time_from, time_to"),
+      supabase.from("children").select("id, name"),
+      supabase.from("household_children").select("id, name"),
+    ]);
+    const childNameById: Record<string, string> = {};
+    ((kids as { id: string; name: string }[] | null) ?? []).forEach((c) => (childNameById[c.id] = c.name));
+    ((hhKids as { id: string; name: string }[] | null) ?? []).forEach((c) => (childNameById[c.id] = c.name));
+    const todayWeekday = mondayStartWeekday(today());
+    const clubItems: Reminder[] = (
+      (clubs as { id: string; child_id: string; club_name: string; weekday: number; time_from: string; time_to: string }[] | null) ?? []
+    )
+      .filter((c) => c.weekday === todayWeekday && c.club_name && childNameById[c.child_id])
+      .map((c) => ({
+        id: `club:${c.id}`,
+        text: clubText(c.club_name, c.time_from, c.time_to),
+        date: today(),
+        done: false,
+        done_at: null,
+        category: "club",
+        child: "",
+        people: [childNameById[c.child_id]],
+        amount: null,
+        series_id: null,
+        source_text: "",
+      }));
+    setTodayItems([...((data as Reminder[]) ?? []), ...clubItems]);
     setLoading(false);
   }
 
@@ -154,7 +181,7 @@ export default function QuickAccessButtons() {
             todayItems.map((r) => (
               <div className="qi" key={r.id}>
                 <b>{reminderCategoryLabel(r.category)}</b> {r.text}
-                {r.child ? ` · ${r.child}` : ""}
+                {r.people.length ? ` · ${r.people.join(", ")}` : ""}
                 {r.amount != null ? ` · £${Number(r.amount).toFixed(2)}` : ""}
               </div>
             ))}
