@@ -71,12 +71,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No text given" }, { status: 400 });
   }
 
-  const { data: children } = await supabase.from("children").select("name");
+  const [{ data: children }, { data: householdChildren }] = await Promise.all([
+    supabase.from("children").select("name"),
+    supabase.from("household_children").select("name"),
+  ]);
   const { data: courseRows } = await supabase
     .from("shared_training_catalog")
     .select("title, description")
     .eq("archived", false);
-  const names = (children ?? []).map((c) => c.name as string);
+  // A child living in the household (household_children) is sometimes an
+  // actual foster placement too, not just the carer's own/adopted/kinship
+  // child -- so notes naming them should match and tag them just like the
+  // main children table, instead of being flagged as an unrecognised name.
+  const names = [...(children ?? []), ...(householdChildren ?? [])].map((c) => c.name as string);
   const courses = (courseRows ?? []).map((c) => {
     const title = c.title as string;
     const description = (c.description as string) || "";
