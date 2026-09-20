@@ -224,7 +224,10 @@ export default function TodayCard() {
             </Link>
           ) : (
             <span style={{ cursor: "pointer" }} onClick={() => startEdit(r)}>
-              {reminderCategoryLabel(r.category)} {r.text}
+              <span className="muted" style={{ fontSize: 12 }}>
+                {reminderCategoryLabel(r.category)}
+              </span>{" "}
+              <b>{r.text}</b>
               {r.series_id ? " 🔁" : ""}
               <PersonTags people={r.people} />
               {r.date !== t && <small className="muted"> — {fmtDate(r.date)}</small>}

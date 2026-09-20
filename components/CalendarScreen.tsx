@@ -407,7 +407,10 @@ export default function CalendarScreen() {
               <div key={r.id} style={{ opacity: r.done ? 0.5 : 1 }}>
                 <div className="rec" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
                   <span style={{ cursor: "pointer" }} onClick={() => startEdit(r)}>
-                    {reminderCategoryLabel(r.category)} {r.text}
+                    <span className="muted" style={{ fontSize: 12 }}>
+                      {reminderCategoryLabel(r.category)}
+                    </span>{" "}
+                    <b>{r.text}</b>
                     {r.series_id ? " 🔁" : ""}
                     <PersonTags people={r.people} />
                     {r.amount != null ? ` · £${Number(r.amount).toFixed(2)}` : ""}
