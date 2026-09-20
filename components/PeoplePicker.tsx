@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PersonDot } from "@/components/PersonTags";
 
 export type PersonOption = { name: string; kind: "child" | "adult" };
 
@@ -41,14 +42,23 @@ export default function PeoplePicker({
             key={o.name}
             type="button"
             className={`chip${selected.includes(o.name) ? " on" : ""}`}
+            style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
             onClick={() => toggle(o.name)}
           >
+            <PersonDot name={o.name} />
             {o.kind === "adult" ? "🧑 " : ""}
             {o.name}
           </button>
         ))}
         {extras.map((n) => (
-          <button key={n} type="button" className="chip on" onClick={() => toggle(n)}>
+          <button
+            key={n}
+            type="button"
+            className="chip on"
+            style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
+            onClick={() => toggle(n)}
+          >
+            <PersonDot name={n} />
             {n} ×
           </button>
         ))}

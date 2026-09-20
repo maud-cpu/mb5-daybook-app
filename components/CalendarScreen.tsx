@@ -5,8 +5,9 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
 import { REMINDER_CATEGORIES, REPEAT_OPTIONS, Reminder, reminderCategoryLabel } from "@/lib/types";
-import { addDays, occurrenceDates } from "@/lib/calendarHelpers";
+import { addDays, occurrenceDates, personColor } from "@/lib/calendarHelpers";
 import PeoplePicker, { PersonOption } from "@/components/PeoplePicker";
+import PersonTags, { PersonDot } from "@/components/PersonTags";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -89,6 +90,7 @@ export default function CalendarScreen() {
   const [extracted, setExtracted] = useState<ExtractedItem[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [peopleFilter, setPeopleFilter] = useState<string[]>([]);
+  const [showFilters, setShowFilters] = useState(false);
   const [showSourceFor, setShowSourceFor] = useState<string | null>(null);
 
   async function load() {
@@ -289,7 +291,14 @@ export default function CalendarScreen() {
     <div>
       <div className="card">
         <div className="row" style={{ alignItems: "center", justifyContent: "space-between" }}>
-          <h3 style={{ margin: 0 }}>Filter the calendar</h3>
+          <button
+            className="chip"
+            style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
+            onClick={() => setShowFilters((v) => !v)}
+          >
+            🔍 Filter{categoryFilter.length + peopleFilter.length > 0 ? ` (${categoryFilter.length + peopleFilter.length})` : ""}
+            {showFilters ? " ▲" : " ▼"}
+          </button>
           {(categoryFilter.length > 0 || peopleFilter.length > 0) && (
             <button
               className="chip"
@@ -302,32 +311,38 @@ export default function CalendarScreen() {
             </button>
           )}
         </div>
-        <p className="hint">Show just one type of thing (e.g. training coming up), just one person, or a few people together.</p>
-        <b style={{ display: "block", fontSize: 13 }}>Type</b>
-        <div className="chips">
-          {REMINDER_CATEGORIES.map(([k, l]) => (
-            <button
-              key={k}
-              className={`chip${categoryFilter.includes(k) ? " on" : ""}`}
-              onClick={() => toggleFilter(categoryFilter, setCategoryFilter, k)}
-            >
-              {l}
-            </button>
-          ))}
-        </div>
-        <b style={{ display: "block", fontSize: 13, marginTop: 8 }}>Who</b>
-        <div className="chips">
-          {personOptions.map((o) => (
-            <button
-              key={o.name}
-              className={`chip${peopleFilter.includes(o.name) ? " on" : ""}`}
-              onClick={() => toggleFilter(peopleFilter, setPeopleFilter, o.name)}
-            >
-              {o.kind === "adult" ? "🧑 " : ""}
-              {o.name}
-            </button>
-          ))}
-        </div>
+        {showFilters && (
+          <>
+            <p className="hint">Show just one type of thing (e.g. training coming up), just one person, or a few people together.</p>
+            <b style={{ display: "block", fontSize: 13 }}>Type</b>
+            <div className="chips">
+              {REMINDER_CATEGORIES.map(([k, l]) => (
+                <button
+                  key={k}
+                  className={`chip${categoryFilter.includes(k) ? " on" : ""}`}
+                  onClick={() => toggleFilter(categoryFilter, setCategoryFilter, k)}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+            <b style={{ display: "block", fontSize: 13, marginTop: 8 }}>Who</b>
+            <div className="chips">
+              {personOptions.map((o) => (
+                <button
+                  key={o.name}
+                  className={`chip${peopleFilter.includes(o.name) ? " on" : ""}`}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
+                  onClick={() => toggleFilter(peopleFilter, setPeopleFilter, o.name)}
+                >
+                  <PersonDot name={o.name} />
+                  {o.kind === "adult" ? "🧑 " : ""}
+                  {o.name}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {selected && (
@@ -394,7 +409,7 @@ export default function CalendarScreen() {
                   <span style={{ cursor: "pointer" }} onClick={() => startEdit(r)}>
                     {reminderCategoryLabel(r.category)} {r.text}
                     {r.series_id ? " 🔁" : ""}
-                    {r.people.length ? ` · ${r.people.join(", ")}` : ""}
+                    <PersonTags people={r.people} />
                     {r.amount != null ? ` · £${Number(r.amount).toFixed(2)}` : ""}
                     {r.done ? " (done)" : ""}
                   </span>
@@ -535,7 +550,19 @@ export default function CalendarScreen() {
                 <div style={{ fontSize: 12, fontWeight: isToday ? 700 : 400 }}>{day}</div>
                 <div style={{ fontSize: 14, lineHeight: 1.1 }}>
                   {items.slice(0, 3).map((it) => (
-                    <div key={it.id} style={{ opacity: it.done ? 0.4 : 1 }}>
+                    <div key={it.id} style={{ opacity: it.done ? 0.4 : 1, display: "flex", alignItems: "center", gap: 3 }}>
+                      {it.people[0] && (
+                        <span
+                          style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: "50%",
+                            background: personColor(it.people[0]),
+                            display: "inline-block",
+                            flex: "0 0 auto",
+                          }}
+                        />
+                      )}
                       {reminderCategoryLabel(it.category).slice(0, 2)}
                     </div>
                   ))}
