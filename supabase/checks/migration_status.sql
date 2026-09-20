@@ -168,6 +168,9 @@ select migration, applied from (
 
     ('0030 reminders.people column',
       exists (select 1 from information_schema.columns
-         where table_schema = 'public' and table_name = 'reminders' and column_name = 'people'))
+         where table_schema = 'public' and table_name = 'reminders' and column_name = 'people')),
+
+    ('0031 dismissed_training_suggestions table',
+      to_regclass('public.dismissed_training_suggestions') is not null)
 ) as t(migration, applied)
 order by migration;

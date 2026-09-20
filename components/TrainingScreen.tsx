@@ -168,16 +168,21 @@ export default function TrainingScreen() {
   const [feedback, setFeedback] = useState<Feedback[]>([]);
   const [myUserId, setMyUserId] = useState("");
   const [sessionDates, setSessionDates] = useState<Record<string, string>>({});
+  const [dismissed, setDismissed] = useState<{ title: string; dismissed_at: string }[]>([]);
+  const [showDismissed, setShowDismissed] = useState(false);
 
   async function load() {
-    const [{ data: c }, { data: pl }, { data: pr }, { data: notes }, { data: fb }, { data: userData }] = await Promise.all([
-      supabase.from("shared_training_catalog").select("*").eq("archived", false).order("sort_order"),
-      supabase.from("shared_training_platforms").select("*"),
-      supabase.from("training_progress").select("course_title, completed_on, session_date"),
-      supabase.from("records").select("training_note, date").neq("training_note", ""),
-      supabase.from("training_feedback").select("course_id, user_id, rating, comment"),
-      supabase.auth.getUser(),
-    ]);
+    const [{ data: c }, { data: pl }, { data: pr }, { data: notes }, { data: fb }, { data: userData }, { data: dis }] =
+      await Promise.all([
+        supabase.from("shared_training_catalog").select("*").eq("archived", false).order("sort_order"),
+        supabase.from("shared_training_platforms").select("*"),
+        supabase.from("training_progress").select("course_title, completed_on, session_date"),
+        supabase.from("records").select("training_note, date").neq("training_note", ""),
+        supabase.from("training_feedback").select("course_id, user_id, rating, comment"),
+        supabase.auth.getUser(),
+        supabase.from("dismissed_training_suggestions").select("title, dismissed_at").order("dismissed_at", { ascending: false }),
+      ]);
+    setDismissed((dis as { title: string; dismissed_at: string }[]) ?? []);
     setCourses(
       ((c as Course[]) ?? []).map((row) => ({
         ...row,
@@ -264,10 +269,25 @@ export default function TrainingScreen() {
     ]);
   }
 
+  async function dismissSuggestion(title: string) {
+    setDismissed((prev) => [{ title, dismissed_at: new Date().toISOString() }, ...prev]);
+    await supabase.from("dismissed_training_suggestions").upsert({ title }, { onConflict: "user_id,title" });
+  }
+
+  async function reopenSuggestion(title: string) {
+    setDismissed((prev) => prev.filter((d) => d.title !== title));
+    await supabase.from("dismissed_training_suggestions").delete().eq("title", title);
+  }
+
   const platformUrl = (name: string) => platforms.find((p) => p.name === name)?.url || "";
 
   const mediaOptions = Array.from(new Set(courses.map((c) => mediumOf(c)).filter(Boolean))).sort();
-  const personalTitles = new Set(Object.keys(personal).map((t) => t.trim().toLowerCase()));
+  const dismissedTitles = new Set(dismissed.map((d) => d.title.trim().toLowerCase()));
+  const personalTitles = new Set(
+    Object.keys(personal)
+      .filter((t) => !dismissedTitles.has(t.trim().toLowerCase()))
+      .map((t) => t.trim().toLowerCase()),
+  );
 
   function matchesFilters(c: Course): boolean {
     if (search.trim() && !c.title.toLowerCase().includes(search.trim().toLowerCase())) return false;
@@ -284,6 +304,7 @@ export default function TrainingScreen() {
     ),
   })).filter((g) => g.rows.length);
   const personalEntries = Object.entries(personal).filter(([title]) => {
+    if (dismissedTitles.has(title.trim().toLowerCase())) return false;
     const course = courses.find((c) => c.title.trim().toLowerCase() === title.trim().toLowerCase());
     return course ? matchesFilters(course) : title.toLowerCase().includes(search.trim().toLowerCase());
   });
@@ -385,9 +406,34 @@ export default function TrainingScreen() {
                   value={completedOn || ""}
                   onChange={(e) => setCompleted(title, e.target.value)}
                 />
+                <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => dismissSuggestion(title)}>
+                  Dismiss
+                </button>
               </div>
             );
           })}
+        </div>
+      )}
+      {dismissed.length > 0 && (
+        <div className="card">
+          <p className="hint" style={{ cursor: "pointer" }} onClick={() => setShowDismissed(!showDismissed)}>
+            {showDismissed ? "▾" : "▸"} Dismissed suggestions ({dismissed.length}) — tap to {showDismissed ? "hide" : "show"}
+          </p>
+          {showDismissed &&
+            dismissed.map((d) => (
+              <div key={d.title} className="rec" style={{ opacity: 0.7, display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <span>
+                  {d.title}
+                  <small className="muted">
+                    {" "}
+                    — dismissed {new Date(d.dismissed_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                  </small>
+                </span>
+                <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => reopenSuggestion(d.title)}>
+                  Reopen
+                </button>
+              </div>
+            ))}
         </div>
       )}
       {groups.map((g) => (
