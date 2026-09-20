@@ -14,7 +14,20 @@ export default function SignOutButton() {
   }
 
   return (
-    <button className="chip" onClick={signOut}>
+    <button
+      onClick={signOut}
+      style={{
+        background: "none",
+        border: "none",
+        padding: 0,
+        color: "var(--grey)",
+        fontSize: 13,
+        fontWeight: 600,
+        cursor: "pointer",
+        textDecoration: "underline",
+        textUnderlineOffset: 2,
+      }}
+    >
       Sign out
     </button>
   );
