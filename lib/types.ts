@@ -257,6 +257,163 @@ export function reminderCategoryLabel(cat: string): string {
   return REMINDER_CATEGORIES.find(([k]) => k === cat)?.[1] ?? "📌 Other";
 }
 
+export type FormRefItem = { name: string; note: string };
+export type FormRefCategory = { key: string; label: string; items: FormRefItem[] };
+
+// The single list of "forms and documents a foster carer might need" --
+// shown on Things To Do and on Training & Resources, so both stay in sync
+// rather than drifting apart as items get added.
+export const FORMS_REFERENCE: FormRefCategory[] = [
+  {
+    key: "placement",
+    label: "For a placement",
+    items: [
+      {
+        name: "Placement Plan / Placement Agreement",
+        note: "the day-to-day arrangements for that child, agreed with the CSW; where the delegated authority for that placement actually lives.",
+      },
+      {
+        name: "Delegated Authority Decision Support Record",
+        note: "what you can consent to yourself (school trips, haircuts, sleepovers, routine medical/dental) versus what needs the CSW or a parent's sign-off.",
+      },
+      {
+        name: "Health/medical consent record",
+        note: "who can consent to what for that child's routine and non-routine healthcare, set out alongside the Placement Plan.",
+      },
+      {
+        name: "Personal Education Plan (PEP)",
+        note: "the school-held plan covering a looked-after child's education and how the pupil premium plus is spent, reviewed at least termly.",
+      },
+      {
+        name: "Immunisation, dental & optician consent",
+        note: "kept alongside the health consent record — check who can sign for routine appointments versus one-offs.",
+      },
+    ],
+  },
+  {
+    key: "safeguarding",
+    label: "Safeguarding",
+    items: [
+      {
+        name: "Missing from care/home protocol",
+        note: "what to do and who to call first if a child goes missing.",
+      },
+      {
+        name: "Allegations & complaints procedure",
+        note: "what happens if an allegation is made against you, and your right to independent support (e.g. Fosterline, Foster Talk) separate from your own agency.",
+      },
+      {
+        name: "Your household's Safer Caring policy",
+        note: "your own written plan, reviewed with your SSW.",
+      },
+      {
+        name: "Behaviour management / positive handling policy",
+        note: "what de-escalation and physical intervention (if any) is agreed for that child, and what must be logged and reported afterwards.",
+      },
+      {
+        name: "Online safety & device use agreement",
+        note: "what's agreed for that child's phone, gaming and social media use, and any monitoring in place.",
+      },
+    ],
+  },
+  {
+    key: "approval",
+    label: "Your own approval",
+    items: [
+      {
+        name: "Foster Carer Agreement & annual review paperwork",
+        note: "the terms of your approval, reviewed yearly by the fostering panel.",
+      },
+      {
+        name: "DBS renewal",
+        note: "for you and every adult in the household, usually every 3 years.",
+      },
+      {
+        name: "Household risk assessment (fire safety, pets, etc.)",
+        note: "reviewed with your SSW, typically annually.",
+      },
+      {
+        name: "Training & Development Standards (TDS) portfolio",
+        note: "the evidence you build up, usually in your first year, showing you meet the national standards; your SSW signs it off.",
+      },
+      {
+        name: "Supervision agreement",
+        note: "how often your SSW visits and supervises you, agreed and reviewed alongside your approval.",
+      },
+    ],
+  },
+  {
+    key: "money",
+    label: "Money & the child's own records",
+    items: [
+      {
+        name: "Expenses & allowances claim form",
+        note: "see the Rates tab for what's claimable.",
+      },
+      {
+        name: "Birthday, festival & holiday grants",
+        note: "one-off payments on top of the weekly allowance — ask your SSW what your agency pays and how to claim it.",
+      },
+      {
+        name: "Clothing & equipment allowance",
+        note: "for school uniform, initial setting-up costs, and larger one-off items.",
+      },
+      {
+        name: "Passport/travel consent",
+        note: "extra written consent is needed before taking a looked-after child abroad; ask your CSW early, it isn't quick to arrange.",
+      },
+      {
+        name: "Life story work / memory box materials",
+        note: "an ongoing record for the child to keep, separate from your day-to-day diary entries here.",
+      },
+    ],
+  },
+  {
+    key: "reviews",
+    label: "Reviews & meetings",
+    items: [
+      {
+        name: "LAC Review invitation & minutes",
+        note: "the formal review of the child's Care Plan, held regularly (usually every 6 months once settled); you'll be asked for a written report beforehand.",
+      },
+      {
+        name: "Care Plan",
+        note: "the social worker's overall plan for the child; the Placement Plan should match it.",
+      },
+      {
+        name: "Statutory visit record",
+        note: "the note the child's social worker makes each time they visit, which you can ask to see.",
+      },
+      {
+        name: "Pathway Plan (16+)",
+        note: "replaces some of the above for young people preparing to leave care.",
+      },
+      {
+        name: "Staying Put agreement (18+)",
+        note: "the arrangement for a young person remaining with you past 18.",
+      },
+    ],
+  },
+  {
+    key: "ending",
+    label: "Ending or moving on from a placement",
+    items: [
+      {
+        name: "Placement ending / disruption meeting record",
+        note: "held when a placement ends in a planned or unplanned way, to capture what was learned.",
+      },
+      {
+        name: "Return of belongings & records checklist",
+        note: "make sure life story materials, medical records and identity documents move with the child.",
+      },
+      {
+        name: "Final handover summary",
+        note: "your own closing note for whoever cares for the child next — the Handover tab in Paperwork can help build this.",
+      },
+    ],
+  },
+];
+
 export type PendingItem = Partial<EntryRecord> & {
   bucket: Bucket;
   text: string;
