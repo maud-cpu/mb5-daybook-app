@@ -56,11 +56,16 @@ export default function CaptureScreen() {
   const [courseInfo, setCourseInfo] = useState<Record<string, { url: string; length: string }>>({});
 
   async function loadChildren() {
-    const { data } = await supabase
-      .from("children")
-      .select("id, name, born, family, hub_carer_name, hub_carer_email")
-      .order("created_at");
-    setChildren((data as Child[]) ?? []);
+    const [{ data: visiting }, { data: household }] = await Promise.all([
+      supabase.from("children").select("id, name, born, family, hub_carer_name, hub_carer_email").order("created_at"),
+      supabase.from("household_children").select("id, name, born, hub_carer_name, hub_carer_email").order("created_at"),
+    ]);
+    // A child in the household (household_children) is sometimes an actual
+    // foster placement too, not just the carer's own/adopted/kinship child --
+    // they need to show up here to be tagged on entries the same as any
+    // other child, so they're merged in rather than only offering the
+    // separate "children" (visiting/placement) table.
+    setChildren([...((visiting as Child[]) ?? []), ...((household as Child[]) ?? []).map((h) => ({ ...h, family: "" }))]);
   }
 
   useEffect(() => {
