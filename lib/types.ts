@@ -257,7 +257,7 @@ export function reminderCategoryLabel(cat: string): string {
   return REMINDER_CATEGORIES.find(([k]) => k === cat)?.[1] ?? "📌 Other";
 }
 
-export type FormRefItem = { name: string; note: string };
+export type FormRefItem = { name: string; note: string; url?: string };
 export type FormRefCategory = { key: string; label: string; items: FormRefItem[] };
 
 // The single list of "forms and documents a foster carer might need" --
@@ -300,7 +300,8 @@ export const FORMS_REFERENCE: FormRefCategory[] = [
       },
       {
         name: "Allegations & complaints procedure",
-        note: "what happens if an allegation is made against you, and your right to independent support (e.g. Fosterline, Foster Talk) separate from your own agency.",
+        note: "what happens if an allegation is made against you, and your right to independent support separate from your own agency.",
+        url: "https://fosterline.info/already-fostering/facing-an-allegation/reducing-the-risk-of-allegations/",
       },
       {
         name: "Your household's Safer Caring policy",
@@ -327,6 +328,7 @@ export const FORMS_REFERENCE: FormRefCategory[] = [
       {
         name: "DBS renewal",
         note: "for you and every adult in the household, usually every 3 years.",
+        url: "https://www.gov.uk/dbs-update-service",
       },
       {
         name: "Household risk assessment (fire safety, pets, etc.)",
@@ -335,6 +337,7 @@ export const FORMS_REFERENCE: FormRefCategory[] = [
       {
         name: "Training & Development Standards (TDS) portfolio",
         note: "the evidence you build up, usually in your first year, showing you meet the national standards; your SSW signs it off.",
+        url: "https://www.surreycc.gov.uk/children/professionals/academy/foster-carers",
       },
       {
         name: "Supervision agreement",
@@ -361,6 +364,7 @@ export const FORMS_REFERENCE: FormRefCategory[] = [
       {
         name: "Passport/travel consent",
         note: "extra written consent is needed before taking a looked-after child abroad; ask your CSW early, it isn't quick to arrange.",
+        url: "https://assets.publishing.service.gov.uk/media/5a7b4f6ded915d3ed90638df/looked-after-children-passports.pdf",
       },
       {
         name: "Life story work / memory box materials",
