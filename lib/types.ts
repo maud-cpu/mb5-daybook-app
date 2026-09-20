@@ -466,4 +466,6 @@ export type PendingItem = Partial<EntryRecord> & {
   unmatched?: string[];
   /** Kids whose Mockingbird hub carer should be emailed once this item is saved. */
   send_hub?: string[];
+  /** When flag is "reminder": the date it should actually appear on the calendar/Today. */
+  reminder_date?: string | null;
 };
