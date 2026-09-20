@@ -22,10 +22,12 @@ export default function ChildClubs({ childId }: { childId: string }) {
   const supabase = createClient();
   const [clubs, setClubs] = useState<Club[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState("");
 
   async function load() {
     setLoaded(false);
-    const { data } = await supabase.from("child_clubs").select("*").eq("child_id", childId).order("weekday");
+    const { data, error: err } = await supabase.from("child_clubs").select("*").eq("child_id", childId).order("weekday");
+    if (err) setError(err.message);
     setClubs((data as Club[]) ?? []);
     setLoaded(true);
   }
@@ -37,19 +39,26 @@ export default function ChildClubs({ childId }: { childId: string }) {
   }, [childId]);
 
   async function addClub() {
-    await supabase.from("child_clubs").insert({ child_id: childId, club_name: "", weekday: 0 });
+    setError("");
+    const { error: err } = await supabase.from("child_clubs").insert({ child_id: childId, club_name: "", weekday: 0 });
+    if (err) {
+      setError(err.message);
+      return;
+    }
     load();
   }
 
-  function updateClub(id: string, patch: Partial<Club>) {
+  async function updateClub(id: string, patch: Partial<Club>) {
     setClubs((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-    supabase.from("child_clubs").update(patch).eq("id", id);
+    const { error: err } = await supabase.from("child_clubs").update(patch).eq("id", id);
+    if (err) setError(err.message);
   }
 
   async function removeClub(id: string) {
     if (!confirm("Remove this club?")) return;
     setClubs((prev) => prev.filter((c) => c.id !== id));
-    await supabase.from("child_clubs").delete().eq("id", id);
+    const { error: err } = await supabase.from("child_clubs").delete().eq("id", id);
+    if (err) setError(err.message);
   }
 
   if (!loaded) return <p className="hint">Loading…</p>;
@@ -60,6 +69,7 @@ export default function ChildClubs({ childId }: { childId: string }) {
         Shows up automatically on the calendar every week on the day you set — no need to add it separately as a
         reminder. Also pulled into the Handover document.
       </p>
+      {error && <p style={{ color: "var(--danger)", fontSize: 14 }}>Couldn&apos;t save: {error}</p>}
       {clubs.map((c) => (
         <div className="item" key={c.id}>
           <div className="row">
