@@ -271,10 +271,12 @@ export const FORMS_REFERENCE: FormRefCategory[] = [
       {
         name: "Placement Plan / Placement Agreement",
         note: "the day-to-day arrangements for that child, agreed with the CSW; where the delegated authority for that placement actually lives.",
+        url: "https://surreycs.trixonline.co.uk/chapter/placements-in-foster-care",
       },
       {
         name: "Delegated Authority Decision Support Record",
         note: "what you can consent to yourself (school trips, haircuts, sleepovers, routine medical/dental) versus what needs the CSW or a parent's sign-off.",
+        url: "https://surreycs.trixonline.co.uk/chapter/delegation-of-authority-to-foster-carers-and-residential-workers",
       },
       {
         name: "Health/medical consent record",
@@ -283,6 +285,7 @@ export const FORMS_REFERENCE: FormRefCategory[] = [
       {
         name: "Personal Education Plan (PEP)",
         note: "the school-held plan covering a looked-after child's education and how the pupil premium plus is spent, reviewed at least termly.",
+        url: "https://surreycs.trixonline.co.uk/chapter/supporting-the-education-and-promoting-the-achievement-of-children-with-a-social-worker-looked-after-and-previously-looked-after-children",
       },
       {
         name: "Immunisation, dental & optician consent",
@@ -307,6 +310,7 @@ export const FORMS_REFERENCE: FormRefCategory[] = [
       {
         name: "Your household's Safer Caring policy",
         note: "your own written plan, reviewed with your SSW.",
+        url: "https://surreycs.trixonline.co.uk/chapter/supervision-and-support-of-foster-carers",
       },
       {
         name: "Behaviour management / positive handling policy",
@@ -348,6 +352,7 @@ export const FORMS_REFERENCE: FormRefCategory[] = [
       {
         name: "Supervision agreement",
         note: "how often your SSW visits and supervises you, agreed and reviewed alongside your approval.",
+        url: "https://surreycs.trixonline.co.uk/chapter/supervision-and-support-of-foster-carers",
       },
     ],
   },
@@ -385,6 +390,7 @@ export const FORMS_REFERENCE: FormRefCategory[] = [
       {
         name: "LAC Review invitation & minutes",
         note: "the formal review of the child's Care Plan, held regularly (usually every 6 months once settled); you'll be asked for a written report beforehand.",
+        url: "https://surreycs.trixonline.co.uk/chapter/appointment-and-role-of-independent-reviewing-officers",
       },
       {
         name: "Care Plan",
@@ -397,10 +403,12 @@ export const FORMS_REFERENCE: FormRefCategory[] = [
       {
         name: "Pathway Plan (16+)",
         note: "replaces some of the above for young people preparing to leave care.",
+        url: "https://surreycs.trixonline.co.uk/chapter/leaving-care-and-transition",
       },
       {
         name: "Staying Put agreement (18+)",
         note: "the arrangement for a young person remaining with you past 18.",
+        url: "https://surreycs.trixonline.co.uk/chapter/staying-put",
       },
     ],
   },
