@@ -297,6 +297,7 @@ export const FORMS_REFERENCE: FormRefCategory[] = [
       {
         name: "Missing from care/home protocol",
         note: "what to do and who to call first if a child goes missing.",
+        url: "https://assets.publishing.service.gov.uk/media/5a7c0f7aed915d74c83620d7/Statutory_guidance_on_children_who_run_away_or_go_missing_from_home_or_care_consultation_-_final.pdf",
       },
       {
         name: "Allegations & complaints procedure",
@@ -417,6 +418,25 @@ export const FORMS_REFERENCE: FormRefCategory[] = [
     ],
   },
 ];
+
+// Things To Do surfaces a document only when a flagged note actually calls
+// for one -- not the whole reference list on every visit. Only flags with an
+// unambiguous, directly-relevant document are mapped; anything looser is
+// left for the full list on Training & Resources instead.
+const FLAG_RELATED_FORM: Partial<Record<FlagKey, string>> = {
+  missing: "Missing from care/home protocol",
+  allegation: "Allegations & complaints procedure",
+};
+
+export function relatedFormFor(flag: string): FormRefItem | undefined {
+  const wanted = FLAG_RELATED_FORM[flag as FlagKey];
+  if (!wanted) return undefined;
+  for (const cat of FORMS_REFERENCE) {
+    const item = cat.items.find((i) => i.name === wanted);
+    if (item?.url) return item;
+  }
+  return undefined;
+}
 
 export type PendingItem = Partial<EntryRecord> & {
   bucket: Bucket;

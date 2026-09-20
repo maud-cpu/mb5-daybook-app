@@ -13,8 +13,7 @@ import {
   missingNumbersItems,
   unreportedIncidentItems,
 } from "@/lib/thingsToDo";
-import { FLAGS, Reminder } from "@/lib/types";
-import FormsReference from "@/components/FormsReference";
+import { FLAGS, Reminder, relatedFormFor } from "@/lib/types";
 
 type FollowUp = {
   id: string;
@@ -223,8 +222,6 @@ export default function ThingsToDoCard() {
     <div className="card" style={{ borderLeft: `4px solid ${anyUrgent ? "var(--danger)" : "var(--marker)"}` }}>
       <h3>Things to do{anyUrgent ? " ⚠" : ""}</h3>
 
-      <FormsReference />
-
       {due.map((x) => {
         // A "fill this in" item (missing basics for a child) points at where to
         // actually go do it. Every other item is just informational -- reading
@@ -251,6 +248,7 @@ export default function ThingsToDoCard() {
       {followUps.map((f) => {
         const open = openId === f.id;
         const urgent = FLAGS[f.flag as keyof typeof FLAGS]?.urgent;
+        const relatedForm = relatedFormFor(f.flag);
         return (
           <div
             key={f.id}
@@ -269,6 +267,14 @@ export default function ThingsToDoCard() {
                 </div>
                 {followUpGuidance(f) && <div className="note">{followUpGuidance(f)}</div>}
                 {f.training_note && f.flag !== "training" && <div className="note">💡 {f.training_note}</div>}
+                {relatedForm && (
+                  <div className="note">
+                    📄{" "}
+                    <a href={relatedForm.url} target="_blank" rel="noopener noreferrer">
+                      {relatedForm.name} ↗
+                    </a>
+                  </div>
+                )}
                 <button className="chip on" onClick={() => markFollowUpDone(f.id)}>
                   Mark done
                 </button>{" "}
