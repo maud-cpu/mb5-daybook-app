@@ -323,6 +323,11 @@ export const FORMS_REFERENCE: FormRefCategory[] = [
     label: "Your own approval",
     items: [
       {
+        name: "Fostering Services: National Minimum Standards",
+        note: "the DfE standards every fostering service is inspected against -- worth knowing what you're entitled to expect from your agency, not just what's expected of you.",
+        url: "https://minimumstandards.org/contents/fostering-services-contents",
+      },
+      {
         name: "Foster Carer Agreement & annual review paperwork",
         note: "the terms of your approval, reviewed yearly by the fostering panel.",
       },
