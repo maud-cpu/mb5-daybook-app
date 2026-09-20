@@ -27,6 +27,30 @@ export function fmtDate(iso: string): string {
   return new Date(iso + "T12:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
+// Monday-start weekday index (0 = Monday ... 6 = Sunday) -- the convention
+// used throughout the calendar (the month grid, and a club's chosen day).
+export function mondayStartWeekday(dateIso: string): number {
+  const jsDay = new Date(dateIso + "T12:00").getDay();
+  return (jsDay + 6) % 7;
+}
+
+export function fmtClubTime(from: string, to: string): string {
+  const f = (t: string) => {
+    if (!t) return "";
+    const [h, m] = t.split(":").map(Number);
+    const suffix = h < 12 ? "am" : "pm";
+    const h12 = h % 12 || 12;
+    return m ? `${h12}:${String(m).padStart(2, "0")}${suffix}` : `${h12}${suffix}`;
+  };
+  if (from && to) return `${f(from)}-${f(to)}`;
+  return f(from);
+}
+
+export function clubText(clubName: string, timeFrom: string, timeTo: string): string {
+  const time = fmtClubTime(timeFrom, timeTo);
+  return time ? `${clubName} (${time})` : clubName;
+}
+
 // A fixed palette rather than generated colours, so every colour stays
 // legible on a light background and distinct from its neighbours.
 const PERSON_PALETTE = [
