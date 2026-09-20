@@ -8,6 +8,38 @@ import { Reminder, reminderCategoryLabel } from "@/lib/types";
 
 type Item = { label: string; name: string; value: string };
 
+function normalizePhone(v: string): string {
+  return v.replace(/[\s\-()]/g, "");
+}
+
+// Siblings often share the same CSW (or CSW's manager) -- when two entries
+// turn out to be the same phone number, that's one person, not two lines to
+// scroll past. Merge them into a single line instead of repeating the number.
+function dedupePhoneItems(items: Item[]): Item[] {
+  const groups = new Map<string, Item[]>();
+  const order: string[] = [];
+  items.forEach((it) => {
+    const key = normalizePhone(it.value);
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      order.push(key);
+    }
+    groups.get(key)!.push(it);
+  });
+  return order.map((key) => {
+    const group = groups.get(key)!;
+    if (group.length === 1) return group[0];
+    const first = group[0];
+    const roleMatch = first.label.match(/^.*?'s (.+)$/);
+    const role = roleMatch?.[1];
+    if (role && group.every((g) => g.label.endsWith(`'s ${role}`))) {
+      const names = group.map((g) => g.label.slice(0, g.label.length - `'s ${role}`.length));
+      return { ...first, label: `${names.join(" & ")}'s ${role}` };
+    }
+    return { ...first, label: group.map((g) => g.label).join(" / ") };
+  });
+}
+
 export default function QuickAccessButtons() {
   const supabase = createClient();
   const router = useRouter();
@@ -71,7 +103,7 @@ export default function QuickAccessButtons() {
         ?.filter((c) => c.email && !seen.has(c.email.toLowerCase()))
         .forEach((c) => out.push({ label: c.label || "Contact", name: c.name || "", value: c.email }));
     }
-    setItems(out);
+    setItems(kind === "phone" ? dedupePhoneItems(out) : out);
     setLoading(false);
   }
 
