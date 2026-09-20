@@ -37,12 +37,18 @@ export default function ComposeEmail({
 
   useEffect(() => {
     async function load() {
-      const [{ data: contacts }, { data: household }, { data: kids }, { data: recs }] = await Promise.all([
+      const [{ data: contacts }, { data: household }, { data: kids }, { data: hhKids }, { data: recs }] = await Promise.all([
         supabase.from("contacts").select("id, label, name, phone, email"),
         supabase.from("household").select("ssw_name, ssw_email, ssw_manager_name, ssw_manager_email").maybeSingle(),
         supabase.from("children").select("name, basics, hub_carer_name, hub_carer_email"),
+        // A child in "Children in your household" can be an actual foster
+        // placement too, not just the carer's own/adopted/kinship child --
+        // they need to be selectable and get their CSW/hub carer offered as
+        // a recipient the same as any other child.
+        supabase.from("household_children").select("name, basics, hub_carer_name, hub_carer_email"),
         supabase.from("records").select("*").order("created_at", { ascending: false }),
       ]);
+      const allKids = [...(kids ?? []), ...(hhKids ?? [])];
       // Show everyone possible, even without an email on file yet -- a name
       // is enough to appear in the draft ("Dear Rhodri...") and be reminded
       // to fill the email in later.
@@ -51,7 +57,7 @@ export default function ComposeEmail({
       if (household?.ssw_name) opts.push({ key: "h:ssw", label: "SSW", name: household.ssw_name, email: household.ssw_email || "" });
       if (household?.ssw_manager_name)
         opts.push({ key: "h:sswm", label: "SSW's manager", name: household.ssw_manager_name, email: household.ssw_manager_email || "" });
-      const kidRows = (kids as { name: string; basics: Record<string, string>; hub_carer_name: string; hub_carer_email: string }[] | null) ?? [];
+      const kidRows = allKids as { name: string; basics: Record<string, string>; hub_carer_name: string; hub_carer_email: string }[];
       kidRows.forEach((c) => {
         const csw = c.basics?.csw?.trim();
         if (csw) opts.push({ key: "csw:" + c.name, label: `${c.name}'s CSW`, name: csw.split(" — ")[0], email: extractEmail(csw) });
@@ -64,7 +70,7 @@ export default function ComposeEmail({
         if (hubKey) setSelectedRecipients(["hub:" + presetChildName]);
       }
       if (presetEntryId) setSelectedEntries([presetEntryId]);
-      setChildNames((kids ?? []).map((k: { name: string }) => k.name));
+      setChildNames(allKids.map((k) => k.name as string));
       setRecords((recs as EntryRecord[]) ?? []);
     }
 

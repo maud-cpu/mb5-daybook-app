@@ -68,6 +68,7 @@ export default function ThingsToDoCard() {
     const [
       { data: incidents },
       { data: children },
+      { data: householdChildren },
       { data: household },
       { data: settings },
       { data: courses },
@@ -79,6 +80,10 @@ export default function ThingsToDoCard() {
     ] = await Promise.all([
       supabase.from("records").select("id, text, created_at, reported").eq("bucket", "incident"),
       supabase.from("children").select("id, name, born, family, basics"),
+      // A child in "Children in your household" can be an actual foster
+      // placement too, not just the carer's own/adopted/kinship child --
+      // they need the same missing-CSW/GP/duty-line nudges as any other.
+      supabase.from("household_children").select("id, name, born, basics"),
       supabase.from("household").select("edt").maybeSingle(),
       supabase.from("carer_settings").select("invoice_day, pay_day").maybeSingle(),
       supabase.from("shared_training_catalog").select("title").eq("group_key", "3yr").eq("archived", false),
@@ -112,13 +117,14 @@ export default function ThingsToDoCard() {
     const dismissedList = (dismissed as DismissedDue[] | null) ?? [];
     const dismissedKeys = new Set(dismissedList.map((d) => d.key));
 
+    const allChildren = [...(children ?? []), ...(householdChildren ?? [])];
     setDue(
       [
         ...unreportedIncidentItems(incidents ?? []),
         ...invoiceMonthItems(settings?.invoice_day ?? 1, settings?.pay_day ?? 28, !!unpaidClaimed?.length),
-        ...bandChangeItems(children ?? []),
+        ...bandChangeItems(allChildren),
         ...trainingItems,
-        ...missingNumbersItems(children ?? []),
+        ...missingNumbersItems(allChildren),
         ...edtMissingItem(household?.edt ?? ""),
         ...dueReminders(remindersList),
       ].filter((x) => !dismissedKeys.has(dismissKeyFor(x.key))),

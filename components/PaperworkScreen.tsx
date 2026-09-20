@@ -48,13 +48,20 @@ export default function PaperworkScreen() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: recs }, { data: kids }, { data: r }] = await Promise.all([
+      const [{ data: recs }, { data: kids }, { data: hhKids }, { data: r }] = await Promise.all([
         supabase.from("records").select("*").order("date", { ascending: false }),
         supabase.from("children").select("id, name, born, family"),
+        // A child in "Children in your household" can be an actual foster
+        // placement too, not just the carer's own/adopted/kinship child --
+        // include them so month reports and expense filters cover them too.
+        supabase.from("household_children").select("id, name, born"),
         supabase.from("shared_rates").select("*").single(),
       ]);
       setRecords((recs as EntryRecord[]) ?? []);
-      setChildren((kids as Child[]) ?? []);
+      setChildren([
+        ...((kids as Child[]) ?? []),
+        ...(((hhKids as Pick<Child, "id" | "name" | "born">[]) ?? []).map((h) => ({ ...h, family: "" }) as Child)),
+      ]);
       setRates(r as Rates);
     }
     load();
