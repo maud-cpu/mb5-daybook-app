@@ -337,7 +337,7 @@ export default function AboutScreen() {
         text: `${childName ? childName + "'s " : ""}${label}`,
         date: value,
         category: "surrey",
-        child: childName,
+        people: childName ? [childName] : [],
         done: false,
         done_at: null,
       },

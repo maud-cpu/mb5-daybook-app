@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
 import { REMINDER_CATEGORIES, REPEAT_OPTIONS, Reminder, reminderCategoryLabel } from "@/lib/types";
 import { addDays, fmtDate, occurrenceDates } from "@/lib/calendarHelpers";
+import PeoplePicker, { PersonOption } from "@/components/PeoplePicker";
 
 // A face-to-face training session (from the Training tab) isn't a real row in
 // the reminders table -- it's read-only here and just merged into the same
@@ -13,7 +14,19 @@ import { addDays, fmtDate, occurrenceDates } from "@/lib/calendarHelpers";
 // check. Marked by this id prefix rather than a real category.
 const F2F_PREFIX = "f2f:";
 function f2fReminder(id: string, text: string, date: string): Reminder {
-  return { id: F2F_PREFIX + id, text, date, done: false, done_at: null, category: "", child: "", amount: null, series_id: null, source_text: "" };
+  return {
+    id: F2F_PREFIX + id,
+    text,
+    date,
+    done: false,
+    done_at: null,
+    category: "training",
+    child: "",
+    people: [],
+    amount: null,
+    series_id: null,
+    source_text: "",
+  };
 }
 
 function inNextDays(days: number): string {
@@ -22,21 +35,21 @@ function inNextDays(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-type Draft = { text: string; date: string; category: string; child: string; amount: string };
+type Draft = { text: string; date: string; category: string; people: string[]; amount: string };
 
 function draftFrom(r: Reminder): Draft {
-  return { text: r.text, date: r.date, category: r.category, child: r.child, amount: r.amount != null ? String(r.amount) : "" };
+  return { text: r.text, date: r.date, category: r.category, people: r.people, amount: r.amount != null ? String(r.amount) : "" };
 }
 
 export default function TodayCard() {
   const supabase = createClient();
   const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [childNames, setChildNames] = useState<string[]>([]);
+  const [personOptions, setPersonOptions] = useState<PersonOption[]>([]);
   const [adding, setAdding] = useState(false);
   const [text, setText] = useState("");
   const [date, setDate] = useState(today());
   const [category, setCategory] = useState<string>(REMINDER_CATEGORIES[0][0]);
-  const [child, setChild] = useState("");
+  const [people, setPeople] = useState<string[]>([]);
   const [amount, setAmount] = useState("");
   const [repeat, setRepeat] = useState<string>("none");
   const [until, setUntil] = useState(inNextDays(12 * 7));
@@ -46,13 +59,15 @@ export default function TodayCard() {
   const [showSourceFor, setShowSourceFor] = useState<string | null>(null);
 
   async function load() {
-    const [{ data: rem }, { data: kids }, { data: hhKids }, { data: f2fCourses }, { data: f2fProgress }] = await Promise.all([
-      supabase.from("reminders").select("*").eq("done", false).order("date"),
-      supabase.from("children").select("name").order("name"),
-      supabase.from("household_children").select("name").order("name"),
-      supabase.from("shared_training_catalog").select("id, title, session_date").eq("is_face_to_face", true).eq("archived", false),
-      supabase.from("training_progress").select("course_title, session_date").not("session_date", "is", null),
-    ]);
+    const [{ data: rem }, { data: kids }, { data: hhKids }, { data: adults }, { data: f2fCourses }, { data: f2fProgress }] =
+      await Promise.all([
+        supabase.from("reminders").select("*").eq("done", false).order("date"),
+        supabase.from("children").select("name").order("name"),
+        supabase.from("household_children").select("name").order("name"),
+        supabase.from("household_adults").select("name").order("name"),
+        supabase.from("shared_training_catalog").select("id, title, session_date").eq("is_face_to_face", true).eq("archived", false),
+        supabase.from("training_progress").select("course_title, session_date").not("session_date", "is", null),
+      ]);
     const myDateByTitle: Record<string, string> = {};
     (f2fProgress ?? []).forEach((p: { course_title: string; session_date: string | null }) => {
       if (p.session_date) myDateByTitle[p.course_title] = p.session_date;
@@ -64,9 +79,10 @@ export default function TodayCard() {
       })
       .filter((r): r is Reminder => r !== null);
     setReminders([...((rem as Reminder[]) ?? []), ...f2fReminders]);
-    setChildNames([
-      ...((kids as { name: string }[] | null) ?? []).map((c) => c.name),
-      ...((hhKids as { name: string }[] | null) ?? []).map((c) => c.name),
+    setPersonOptions([
+      ...((kids as { name: string }[] | null) ?? []).map((c) => ({ name: c.name, kind: "child" as const })),
+      ...((hhKids as { name: string }[] | null) ?? []).map((c) => ({ name: c.name, kind: "child" as const })),
+      ...((adults as { name: string }[] | null) ?? []).map((a) => ({ name: a.name, kind: "adult" as const })),
     ]);
     setLoaded(true);
   }
@@ -79,7 +95,7 @@ export default function TodayCard() {
 
   async function addReminder() {
     if (!text.trim() || !date) return;
-    const base = { text: text.trim(), category, child, amount: amount ? Number(amount) : null };
+    const base = { text: text.trim(), category, people, amount: amount ? Number(amount) : null };
     if (repeat === "none") {
       await supabase.from("reminders").insert({ ...base, date });
     } else {
@@ -89,7 +105,7 @@ export default function TodayCard() {
     }
     setText("");
     setAmount("");
-    setChild("");
+    setPeople([]);
     setRepeat("none");
     setAdding(false);
     load();
@@ -111,7 +127,7 @@ export default function TodayCard() {
       text: editDraft.text.trim(),
       date: editDraft.date,
       category: editDraft.category,
-      child: editDraft.child,
+      people: editDraft.people,
       amount: editDraft.amount ? Number(editDraft.amount) : null,
     };
     setReminders((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -162,41 +178,34 @@ export default function TodayCard() {
             ))}
           </select>
         </div>
-        <div className="row" style={{ marginTop: 6 }}>
-          <select value={editDraft.child} onChange={(e) => setEditDraft({ ...editDraft, child: e.target.value })}>
-            <option value="">— which child (optional) —</option>
-            {childNames.map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-          <input
-            type="number"
-            step="0.01"
-            placeholder="£ if a payment"
-            style={{ flex: "0 0 130px" }}
-            value={editDraft.amount}
-            onChange={(e) => setEditDraft({ ...editDraft, amount: e.target.value })}
-          />
+        <PeoplePicker options={personOptions} selected={editDraft.people} onChange={(v) => setEditDraft({ ...editDraft, people: v })} />
+        <input
+          type="number"
+          step="0.01"
+          placeholder="£ if a payment"
+          style={{ marginTop: 6 }}
+          value={editDraft.amount}
+          onChange={(e) => setEditDraft({ ...editDraft, amount: e.target.value })}
+        />
+        <div style={{ marginTop: 6 }}>
+          <button className="chip" onClick={() => saveEdit(r.id)}>
+            Save
+          </button>{" "}
+          <button className="chip" onClick={() => setEditingId(null)}>
+            Cancel
+          </button>{" "}
+          <button className="chip" onClick={() => deleteOne(r)}>
+            Delete
+          </button>
+          {r.series_id && (
+            <>
+              {" "}
+              <button className="chip" onClick={() => stopRepeating(r)}>
+                Stop repeating (this & future)
+              </button>
+            </>
+          )}
         </div>
-        <button className="chip" style={{ marginTop: 6 }} onClick={() => saveEdit(r.id)}>
-          Save
-        </button>{" "}
-        <button className="chip" onClick={() => setEditingId(null)}>
-          Cancel
-        </button>{" "}
-        <button className="chip" onClick={() => deleteOne(r)}>
-          Delete
-        </button>
-        {r.series_id && (
-          <>
-            {" "}
-            <button className="chip" onClick={() => stopRepeating(r)}>
-              Stop repeating (this & future)
-            </button>
-          </>
-        )}
       </div>
     );
   }
@@ -216,7 +225,7 @@ export default function TodayCard() {
             <span style={{ cursor: "pointer" }} onClick={() => startEdit(r)}>
               {reminderCategoryLabel(r.category)} {r.text}
               {r.series_id ? " 🔁" : ""}
-              {r.child ? ` · ${r.child}` : ""}
+              {r.people.length ? ` · ${r.people.join(", ")}` : ""}
               {r.date !== t && <small className="muted"> — {fmtDate(r.date)}</small>}
             </span>
           )}
@@ -284,24 +293,15 @@ export default function TodayCard() {
               ))}
             </select>
           </div>
-          <div className="row" style={{ marginTop: 6 }}>
-            <select value={child} onChange={(e) => setChild(e.target.value)}>
-              <option value="">— which child (optional) —</option>
-              {childNames.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-            <input
-              type="number"
-              step="0.01"
-              placeholder="£ if a payment"
-              style={{ flex: "0 0 130px" }}
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-          </div>
+          <PeoplePicker options={personOptions} selected={people} onChange={setPeople} />
+          <input
+            type="number"
+            step="0.01"
+            placeholder="£ if a payment"
+            style={{ marginTop: 6 }}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
           <div className="row" style={{ marginTop: 6 }}>
             <select
               value={repeat}

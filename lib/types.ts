@@ -227,7 +227,9 @@ export type Reminder = {
   done: boolean;
   done_at: string | null;
   category: string;
+  /** @deprecated superseded by people -- still a real column, but no longer written to */
   child: string;
+  people: string[];
   amount: number | null;
   series_id: string | null;
   source_text: string;
@@ -243,7 +245,11 @@ export const REPEAT_OPTIONS = [
 export const REMINDER_CATEGORIES = [
   ["school", "🏫 School"],
   ["club", "🧩 Club"],
+  ["training", "🎓 Training"],
   ["surrey", "🏛️ Surrey / agency"],
+  ["medical", "🏥 Medical / appointment"],
+  ["family", "👪 Family contact"],
+  ["household", "🏠 Household"],
   ["personal", "📌 Personal"],
 ] as const;
 
