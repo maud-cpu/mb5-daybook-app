@@ -227,20 +227,12 @@ export default function ThingsToDoCard() {
 
       {due.map((x) => {
         // A "fill this in" item (missing basics for a child) points at where to
-        // actually go do it -- it should only ever leave this list once that
-        // field is filled in and this stops being generated, never just from
-        // being tapped. Every other item has nowhere to "go do", so tapping the
-        // text is a shortcut for the Dismiss/Done button next to it.
+        // actually go do it. Every other item is just informational -- reading
+        // it should never remove it; only the explicit Dismiss/Done button does.
         const goTo = x.key.startsWith("nums-") ? "/dashboard/about" : null;
         return (
           <div key={x.key} className="rec" style={x.urgent ? { color: "var(--danger)" } : undefined}>
-            {goTo ? (
-              <Link href={goTo}>{x.text}</Link>
-            ) : (
-              <span onClick={() => dismissDue(x)} style={{ cursor: "pointer" }}>
-                {x.text}
-              </span>
-            )}
+            {goTo ? <Link href={goTo}>{x.text}</Link> : <span>{x.text}</span>}
             <button className="chip" style={{ marginLeft: 8 }} onClick={() => dismissDue(x)}>
               {x.key.startsWith("rem-") ? "Done" : "Dismiss"}
             </button>
