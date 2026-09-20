@@ -232,6 +232,19 @@ export default function CaptureScreen() {
       showToast("Couldn't save: " + error.message);
       return;
     }
+    // A "remind me" note on its own was previously just tagged and then never
+    // seen again -- nothing ever turned it into an actual calendar/Today
+    // entry. It now also creates a real reminder for the date the carer
+    // meant (or today, if they didn't give one).
+    const reminderRows = pending
+      .filter((p) => p.flag === "reminder")
+      .map((p) => ({
+        text: p.flag_note || p.text,
+        date: p.reminder_date || today(),
+        category: "personal",
+        people: p.kids,
+      }));
+    if (reminderRows.length) await supabase.from("reminders").insert(reminderRows);
     showToast(`Saved ${rows.length} item${rows.length > 1 ? "s" : ""}`);
     const queue: { child: string; entryId: string }[] = [];
     pending.forEach((p, idx) => {
@@ -539,11 +552,26 @@ export default function CaptureScreen() {
               {p.flag && (
                 <div className="note">
                   {["reminder", "training"].includes(p.flag) ? (
-                    <textarea
-                      placeholder={p.flag === "training" ? "Suggested course — edit if needed" : "What to remind you to do"}
-                      value={p.flag_note ?? ""}
-                      onChange={(e) => updatePending(i, { flag_note: e.target.value })}
-                    />
+                    <>
+                      <textarea
+                        placeholder={p.flag === "training" ? "Suggested course — edit if needed" : "What to remind you to do"}
+                        value={p.flag_note ?? ""}
+                        onChange={(e) => updatePending(i, { flag_note: e.target.value })}
+                      />
+                      {p.flag === "reminder" && (
+                        <div className="row" style={{ marginTop: 6, alignItems: "center" }}>
+                          <span className="muted" style={{ flex: "0 0 auto" }}>
+                            Remind me on
+                          </span>
+                          <input
+                            type="date"
+                            style={{ flex: "0 0 150px" }}
+                            value={p.reminder_date || today()}
+                            onChange={(e) => updatePending(i, { reminder_date: e.target.value })}
+                          />
+                        </div>
+                      )}
+                    </>
                   ) : (
                     FLAGS[p.flag as keyof typeof FLAGS]?.guidance
                   )}

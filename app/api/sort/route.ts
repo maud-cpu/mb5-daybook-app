@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { backstopFlag, FLAG_TRAINING, namesInText } from "@/lib/keywordFlags";
+import { today } from "@/lib/domain";
 import { BUCKETS, DAYCARE_REASONS, FlagKey, PendingItem } from "@/lib/types";
 
 const FLAG_KEYS = [
@@ -103,14 +104,15 @@ export async function POST(req: NextRequest) {
   }
 
   const sys = `You sort a UK foster carer's spoken notes into buckets. Buckets: diary (day-to-day observations about a child), supervision (things to raise with the supervising social worker at next supervision), expenses (money spent, miles driven, or day care / babysitting provided for other carers' children), meds (a specific dose of medication given to a child), sw (log of contact with a social worker: calls, visits, what was agreed), incident (serious events needing formal reporting: injury, unexplained bruise, allegation, restraint, going missing, police), scratch (anything the carer says to "just record" or that fits nowhere).
+Today's date is ${today()} -- resolve anything relative ("next Friday", "in two weeks", "the 3rd") against that, in the correct year.
 Children known: ${names.join(", ") || "unknown"}. Match spoken names to these where obvious. If the carer names where something goes, obey. Otherwise choose sensibly; use scratch when unsure. Split into separate items if there are several things. Keep the carer's words, tidied for a written record, British English. Never add facts.
 "kids" for each item must only be children the carer actually names or unambiguously refers to (e.g. "she"/"her" meaning the one child just named) in THAT item's own text — never add a child who isn't mentioned there, even if they're mentioned in a different item from the same note.
 For expenses set "kind": "purchase" (amount in pounds), "mileage" (miles driven, one item per journey, round trip if they say so), or "daycare" (care given: from/to clock times if the carer says them, otherwise hours; kids = the child cared for, overnight true if they stayed the night). Daycare and overnight are always ONE ITEM PER CHILD, even when several children were cared for on the same occasion at the same time. Overnight is set INDIVIDUALLY per child based on what actually happened to THAT child.
 For meds, set "medName", "dose", "given" (HH:MM), and "givenBy". One item per child per medicine given.
-Also set "flag" on any item that needs a follow-up: one of ${FLAG_KEYS.join(", ")}, or null. Use "reminder" only when the carer explicitly asks to be reminded — set "flagNote" to that instruction. Never set "flag" to "training". Set a safeguarding flag both when the text describes something happening, AND when the carer is asking or wondering whether a behaviour or mark might be a sign of one of these things (e.g. "is this a sign of abuse?") — that question is itself exactly the kind of concern that needs the guidance and support surfaced, not just a literal account of abuse having occurred. Still be cautious about flagging things that are clearly unrelated.
+Also set "flag" on any item that needs a follow-up: one of ${FLAG_KEYS.join(", ")}, or null. Use "reminder" only when the carer explicitly asks to be reminded — set "flagNote" to that instruction, and "reminderDate" to the date they should actually be reminded (resolve a relative date as above; if they gave no date at all, use today's date). Never set "flag" to "training". Set a safeguarding flag both when the text describes something happening, AND when the carer is asking or wondering whether a behaviour or mark might be a sign of one of these things (e.g. "is this a sign of abuse?") — that question is itself exactly the kind of concern that needs the guidance and support surfaced, not just a literal account of abuse having occurred. Still be cautious about flagging things that are clearly unrelated.
 Separately, consider whether any courses from this list could help (title, with what it covers in brackets where known): ${courses.join(" | ")}. Only ever pick a title that appears verbatim in this list -- never suggest a book, article, video or course that isn't in it, even if you recognise a similarly-named real one; if nothing in the list actually fits, return an empty list rather than inventing something. Set "training" to a list of every one plausibly useful (often none, sometimes more than one), each as {"course":"<the exact title only, without the bracketed description>","why":"<one short clause, specific to why THIS course over the others>"}; empty list if none.
 Reason for day care, if said, is one of: ${DAYCARE_REASONS.join("/")}.
-Respond with ONLY a JSON array, no prose, no markdown: [{"bucket":"diary","child":"name or empty","text":"...","kind":"purchase|mileage|daycare|null","amount":number|null,"miles":number|null,"from":"HH:MM or null","to":"HH:MM or null","reason":"string or null","hours":number|null,"kids":["names"],"overnight":false,"medName":"string or null","dose":"string or null","given":"HH:MM or null","givenBy":"string or null","flag":"string or null","flagNote":"string or null","training":[{"course":"string","why":"string"}]}]`;
+Respond with ONLY a JSON array, no prose, no markdown: [{"bucket":"diary","child":"name or empty","text":"...","kind":"purchase|mileage|daycare|null","amount":number|null,"miles":number|null,"from":"HH:MM or null","to":"HH:MM or null","reason":"string or null","hours":number|null,"kids":["names"],"overnight":false,"medName":"string or null","dose":"string or null","given":"HH:MM or null","givenBy":"string or null","flag":"string or null","flagNote":"string or null","reminderDate":"YYYY-MM-DD or null","training":[{"course":"string","why":"string"}]}]`;
 
   try {
     const anthropic = new Anthropic({ apiKey });
@@ -190,6 +192,12 @@ Respond with ONLY a JSON array, no prose, no markdown: [{"bucket":"diary","child
         given_by: p.givenBy || "",
         flag,
         flag_note: flagNote,
+        reminder_date:
+          flag === "reminder" && typeof p.reminderDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(p.reminderDate)
+            ? p.reminderDate
+            : flag === "reminder"
+              ? today()
+              : null,
         training_note: trainingNote,
         unmatched,
       };
