@@ -60,6 +60,7 @@ export default function ThingsToDoCard() {
   const [doneReminders, setDoneReminders] = useState<Reminder[]>([]);
   const [dismissedDue, setDismissedDue] = useState<DismissedDue[]>([]);
   const [showDone, setShowDone] = useState(false);
+  const [showRoutine, setShowRoutine] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -218,24 +219,50 @@ export default function ThingsToDoCard() {
 
   const anyUrgent = due.some((x) => x.urgent) || followUps.some((f) => FLAGS[f.flag as keyof typeof FLAGS]?.urgent);
 
+  // Missing CSW/GP/duty-line details and a missing EDT number are safeguarding
+  // basics, not routine nagging -- if they sat in the same dismissable list as
+  // "send last month's expenses claim", a quick tidy-up tap could bury a gap
+  // that actually matters. These two have nowhere to hide: no Dismiss button,
+  // and they only ever leave this list once the field is actually filled in.
+  const isEssential = (x: DueItem) => x.key.startsWith("nums-") || x.key === "edt";
+  const essentialDue = due.filter(isEssential);
+  const routineDue = due.filter((x) => !isEssential(x));
+
   return (
     <div className="card" style={{ borderLeft: `4px solid ${anyUrgent ? "var(--danger)" : "var(--marker)"}` }}>
       <h3>Things to do{anyUrgent ? " ⚠" : ""}</h3>
 
-      {due.map((x) => {
-        // A "fill this in" item (missing basics for a child) points at where to
-        // actually go do it. Every other item is just informational -- reading
-        // it should never remove it; only the explicit Dismiss/Done button does.
-        const goTo = x.key.startsWith("nums-") ? "/dashboard/about" : null;
-        return (
-          <div key={x.key} className="rec" style={x.urgent ? { color: "var(--danger)" } : undefined}>
-            {goTo ? <Link href={goTo}>{x.text}</Link> : <span>{x.text}</span>}
-            <button className="chip" style={{ marginLeft: 8 }} onClick={() => dismissDue(x)}>
-              {x.key.startsWith("rem-") ? "Done" : "Dismiss"}
-            </button>
-          </div>
-        );
-      })}
+      {essentialDue.length > 0 && (
+        <>
+          <b style={{ display: "block", fontSize: 13, color: "var(--grey)" }}>Needs your attention</b>
+          {essentialDue.map((x) => (
+            <div key={x.key} className="rec" style={x.urgent ? { color: "var(--danger)" } : undefined}>
+              <Link href="/dashboard/about">{x.text}</Link>
+            </div>
+          ))}
+        </>
+      )}
+
+      {routineDue.length > 0 && (
+        <>
+          <p
+            className="hint"
+            style={{ marginTop: essentialDue.length > 0 ? 10 : 0, cursor: "pointer" }}
+            onClick={() => setShowRoutine(!showRoutine)}
+          >
+            {showRoutine ? "▾" : "▸"} Reminders & admin ({routineDue.length}) — tap to {showRoutine ? "hide" : "show"}
+          </p>
+          {showRoutine &&
+            routineDue.map((x) => (
+              <div key={x.key} className="rec" style={x.urgent ? { color: "var(--danger)" } : undefined}>
+                <span>{x.text}</span>
+                <button className="chip" style={{ marginLeft: 8 }} onClick={() => dismissDue(x)}>
+                  {x.key.startsWith("rem-") ? "Done" : "Dismiss"}
+                </button>
+              </div>
+            ))}
+        </>
+      )}
       {allReminders.length > 0 && (
         <p className="muted">
           Tap a reminder to add it to your phone calendar for an alert:{" "}
