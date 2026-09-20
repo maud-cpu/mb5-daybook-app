@@ -58,6 +58,28 @@ export default function TodayCard() {
   const [editDraft, setEditDraft] = useState<Draft | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [showSourceFor, setShowSourceFor] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-off read of a per-device UI preference
+      if (localStorage.getItem("todayCardCollapsed") === "1") setCollapsed(true);
+    } catch {
+      // localStorage can throw (private browsing, blocked storage) -- just stay expanded
+    }
+  }, []);
+
+  function toggleCollapsed() {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("todayCardCollapsed", next ? "1" : "0");
+      } catch {
+        // best-effort only -- the toggle still works for this session either way
+      }
+      return next;
+    });
+  }
 
   async function load() {
     const [{ data: rem }, { data: kids }, { data: hhKids }, { data: adults }, { data: f2fCourses }, { data: f2fProgress }] =
@@ -259,32 +281,49 @@ export default function TodayCard() {
     );
   }
 
+  const totalCount = todays.length + upcoming.length;
+
   return (
     <div className="card">
-      <h3>📅 Today & coming up</h3>
-      {todays.length === 0 && upcoming.length === 0 && (
-        <p className="empty">Nothing on the calendar right now — add school, club, Surrey or personal dates below.</p>
-      )}
-      {todays.length > 0 && (
+      <div
+        className="row"
+        style={{ alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}
+        onClick={toggleCollapsed}
+      >
+        <h3 style={{ margin: 0 }}>
+          📅 Today & coming up
+          {collapsed && totalCount > 0 ? ` (${totalCount})` : ""}
+        </h3>
+        <span className="muted">{collapsed ? "▸" : "▾"}</span>
+      </div>
+      {collapsed && totalCount === 0 && <p className="hint">Nothing on the calendar right now.</p>}
+      {!collapsed && (
         <>
-          <b style={{ display: "block", marginTop: 4 }}>Today</b>
-          {todays.map((r) => (
-            <Row key={r.id} r={r} />
-          ))}
+          {todays.length === 0 && upcoming.length === 0 && (
+            <p className="empty">Nothing on the calendar right now — add school, club, Surrey or personal dates below.</p>
+          )}
+          {todays.length > 0 && (
+            <>
+              <b style={{ display: "block", marginTop: 4 }}>Today</b>
+              {todays.map((r) => (
+                <Row key={r.id} r={r} />
+              ))}
+            </>
+          )}
+          {upcoming.length > 0 && (
+            <>
+              <b style={{ display: "block", marginTop: 8 }}>Next 7 days</b>
+              {upcoming.map((r) => (
+                <Row key={r.id} r={r} />
+              ))}
+            </>
+          )}
+          <p className="hint" style={{ marginTop: 8 }}>
+            Tap anything above to edit it.
+          </p>
         </>
       )}
-      {upcoming.length > 0 && (
-        <>
-          <b style={{ display: "block", marginTop: 8 }}>Next 7 days</b>
-          {upcoming.map((r) => (
-            <Row key={r.id} r={r} />
-          ))}
-        </>
-      )}
-      <p className="hint" style={{ marginTop: 8 }}>
-        Tap anything above to edit it.
-      </p>
-      {adding ? (
+      {!collapsed && adding ? (
         <div style={{ marginTop: 8 }}>
           <input placeholder="What is it?" value={text} onChange={(e) => setText(e.target.value)} />
           <div className="row" style={{ marginTop: 6 }}>
@@ -338,9 +377,11 @@ export default function TodayCard() {
           </button>
         </div>
       ) : (
-        <button className="chip add" style={{ marginTop: 8 }} onClick={() => setAdding(true)}>
-          + add to calendar
-        </button>
+        !collapsed && (
+          <button className="chip add" style={{ marginTop: 8 }} onClick={() => setAdding(true)}>
+            + add to calendar
+          </button>
+        )
       )}
     </div>
   );
