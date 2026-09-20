@@ -291,6 +291,11 @@ export const FORMS_REFERENCE: FormRefCategory[] = [
         name: "Immunisation, dental & optician consent",
         note: "kept alongside the health consent record — check who can sign for routine appointments versus one-offs.",
       },
+      {
+        name: "Short breaks / respite placements",
+        note: "different arrangements apply when a child is with you for a planned short break rather than a full placement — worth knowing before agreeing to one.",
+        url: "https://surreycs.trixonline.co.uk/chapter/short-breaks",
+      },
     ],
   },
   {
@@ -315,6 +320,7 @@ export const FORMS_REFERENCE: FormRefCategory[] = [
       {
         name: "Behaviour management / positive handling policy",
         note: "what de-escalation and physical intervention (if any) is agreed for that child, and what must be logged and reported afterwards.",
+        url: "https://surreycs.trixonline.co.uk/chapter/restrictive-physical-intervention-and-restraint",
       },
       {
         name: "Online safety & device use agreement",
@@ -343,6 +349,7 @@ export const FORMS_REFERENCE: FormRefCategory[] = [
       {
         name: "Household risk assessment (fire safety, pets, etc.)",
         note: "reviewed with your SSW, typically annually.",
+        url: "https://surreycs.trixonline.co.uk/chapter/risk-assessment-and-planning",
       },
       {
         name: "Training & Development Standards (TDS) portfolio",
