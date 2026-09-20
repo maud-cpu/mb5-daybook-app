@@ -7,6 +7,7 @@ import { today } from "@/lib/domain";
 import { REMINDER_CATEGORIES, REPEAT_OPTIONS, Reminder, reminderCategoryLabel } from "@/lib/types";
 import { addDays, fmtDate, occurrenceDates } from "@/lib/calendarHelpers";
 import PeoplePicker, { PersonOption } from "@/components/PeoplePicker";
+import PersonTags from "@/components/PersonTags";
 
 // A face-to-face training session (from the Training tab) isn't a real row in
 // the reminders table -- it's read-only here and just merged into the same
@@ -225,7 +226,7 @@ export default function TodayCard() {
             <span style={{ cursor: "pointer" }} onClick={() => startEdit(r)}>
               {reminderCategoryLabel(r.category)} {r.text}
               {r.series_id ? " 🔁" : ""}
-              {r.people.length ? ` · ${r.people.join(", ")}` : ""}
+              <PersonTags people={r.people} />
               {r.date !== t && <small className="muted"> — {fmtDate(r.date)}</small>}
             </span>
           )}
