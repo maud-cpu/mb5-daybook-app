@@ -164,6 +164,10 @@ select migration, applied from (
       and exists (select 1 from information_schema.columns
          where table_schema = 'public' and table_name = 'shared_training_catalog' and column_name = 'session_date')
       and exists (select 1 from information_schema.columns
-         where table_schema = 'public' and table_name = 'training_progress' and column_name = 'session_date'))
+         where table_schema = 'public' and table_name = 'training_progress' and column_name = 'session_date')),
+
+    ('0030 reminders.people column',
+      exists (select 1 from information_schema.columns
+         where table_schema = 'public' and table_name = 'reminders' and column_name = 'people'))
 ) as t(migration, applied)
 order by migration;

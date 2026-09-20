@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
 import { REMINDER_CATEGORIES, REPEAT_OPTIONS, Reminder, reminderCategoryLabel } from "@/lib/types";
 import { addDays, occurrenceDates } from "@/lib/calendarHelpers";
+import PeoplePicker, { PersonOption } from "@/components/PeoplePicker";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -14,7 +15,19 @@ const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 // grid without needing a second place to look. Marked by this id prefix.
 const F2F_PREFIX = "f2f:";
 function f2fReminder(id: string, text: string, date: string): Reminder {
-  return { id: F2F_PREFIX + id, text, date, done: false, done_at: null, category: "", child: "", amount: null, series_id: null, source_text: "" };
+  return {
+    id: F2F_PREFIX + id,
+    text,
+    date,
+    done: false,
+    done_at: null,
+    category: "training",
+    child: "",
+    people: [],
+    amount: null,
+    series_id: null,
+    source_text: "",
+  };
 }
 
 function monthLabel(year: number, month: number): string {
@@ -39,15 +52,15 @@ function daysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate();
 }
 
-type Draft = { text: string; date: string; category: string; child: string; amount: string };
-const emptyDraft = (date: string): Draft => ({ text: "", date, category: REMINDER_CATEGORIES[0][0], child: "", amount: "" });
+type Draft = { text: string; date: string; category: string; people: string[]; amount: string };
+const emptyDraft = (date: string): Draft => ({ text: "", date, category: REMINDER_CATEGORIES[0][0], people: [], amount: "" });
 
 type ExtractedItem = {
   _k: string;
   text: string;
   date: string;
   category: string;
-  child: string;
+  people: string[];
   amount: number | null;
   repeat: string;
   until: string | null;
@@ -61,7 +74,7 @@ export default function CalendarScreen() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
   const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [childNames, setChildNames] = useState<string[]>([]);
+  const [personOptions, setPersonOptions] = useState<PersonOption[]>([]);
   const [selected, setSelected] = useState<string | null>(t);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState<Draft>(emptyDraft(t));
@@ -74,18 +87,22 @@ export default function CalendarScreen() {
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState("");
   const [extracted, setExtracted] = useState<ExtractedItem[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const [peopleFilter, setPeopleFilter] = useState<string[]>([]);
   const [showSourceFor, setShowSourceFor] = useState<string | null>(null);
 
   async function load() {
     const from = isoOf(year, month, 1);
     const to = isoOf(year, month, daysInMonth(year, month));
-    const [{ data: rem }, { data: kids }, { data: hhKids }, { data: f2fCourses }, { data: f2fProgress }] = await Promise.all([
-      supabase.from("reminders").select("*").gte("date", from).lte("date", to).order("date"),
-      supabase.from("children").select("name").order("name"),
-      supabase.from("household_children").select("name").order("name"),
-      supabase.from("shared_training_catalog").select("id, title, session_date").eq("is_face_to_face", true).eq("archived", false),
-      supabase.from("training_progress").select("course_title, session_date").not("session_date", "is", null),
-    ]);
+    const [{ data: rem }, { data: kids }, { data: hhKids }, { data: adults }, { data: f2fCourses }, { data: f2fProgress }] =
+      await Promise.all([
+        supabase.from("reminders").select("*").gte("date", from).lte("date", to).order("date"),
+        supabase.from("children").select("name").order("name"),
+        supabase.from("household_children").select("name").order("name"),
+        supabase.from("household_adults").select("name").order("name"),
+        supabase.from("shared_training_catalog").select("id, title, session_date").eq("is_face_to_face", true).eq("archived", false),
+        supabase.from("training_progress").select("course_title, session_date").not("session_date", "is", null),
+      ]);
     const myDateByTitle: Record<string, string> = {};
     (f2fProgress ?? []).forEach((p: { course_title: string; session_date: string | null }) => {
       if (p.session_date) myDateByTitle[p.course_title] = p.session_date;
@@ -97,9 +114,10 @@ export default function CalendarScreen() {
       })
       .filter((r): r is Reminder => r !== null);
     setReminders([...((rem as Reminder[]) ?? []), ...f2fReminders]);
-    setChildNames([
-      ...((kids as { name: string }[] | null) ?? []).map((c) => c.name),
-      ...((hhKids as { name: string }[] | null) ?? []).map((c) => c.name),
+    setPersonOptions([
+      ...((kids as { name: string }[] | null) ?? []).map((c) => ({ name: c.name, kind: "child" as const })),
+      ...((hhKids as { name: string }[] | null) ?? []).map((c) => ({ name: c.name, kind: "child" as const })),
+      ...((adults as { name: string }[] | null) ?? []).map((a) => ({ name: a.name, kind: "adult" as const })),
     ]);
     setLoaded(true);
   }
@@ -130,8 +148,14 @@ export default function CalendarScreen() {
     setSelected(t);
   }
 
+  const visibleReminders = reminders.filter(
+    (r) =>
+      (categoryFilter.length === 0 || categoryFilter.includes(r.category)) &&
+      (peopleFilter.length === 0 || r.people.some((p) => peopleFilter.includes(p))),
+  );
+
   const byDate: Record<string, Reminder[]> = {};
-  reminders.forEach((r) => {
+  visibleReminders.forEach((r) => {
     (byDate[r.date] ||= []).push(r);
   });
 
@@ -142,7 +166,7 @@ export default function CalendarScreen() {
 
   async function addReminder() {
     if (!draft.text.trim() || !draft.date) return;
-    const base = { text: draft.text.trim(), category: draft.category, child: draft.child, amount: draft.amount ? Number(draft.amount) : null };
+    const base = { text: draft.text.trim(), category: draft.category, people: draft.people, amount: draft.amount ? Number(draft.amount) : null };
     if (repeat === "none") {
       await supabase.from("reminders").insert({ ...base, date: draft.date });
     } else {
@@ -194,7 +218,7 @@ export default function CalendarScreen() {
 
   async function commitExtracted(items: ExtractedItem[]) {
     for (const it of items) {
-      const base = { text: it.text, category: it.category, child: it.child, amount: it.amount, source_text: it.source };
+      const base = { text: it.text, category: it.category, people: it.people, amount: it.amount, source_text: it.source };
       if (it.repeat === "none" || !it.until) {
         await supabase.from("reminders").insert({ ...base, date: it.date });
       } else {
@@ -214,7 +238,7 @@ export default function CalendarScreen() {
   }
 
   function draftFrom(r: Reminder): Draft {
-    return { text: r.text, date: r.date, category: r.category, child: r.child, amount: r.amount != null ? String(r.amount) : "" };
+    return { text: r.text, date: r.date, category: r.category, people: r.people, amount: r.amount != null ? String(r.amount) : "" };
   }
 
   function startEdit(r: Reminder) {
@@ -229,7 +253,7 @@ export default function CalendarScreen() {
       text: editDraft.text.trim(),
       date: editDraft.date,
       category: editDraft.category,
-      child: editDraft.child,
+      people: editDraft.people,
       amount: editDraft.amount ? Number(editDraft.amount) : null,
     };
     setEditingId(null);
@@ -257,138 +281,52 @@ export default function CalendarScreen() {
 
   const dayItems = selected ? (byDate[selected] ?? []) : [];
 
+  function toggleFilter(list: string[], setList: (v: string[]) => void, value: string) {
+    setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
+  }
+
   return (
     <div>
       <div className="card">
-        <h3>📧 Paste an email</h3>
-        <p className="note">
-          Paste a whole email from school, a club, Surrey or anywhere else — dates, payments and events get pulled
-          out for you to check over before anything&apos;s added.
-        </p>
-        <textarea
-          rows={6}
-          placeholder="Paste the email text here…"
-          value={pasteText}
-          onChange={(e) => setPasteText(e.target.value)}
-        />
-        <button className="chip" disabled={extracting || !pasteText.trim()} onClick={extractFromPaste}>
-          {extracting ? "Reading…" : "Extract"}
-        </button>
-        {extractError && <p style={{ color: "var(--danger)", fontSize: 14, marginTop: 6 }}>{extractError}</p>}
-        {extracted.length > 0 && (
-          <div style={{ marginTop: 10 }}>
-            <div className="row" style={{ alignItems: "center", justifyContent: "space-between" }}>
-              <b>Found {extracted.length} thing{extracted.length > 1 ? "s" : ""} — check before adding</b>
-              {extracted.length > 1 && (
-                <button className="chip" onClick={() => commitExtracted(extracted)}>
-                  Add all
-                </button>
-              )}
-            </div>
-            {extracted.map((it) => (
-              <div key={it._k} style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #eee" }}>
-                <input value={it.text} onChange={(e) => updateExtracted(it._k, { text: e.target.value })} />
-                <div className="row" style={{ marginTop: 6 }}>
-                  <input
-                    type="date"
-                    style={{ flex: "0 0 150px" }}
-                    value={it.date}
-                    onChange={(e) => updateExtracted(it._k, { date: e.target.value })}
-                  />
-                  <select value={it.category} onChange={(e) => updateExtracted(it._k, { category: e.target.value })}>
-                    {REMINDER_CATEGORIES.map(([k, l]) => (
-                      <option key={k} value={k}>
-                        {l}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="row" style={{ marginTop: 6 }}>
-                  <select value={it.child} onChange={(e) => updateExtracted(it._k, { child: e.target.value })}>
-                    <option value="">— which child (optional) —</option>
-                    {childNames.map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="£ if a payment"
-                    style={{ flex: "0 0 130px" }}
-                    value={it.amount ?? ""}
-                    onChange={(e) => updateExtracted(it._k, { amount: e.target.value ? Number(e.target.value) : null })}
-                  />
-                </div>
-                {it.repeat !== "none" && (
-                  <p className="hint" style={{ marginTop: 4 }}>
-                    🔁 Looks recurring ({it.repeat}) until {it.until}
-                  </p>
-                )}
-                <button className="chip" style={{ marginTop: 6 }} onClick={() => commitExtracted([it])}>
-                  Add to calendar
-                </button>{" "}
-                <button className="chip" onClick={() => discardExtracted(it._k)}>
-                  Discard
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="card">
         <div className="row" style={{ alignItems: "center", justifyContent: "space-between" }}>
-          <button className="chip" onClick={() => changeMonth(-1)}>
-            ‹
-          </button>
-          <h3 style={{ margin: 0 }}>{monthLabel(year, month)}</h3>
-          <button className="chip" onClick={() => changeMonth(1)}>
-            ›
-          </button>
+          <h3 style={{ margin: 0 }}>Filter the calendar</h3>
+          {(categoryFilter.length > 0 || peopleFilter.length > 0) && (
+            <button
+              className="chip"
+              onClick={() => {
+                setCategoryFilter([]);
+                setPeopleFilter([]);
+              }}
+            >
+              Clear filters
+            </button>
+          )}
         </div>
-        <button className="chip" style={{ marginTop: 6 }} onClick={goToday}>
-          Today
-        </button>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginTop: 10 }}>
-          {WEEKDAYS.map((w) => (
-            <div key={w} className="muted" style={{ textAlign: "center", fontSize: 12 }}>
-              {w}
-            </div>
+        <p className="hint">Show just one type of thing (e.g. training coming up), just one person, or a few people together.</p>
+        <b style={{ display: "block", fontSize: 13 }}>Type</b>
+        <div className="chips">
+          {REMINDER_CATEGORIES.map(([k, l]) => (
+            <button
+              key={k}
+              className={`chip${categoryFilter.includes(k) ? " on" : ""}`}
+              onClick={() => toggleFilter(categoryFilter, setCategoryFilter, k)}
+            >
+              {l}
+            </button>
           ))}
-          {cells.map((day, i) => {
-            if (day === null) return <div key={i} />;
-            const iso = isoOf(year, month, day);
-            const items = byDate[iso] ?? [];
-            const isToday = iso === t;
-            const isSelected = iso === selected;
-            return (
-              <div
-                key={i}
-                onClick={() => setSelected(iso)}
-                style={{
-                  minHeight: 52,
-                  padding: 4,
-                  borderRadius: 6,
-                  cursor: "pointer",
-                  border: isSelected ? "2px solid var(--marker)" : isToday ? "1px solid var(--marker)" : "1px solid #eee",
-                  background: isSelected ? "var(--marker-bg, #fff7e6)" : undefined,
-                }}
-              >
-                <div style={{ fontSize: 12, fontWeight: isToday ? 700 : 400 }}>{day}</div>
-                <div style={{ fontSize: 14, lineHeight: 1.1 }}>
-                  {items.slice(0, 3).map((it) => (
-                    <div key={it.id} style={{ opacity: it.done ? 0.4 : 1 }}>
-                      {it.id.startsWith(F2F_PREFIX) ? "🎓" : reminderCategoryLabel(it.category).slice(0, 2)}
-                    </div>
-                  ))}
-                  {items.length > 3 && <small className="muted">+{items.length - 3}</small>}
-                </div>
-              </div>
-            );
-          })}
+        </div>
+        <b style={{ display: "block", fontSize: 13, marginTop: 8 }}>Who</b>
+        <div className="chips">
+          {personOptions.map((o) => (
+            <button
+              key={o.name}
+              className={`chip${peopleFilter.includes(o.name) ? " on" : ""}`}
+              onClick={() => toggleFilter(peopleFilter, setPeopleFilter, o.name)}
+            >
+              {o.kind === "adult" ? "🧑 " : ""}
+              {o.name}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -417,41 +355,34 @@ export default function CalendarScreen() {
                     ))}
                   </select>
                 </div>
-                <div className="row" style={{ marginTop: 6 }}>
-                  <select value={editDraft.child} onChange={(e) => setEditDraft({ ...editDraft, child: e.target.value })}>
-                    <option value="">— which child (optional) —</option>
-                    {childNames.map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="£ if a payment"
-                    style={{ flex: "0 0 130px" }}
-                    value={editDraft.amount}
-                    onChange={(e) => setEditDraft({ ...editDraft, amount: e.target.value })}
-                  />
+                <PeoplePicker options={personOptions} selected={editDraft.people} onChange={(v) => setEditDraft({ ...editDraft, people: v })} />
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="£ if a payment"
+                  style={{ marginTop: 6 }}
+                  value={editDraft.amount}
+                  onChange={(e) => setEditDraft({ ...editDraft, amount: e.target.value })}
+                />
+                <div style={{ marginTop: 6 }}>
+                  <button className="chip" onClick={() => saveEdit(r.id)}>
+                    Save
+                  </button>{" "}
+                  <button className="chip" onClick={() => setEditingId(null)}>
+                    Cancel
+                  </button>{" "}
+                  <button className="chip" onClick={() => deleteOne(r)}>
+                    Delete
+                  </button>
+                  {r.series_id && (
+                    <>
+                      {" "}
+                      <button className="chip" onClick={() => stopRepeating(r)}>
+                        Stop repeating (this & future)
+                      </button>
+                    </>
+                  )}
                 </div>
-                <button className="chip" style={{ marginTop: 6 }} onClick={() => saveEdit(r.id)}>
-                  Save
-                </button>{" "}
-                <button className="chip" onClick={() => setEditingId(null)}>
-                  Cancel
-                </button>{" "}
-                <button className="chip" onClick={() => deleteOne(r)}>
-                  Delete
-                </button>
-                {r.series_id && (
-                  <>
-                    {" "}
-                    <button className="chip" onClick={() => stopRepeating(r)}>
-                      Stop repeating (this & future)
-                    </button>
-                  </>
-                )}
               </div>
             ) : r.id.startsWith(F2F_PREFIX) ? (
               <div key={r.id} className="rec">
@@ -463,7 +394,7 @@ export default function CalendarScreen() {
                   <span style={{ cursor: "pointer" }} onClick={() => startEdit(r)}>
                     {reminderCategoryLabel(r.category)} {r.text}
                     {r.series_id ? " 🔁" : ""}
-                    {r.child ? ` · ${r.child}` : ""}
+                    {r.people.length ? ` · ${r.people.join(", ")}` : ""}
                     {r.amount != null ? ` · £${Number(r.amount).toFixed(2)}` : ""}
                     {r.done ? " (done)" : ""}
                   </span>
@@ -506,24 +437,15 @@ export default function CalendarScreen() {
                   ))}
                 </select>
               </div>
-              <div className="row" style={{ marginTop: 6 }}>
-                <select value={draft.child} onChange={(e) => setDraft({ ...draft, child: e.target.value })}>
-                  <option value="">— which child (optional) —</option>
-                  {childNames.map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="£ if a payment"
-                  style={{ flex: "0 0 130px" }}
-                  value={draft.amount}
-                  onChange={(e) => setDraft({ ...draft, amount: e.target.value })}
-                />
-              </div>
+              <PeoplePicker options={personOptions} selected={draft.people} onChange={(v) => setDraft({ ...draft, people: v })} />
+              <input
+                type="number"
+                step="0.01"
+                placeholder="£ if a payment"
+                style={{ marginTop: 6 }}
+                value={draft.amount}
+                onChange={(e) => setDraft({ ...draft, amount: e.target.value })}
+              />
               <div className="row" style={{ marginTop: 6 }}>
                 <select
                   value={repeat}
@@ -570,6 +492,134 @@ export default function CalendarScreen() {
           )}
         </div>
       )}
+
+      <div className="card">
+        <div className="row" style={{ alignItems: "center", justifyContent: "space-between" }}>
+          <button className="chip" onClick={() => changeMonth(-1)}>
+            ‹
+          </button>
+          <h3 style={{ margin: 0 }}>{monthLabel(year, month)}</h3>
+          <button className="chip" onClick={() => changeMonth(1)}>
+            ›
+          </button>
+        </div>
+        <button className="chip" style={{ marginTop: 6 }} onClick={goToday}>
+          Today
+        </button>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginTop: 10 }}>
+          {WEEKDAYS.map((w) => (
+            <div key={w} className="muted" style={{ textAlign: "center", fontSize: 12 }}>
+              {w}
+            </div>
+          ))}
+          {cells.map((day, i) => {
+            if (day === null) return <div key={i} />;
+            const iso = isoOf(year, month, day);
+            const items = byDate[iso] ?? [];
+            const isToday = iso === t;
+            const isSelected = iso === selected;
+            return (
+              <div
+                key={i}
+                onClick={() => setSelected(iso)}
+                style={{
+                  minHeight: 52,
+                  padding: 4,
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  border: isSelected ? "2px solid var(--marker)" : isToday ? "1px solid var(--marker)" : "1px solid #eee",
+                  background: isSelected ? "var(--marker-bg, #fff7e6)" : undefined,
+                }}
+              >
+                <div style={{ fontSize: 12, fontWeight: isToday ? 700 : 400 }}>{day}</div>
+                <div style={{ fontSize: 14, lineHeight: 1.1 }}>
+                  {items.slice(0, 3).map((it) => (
+                    <div key={it.id} style={{ opacity: it.done ? 0.4 : 1 }}>
+                      {reminderCategoryLabel(it.category).slice(0, 2)}
+                    </div>
+                  ))}
+                  {items.length > 3 && <small className="muted">+{items.length - 3}</small>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="card">
+        <h3>📧 Paste an email</h3>
+        <p className="note">
+          Paste a whole email from school, a club, Surrey or anywhere else — dates, payments and events get pulled
+          out for you to check over before anything&apos;s added.
+        </p>
+        <textarea
+          rows={6}
+          placeholder="Paste the email text here…"
+          value={pasteText}
+          onChange={(e) => setPasteText(e.target.value)}
+        />
+        <button className="chip" disabled={extracting || !pasteText.trim()} onClick={extractFromPaste}>
+          {extracting ? "Reading…" : "Extract"}
+        </button>
+        {extractError && <p style={{ color: "var(--danger)", fontSize: 14, marginTop: 6 }}>{extractError}</p>}
+        {extracted.length > 0 && (
+          <div style={{ marginTop: 10 }}>
+            <div className="row" style={{ alignItems: "center", justifyContent: "space-between" }}>
+              <b>Found {extracted.length} thing{extracted.length > 1 ? "s" : ""} — check before adding</b>
+              {extracted.length > 1 && (
+                <button className="chip" onClick={() => commitExtracted(extracted)}>
+                  Add all
+                </button>
+              )}
+            </div>
+            {extracted.map((it) => (
+              <div key={it._k} style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #eee" }}>
+                <input value={it.text} onChange={(e) => updateExtracted(it._k, { text: e.target.value })} />
+                <div className="row" style={{ marginTop: 6 }}>
+                  <input
+                    type="date"
+                    style={{ flex: "0 0 150px" }}
+                    value={it.date}
+                    onChange={(e) => updateExtracted(it._k, { date: e.target.value })}
+                  />
+                  <select value={it.category} onChange={(e) => updateExtracted(it._k, { category: e.target.value })}>
+                    {REMINDER_CATEGORIES.map(([k, l]) => (
+                      <option key={k} value={k}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <PeoplePicker
+                  options={personOptions}
+                  selected={it.people}
+                  onChange={(v) => updateExtracted(it._k, { people: v })}
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="£ if a payment"
+                  style={{ marginTop: 6 }}
+                  value={it.amount ?? ""}
+                  onChange={(e) => updateExtracted(it._k, { amount: e.target.value ? Number(e.target.value) : null })}
+                />
+                {it.repeat !== "none" && (
+                  <p className="hint" style={{ marginTop: 4 }}>
+                    🔁 Looks recurring ({it.repeat}) until {it.until}
+                  </p>
+                )}
+                <button className="chip" style={{ marginTop: 6 }} onClick={() => commitExtracted([it])}>
+                  Add to calendar
+                </button>{" "}
+                <button className="chip" onClick={() => discardExtracted(it._k)}>
+                  Discard
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
