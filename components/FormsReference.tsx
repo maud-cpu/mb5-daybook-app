@@ -6,19 +6,25 @@ export default function FormsReference() {
       <summary>📄 Forms & documents — what a foster carer might need</summary>
       <div>
         {FORMS_REFERENCE.map((cat) => (
-          <div key={cat.key} style={{ marginTop: 10 }}>
-            <b>{cat.label}</b>
-            <ul>
+          <div key={cat.key} style={{ marginTop: 14 }}>
+            <b style={{ display: "block", fontSize: 13, textTransform: "uppercase", letterSpacing: 0.3, color: "var(--grey)" }}>
+              {cat.label}
+            </b>
+            <ul style={{ listStyle: "none", padding: 0, margin: "6px 0 0" }}>
               {cat.items.map((it) => (
-                <li key={it.name}>
-                  {it.url ? (
-                    <a href={it.url} target="_blank" rel="noopener noreferrer">
-                      <b>{it.name} ↗</b>
-                    </a>
-                  ) : (
-                    <b>{it.name}</b>
-                  )}{" "}
-                  — {it.note}
+                <li key={it.name} style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 15.5, fontWeight: 700, lineHeight: 1.35 }}>
+                    {it.url ? (
+                      <a href={it.url} target="_blank" rel="noopener noreferrer">
+                        {it.name} ↗
+                      </a>
+                    ) : (
+                      it.name
+                    )}
+                  </div>
+                  <div className="muted" style={{ marginTop: 2 }}>
+                    {it.note}
+                  </div>
                 </li>
               ))}
             </ul>
