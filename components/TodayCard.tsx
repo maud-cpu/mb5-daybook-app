@@ -285,17 +285,30 @@ export default function TodayCard() {
 
   return (
     <div className="card">
-      <div
-        className="row"
-        style={{ alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}
+      <button
+        type="button"
         onClick={toggleCollapsed}
+        style={{
+          display: "flex",
+          width: "100%",
+          alignItems: "center",
+          justifyContent: "space-between",
+          background: "none",
+          border: "none",
+          padding: 0,
+          margin: "8px 0",
+          cursor: "pointer",
+          font: "inherit",
+          textAlign: "left",
+          color: "inherit",
+        }}
       >
         <h3 style={{ margin: 0 }}>
           📅 Today & coming up
           {collapsed && totalCount > 0 ? ` (${totalCount})` : ""}
         </h3>
         <span className="muted">{collapsed ? "▸" : "▾"}</span>
-      </div>
+      </button>
       {collapsed && totalCount === 0 && <p className="hint">Nothing on the calendar right now.</p>}
       {!collapsed && (
         <>
