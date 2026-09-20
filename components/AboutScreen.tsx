@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { BASICS_SECTIONS, RepeatableSubfield } from "@/lib/basics";
 import { Child, LIVES_CATS, livesHereOf, MB_OPTIONS, VISITS_CATS } from "@/lib/types";
+import ChildSchoolAdmin from "@/components/ChildSchoolAdmin";
+import ChildClubs from "@/components/ChildClubs";
 
 const ADULT_ROLES = ["Foster carer", "Adult child", "Live-in grandparent", "Other"];
 const VISITOR_ROLES = ["Mockingbird hub carer", "Respite support worker", "Family friend / helper", "Other"];
@@ -283,6 +285,8 @@ export default function AboutScreen() {
   const [newVisitingChild, setNewVisitingChild] = useState({ name: "", born: "", category: VISITS_CATS[0][0] as string });
   const [openChild, setOpenChild] = useState<string | null>(null);
   const [openHouseholdChild, setOpenHouseholdChild] = useState<string | null>(null);
+  const [openSchoolAdmin, setOpenSchoolAdmin] = useState<string | null>(null);
+  const [openClubs, setOpenClubs] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState("");
 
   async function load() {
@@ -567,6 +571,16 @@ export default function AboutScreen() {
                   onChange={(e) => updateHouseholdChild(c.id, { notes: e.target.value })}
                 />
               </div>
+              <div className="chips" style={{ marginTop: 6 }}>
+                <button className="chip" onClick={() => setOpenSchoolAdmin(openSchoolAdmin === c.id ? null : c.id)}>
+                  🏫 School admin
+                </button>
+                <button className="chip" onClick={() => setOpenClubs(openClubs === c.id ? null : c.id)}>
+                  🧩 Clubs
+                </button>
+              </div>
+              {openSchoolAdmin === c.id && <ChildSchoolAdmin childId={c.id} />}
+              {openClubs === c.id && <ChildClubs childId={c.id} />}
               {c.category !== "fosters" && (
                 <>
                   <p
@@ -850,6 +864,16 @@ export default function AboutScreen() {
                 {c.mockingbird ? " · " + (MB_OPTIONS.find(([k]) => k === c.mockingbird)?.[1] ?? c.mockingbird) : ""}
               </div>
             )}
+            <div className="chips" style={{ marginTop: 6 }}>
+              <button className="chip" onClick={() => setOpenSchoolAdmin(openSchoolAdmin === c.id ? null : c.id)}>
+                🏫 School admin
+              </button>
+              <button className="chip" onClick={() => setOpenClubs(openClubs === c.id ? null : c.id)}>
+                🧩 Clubs
+              </button>
+            </div>
+            {openSchoolAdmin === c.id && <ChildSchoolAdmin childId={c.id} />}
+            {openClubs === c.id && <ChildClubs childId={c.id} />}
             {open && (
               <div style={{ marginBottom: 12 }}>
                 <b style={{ fontSize: 14 }}>Living arrangement</b>
