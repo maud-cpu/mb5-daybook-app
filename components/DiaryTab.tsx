@@ -28,10 +28,14 @@ export default function DiaryTab() {
   const [savedAt, setSavedAt] = useState("");
 
   useEffect(() => {
-    supabase
-      .from("children")
-      .select("name")
-      .then(({ data }) => setNames((data ?? []).map((c: { name: string }) => c.name)));
+    Promise.all([supabase.from("children").select("name"), supabase.from("household_children").select("name")]).then(
+      ([{ data: kids }, { data: hhKids }]) =>
+        // A child in "Children in your household" can be an actual foster
+        // placement too, not just the carer's own/adopted/kinship child --
+        // they need to be selectable for a statutory diary the same as
+        // any other child.
+        setNames([...(kids ?? []), ...(hhKids ?? [])].map((c: { name: string }) => c.name)),
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

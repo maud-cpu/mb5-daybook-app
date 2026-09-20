@@ -50,13 +50,21 @@ export default function EntriesScreen() {
 
   async function load() {
     setLoading(true);
-    const [{ data: recs }, { data: kids }, { data: r }] = await Promise.all([
+    const [{ data: recs }, { data: kids }, { data: hhKids }, { data: r }] = await Promise.all([
       supabase.from("records").select("*").order("created_at", { ascending: false }),
       supabase.from("children").select("id, name, born, family, category, lives_here"),
+      // A child in "Children in your household" can be an actual foster
+      // placement too, not just the carer's own/adopted/kinship child --
+      // they need to appear here to be filtered/tagged the same as any
+      // other child. They live in the household by definition.
+      supabase.from("household_children").select("id, name, born, category"),
       supabase.from("shared_rates").select("*").single(),
     ]);
     setRecords((recs as EntryRecord[]) ?? []);
-    setChildren((kids as Child[]) ?? []);
+    setChildren([
+      ...((kids as Child[]) ?? []),
+      ...(((hhKids as Pick<Child, "id" | "name" | "born" | "category">[]) ?? []).map((h) => ({ ...h, family: "", lives_here: true }) as Child)),
+    ]);
     setRates(r as Rates);
     setLoading(false);
   }
