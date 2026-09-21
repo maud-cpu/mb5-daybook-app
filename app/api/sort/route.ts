@@ -45,7 +45,11 @@ const SortItemSchema = z.object({
   givenBy: z.string().nullable(),
   flag: z.string().nullable(),
   flagNote: z.string().nullable(),
-  reminderDate: z.string().nullable().describe("YYYY-MM-DD"),
+  // Enforced as a date-only string (not just described as one) -- caught in
+  // testing where a reminder for "Tuesday at 4pm" came back with the time
+  // folded into this field too, which the regex check in the mapping below
+  // would have silently rejected in favour of falling back to today's date.
+  reminderDate: z.iso.date().nullable(),
   training: z.array(z.object({ course: z.string(), why: z.string() })),
   schoolContact: z
     .object({ name: z.string(), contact: z.string() })
@@ -148,7 +152,7 @@ For expenses set "kind": "purchase" (amount in pounds), "mileage" (miles driven,
 For meds, set "medName", "dose", "given" (HH:MM), and "givenBy". One item per child per medicine given.
 Also set "flag" on any item that needs a follow-up: one of ${FLAG_KEYS.join(", ")}, or null. Use "reminder" when the carer explicitly asks to be reminded, asks for something to be added/put on the calendar (e.g. "add parents evening to the calendar on the 12th", "put the dentist appointment in the diary for next Tuesday"), OR the item itself describes a specific future meeting, appointment or event with a date the carer would need to attend or act on (e.g. "meeting with teacher on Friday at 3pm", "dentist appointment next Tuesday", "review meeting on the 10th") — even when they didn't explicitly ask to be reminded. Don't use it for a date that's just mentioned in passing about something else (e.g. a birthday recalled from the past, a date something already happened). Set "flagNote" to what the reminder/calendar entry should say, and "reminderDate" to the date it's for (resolve a relative date as above; if they gave no date at all, use today's date). Never set "flag" to "training". Set a safeguarding flag both when the text describes something happening, AND when the carer is asking or wondering whether a behaviour or mark might be a sign of one of these things (e.g. "is this a sign of abuse?") — that question is itself exactly the kind of concern that needs the guidance and support surfaced, not just a literal account of abuse having occurred. Still be cautious about flagging things that are clearly unrelated.
 Separately, consider whether any courses from this list could help (title, with what it covers in brackets where known): ${courses.join(" | ")}. Only ever pick a title that appears verbatim in this list -- never suggest a book, article, video or course that isn't in it, even if you recognise a similarly-named real one; if nothing in the list actually fits, return an empty list rather than inventing something. Set "training" to a list of every one plausibly useful (often none, sometimes more than one), each as {"course":"<the exact title only, without the bracketed description>","why":"<one short clause, specific to why THIS course over the others>"}; empty list if none.
-Also separately: if the text names a specific school contact (the child's class teacher, a class rep, the school office) together with an email address or phone number for that person, set "schoolContact" to {"name":"<their name or role>","contact":"<the email/phone as given>"} so it can be offered as a save to that child's records -- otherwise null. Only for an actual contact detail given for a named/described person, not a general school phone number with no name.
+Also separately: if the text identifies someone as a specific child's class teacher, class rep, or school office contact (e.g. "meeting with Miss Framp, she is Ruby's teacher", "her teacher, Mrs Smith"), set "schoolContact" to {"name":"<their name>","contact":"<email/phone if given, else empty string>"} tied to whichever known children that item is about, so it can be offered as a save to their records -- a name alone is enough, an email/phone is a bonus, not required. Only when the text actually establishes that relationship, not just any name mentioned near a school topic. Otherwise null.
 Reason for day care, if said, is one of: ${DAYCARE_REASONS.join("/")}.
 Split into one item per separate thing, under "items".`;
 

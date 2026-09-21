@@ -56,6 +56,7 @@ export default function CaptureScreen() {
   const [composing, setComposing] = useState(false);
   const [composeQueue, setComposeQueue] = useState<{ child: string; entryId: string }[]>([]);
   const [courseInfo, setCourseInfo] = useState<Record<string, { url: string; length: string }>>({});
+  const [teacherByChildId, setTeacherByChildId] = useState<Record<string, string>>({});
 
   async function loadChildren() {
     const [{ data: visiting }, { data: household }] = await Promise.all([
@@ -70,9 +71,20 @@ export default function CaptureScreen() {
     setChildren([...((visiting as Child[]) ?? []), ...((household as Child[]) ?? []).map((h) => ({ ...h, family: "" }))]);
   }
 
+  // So a "meeting with teacher" note only ever prompts to save what's
+  // actually new or different -- not the same teacher's name it already
+  // has on file for that child.
+  async function loadTeachers() {
+    const { data } = await supabase.from("child_school_admin").select("child_id, teacher_name");
+    const map: Record<string, string> = {};
+    (data ?? []).forEach((r: { child_id: string; teacher_name: string }) => (map[r.child_id] = r.teacher_name));
+    setTeacherByChildId(map);
+  }
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data load on mount
     loadChildren();
+    loadTeachers();
     supabase
       .from("shared_rates")
       .select("*")
@@ -203,23 +215,30 @@ export default function CaptureScreen() {
     );
   }
 
-  // Saving only the two contact columns -- not a full-row upsert -- means
-  // this never wipes out lunch payment, PTA details or anything else
-  // already filled in for the child on About us.
-  async function saveSchoolContact(i: number, childName: string) {
-    const child = children.find((c) => c.name === childName);
-    if (!child) return;
+  // Applies to every tagged child that needs it (e.g. two siblings sharing
+  // the same teacher), not just one. Saving only the two contact columns --
+  // not a full-row upsert -- means this never wipes out lunch payment, PTA
+  // details or anything else already filled in for the child on About us.
+  async function saveSchoolContact(i: number, childNames: string[]) {
     const sc = pending[i].school_contact;
     if (!sc) return;
-    const { error } = await supabase
-      .from("child_school_admin")
-      .upsert({ child_id: child.id, teacher_name: sc.name, teacher_contact: sc.contact }, { onConflict: "child_id" });
+    const targets = childNames.map((n) => children.find((c) => c.name === n)).filter((c): c is Child => !!c);
+    if (!targets.length) return;
+    const { error } = await supabase.from("child_school_admin").upsert(
+      targets.map((c) => ({ child_id: c.id, teacher_name: sc.name, teacher_contact: sc.contact })),
+      { onConflict: "child_id" },
+    );
     if (error) {
       showToast("Couldn't save: " + error.message);
       return;
     }
+    setTeacherByChildId((prev) => {
+      const next = { ...prev };
+      targets.forEach((c) => (next[c.id] = sc.name));
+      return next;
+    });
     updatePending(i, { school_contact: null });
-    showToast(`Saved to ${childName}'s School admin`);
+    showToast(`Saved to ${childNames.join(" & ")}'s School admin`);
   }
 
   async function saveAll() {
@@ -636,41 +655,41 @@ export default function CaptureScreen() {
                     </div>
                   );
                 })}
-              {p.school_contact && p.kids.length > 0 && (
-                <div className="note" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                  <span style={{ flex: "1 1 auto" }}>
-                    📇 Save <b>{p.school_contact.name}</b>
-                    {p.school_contact.contact ? ` (${p.school_contact.contact})` : ""} to{" "}
-                    {p.kids.length > 1 ? (
-                      <select
-                        value={p.kids[0]}
-                        onChange={(e) => updatePending(i, { kids: [e.target.value, ...p.kids.filter((k) => k !== e.target.value)] })}
-                        style={{ width: "auto", display: "inline-block", padding: "2px 4px" }}
-                      >
-                        {p.kids.map((k) => (
-                          <option key={k} value={k}>
-                            {k}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <b>{p.kids[0]}</b>
-                    )}
-                    &apos;s School admin as class teacher?
-                  </span>
-                  <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => saveSchoolContact(i, p.kids[0])}>
-                    Save
-                  </button>
-                  <button
-                    className="x"
-                    style={{ flex: "0 0 auto" }}
-                    title="Don't save this"
-                    onClick={() => updatePending(i, { school_contact: null })}
-                  >
-                    ×
-                  </button>
-                </div>
-              )}
+              {p.school_contact &&
+                (() => {
+                  // Only kids who don't already have this exact teacher on
+                  // file -- so it never asks again for something it's
+                  // already been told, only what's actually new or changed.
+                  const needsUpdate = p.kids.filter((k) => {
+                    const c = children.find((ch) => ch.name === k);
+                    if (!c) return false;
+                    return (teacherByChildId[c.id] || "").trim().toLowerCase() !== p.school_contact!.name.trim().toLowerCase();
+                  });
+                  if (!needsUpdate.length) return null;
+                  return (
+                    <div className="note">
+                      <div style={{ marginBottom: 6 }}>📇 New school contact for {needsUpdate.join(" & ")} — check it&apos;s right, then save:</div>
+                      <div className="row" style={{ margin: "0 0 6px" }}>
+                        <input
+                          placeholder="Name"
+                          value={p.school_contact.name}
+                          onChange={(e) => updatePending(i, { school_contact: { ...p.school_contact!, name: e.target.value } })}
+                        />
+                        <input
+                          placeholder="Email/phone (optional)"
+                          value={p.school_contact.contact}
+                          onChange={(e) => updatePending(i, { school_contact: { ...p.school_contact!, contact: e.target.value } })}
+                        />
+                      </div>
+                      <button className="chip" onClick={() => saveSchoolContact(i, needsUpdate)}>
+                        Save as {needsUpdate.join(" & ")}&apos;s teacher
+                      </button>{" "}
+                      <button className="chip" onClick={() => updatePending(i, { school_contact: null })}>
+                        Don&apos;t save
+                      </button>
+                    </div>
+                  );
+                })()}
               {adminName && (
                 <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
                   <input
