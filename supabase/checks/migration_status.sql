@@ -178,6 +178,10 @@ select migration, applied from (
       and to_regclass('public.child_clubs') is not null),
 
     ('0033 todo_first_seen table',
-      to_regclass('public.todo_first_seen') is not null)
+      to_regclass('public.todo_first_seen') is not null),
+
+    ('0034 YourKids articles seeded into shared_training_catalog',
+      exists (select 1 from shared_training_catalog where title = 'AI Chatbots and Teens')
+      and exists (select 1 from shared_training_catalog where title = 'Toddler Tantrums: Why They Happen and How to Respond'))
 ) as t(migration, applied)
 order by migration;
