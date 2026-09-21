@@ -463,6 +463,52 @@ export const FORMS_REFERENCE: FormRefCategory[] = [
         note: "NSPCC's simple, free conversation and resources to help keep children safe from sexual abuse.",
         url: "https://www.nspcc.org.uk/pants",
       },
+      {
+        name: "AI Chatbots and Teens",
+        note: "YourKids — what's worth knowing about teenagers using AI chatbots. (Title/description inferred from the article's URL, not read in full — check it covers what you need before relying on it.)",
+        url: "https://yourkids.com/articles/ai-chatbots-and-teens",
+      },
+    ],
+  },
+  {
+    key: "yourkids",
+    label: "Child development & family life (YourKids)",
+    items: [
+      {
+        name: "Looksmaxxing: What Parents of Boys Should Know",
+        note: "the online \"looksmaxxing\" appearance trend aimed at boys and teenage boys. (Title/description inferred from the article's URL, not read in full.)",
+        url: "https://yourkids.com/articles/looksmaxxing-what-parents-of-boys-should-know",
+      },
+      {
+        name: "Newborn SMA Screening in England",
+        note: "newborn screening for spinal muscular atrophy (SMA), now offered in England — relevant if you're caring for a baby. (Title/description inferred from the article's URL, not read in full.)",
+        url: "https://yourkids.com/articles/newborn-sma-screening-england",
+      },
+      {
+        name: "Picky Eating Starts Before Birth",
+        note: "what shapes picky eating in young children, including factors from before birth. (Title/description inferred from the article's URL, not read in full.)",
+        url: "https://yourkids.com/articles/picky-eating-starts-before-birth",
+      },
+      {
+        name: "Teens and Loneliness: How Parents Can Help",
+        note: "recognising loneliness in teenagers and ways to support them. (Title/description inferred from the article's URL, not read in full.)",
+        url: "https://yourkids.com/articles/teens-and-loneliness-how-parents-can-help",
+      },
+      {
+        name: "Toddler Tantrums: Why They Happen and How to Respond",
+        note: "why toddlers have tantrums and practical ways to respond. (Title/description inferred from the article's URL, not read in full.)",
+        url: "https://yourkids.com/articles/toddler-tantrums-why-they-happen-how-to-respond",
+      },
+      {
+        name: "Circle Time Games for Groups",
+        note: "group games for circle time — useful for sibling or family group activities. (Title/description inferred from the article's URL, not read in full.)",
+        url: "https://yourkids.com/articles/circle-time-games-for-groups",
+      },
+      {
+        name: "Cooperative Games for Mixed Ages",
+        note: "non-competitive games that work across a mixed-age group of children. (Title/description inferred from the article's URL, not read in full.)",
+        url: "https://yourkids.com/articles/cooperative-games-for-mixed-ages",
+      },
     ],
   },
   {
