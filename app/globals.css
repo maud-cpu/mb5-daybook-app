@@ -308,6 +308,27 @@ nav.tabbar a.on {
   background: #fbfaf6;
 }
 
+/* Capture page dashboard: 2x2 boxes on wider screens, one column on a
+   phone -- the natural place this app is mostly used. */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 16px;
+}
+
+.dashboard-grid .card {
+  margin-bottom: 0;
+  height: 100%;
+}
+
+@media (max-width: 720px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* The compiled month report (Paperwork -> Month) is plain text kept in a
    <pre> so its blank lines and indentation survive -- but that defaults to
    the browser's monospace font, which stood out against the rest of the

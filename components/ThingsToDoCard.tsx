@@ -235,10 +235,17 @@ export default function ThingsToDoCard() {
     load();
   }
 
-  // The documents & forms reference below is always useful, even with an
-  // empty list, so this only waits for the initial load rather than hiding
-  // the whole card whenever there's nothing currently due.
-  if (!loaded) return null;
+  // A skeleton card rather than nothing at all -- so this box holds its
+  // place in the Capture page's 2x2 grid instead of the layout jumping once
+  // it finishes loading.
+  if (!loaded) {
+    return (
+      <div className="card">
+        <h3>Things to do</h3>
+        <p className="muted">Loading…</p>
+      </div>
+    );
+  }
 
   const anyUrgent = due.some((x) => x.urgent) || followUps.some((f) => FLAGS[f.flag as keyof typeof FLAGS]?.urgent);
 
@@ -260,11 +267,18 @@ export default function ThingsToDoCard() {
   const isNewDue = (x: DueItem) => firstSeen[dismissKeyFor(x.key)] === today();
   const isNewFollowUp = (f: FollowUp) => f.created_at?.slice(0, 10) === today();
   const newEssential = essentialDue.filter(isNewDue);
-  const olderEssential = essentialDue.filter((x) => !isNewDue(x));
   const newRoutine = routineDue.filter(isNewDue);
-  const olderRoutine = routineDue.filter((x) => !isNewDue(x));
   const newFollowUps = followUps.filter(isNewFollowUp);
-  const olderFollowUps = followUps.filter((f) => !isNewFollowUp(f));
+
+  // Once there's nothing new today, the order of what's left matters --
+  // most-recently-appeared first, so the top of the list is still the
+  // freshest thing to look at rather than whatever order the underlying
+  // queries happened to return.
+  const byFirstSeenDesc = (a: DueItem, b: DueItem) =>
+    (firstSeen[dismissKeyFor(b.key)] || "").localeCompare(firstSeen[dismissKeyFor(a.key)] || "");
+  const olderEssential = essentialDue.filter((x) => !isNewDue(x)).sort(byFirstSeenDesc);
+  const olderRoutine = routineDue.filter((x) => !isNewDue(x)).sort(byFirstSeenDesc);
+  const olderFollowUps = followUps.filter((f) => !isNewFollowUp(f)).sort((a, b) => b.created_at.localeCompare(a.created_at));
   const olderCount = olderEssential.length + olderRoutine.length + olderFollowUps.length;
 
   function renderEssential(x: DueItem) {
@@ -277,11 +291,19 @@ export default function ThingsToDoCard() {
 
   function renderDue(x: DueItem) {
     return (
-      <div key={x.key} className="rec" style={x.urgent ? { color: "var(--danger)" } : undefined}>
-        <span>{x.text}</span>
-        <button className="chip" style={{ marginLeft: 8 }} onClick={() => dismissDue(x)}>
-          {x.key.startsWith("rem-") ? "Done" : "Dismiss"}
-        </button>
+      <div
+        key={x.key}
+        className="rec"
+        style={{ display: "flex", alignItems: "center", gap: 8, ...(x.urgent ? { color: "var(--danger)" } : {}) }}
+      >
+        <input
+          type="checkbox"
+          style={{ width: "auto", flex: "0 0 auto" }}
+          checked={false}
+          onChange={() => dismissDue(x)}
+          title={x.key.startsWith("rem-") ? "Mark done" : "Dismiss"}
+        />
+        <span style={{ flex: 1 }}>{x.text}</span>
       </div>
     );
   }
@@ -294,9 +316,16 @@ export default function ThingsToDoCard() {
       <div
         key={f.id}
         className="rec"
-        style={urgent ? { color: "var(--danger)" } : undefined}
-        onClick={() => setOpenId(open ? null : f.id)}
+        style={{ display: "flex", alignItems: "flex-start", gap: 8, ...(urgent ? { color: "var(--danger)" } : {}) }}
       >
+        <input
+          type="checkbox"
+          style={{ width: "auto", flex: "0 0 auto", marginTop: 3 }}
+          checked={false}
+          onChange={() => markFollowUpDone(f.id)}
+          title="Mark done"
+        />
+        <div style={{ flex: 1, cursor: "pointer" }} onClick={() => setOpenId(open ? null : f.id)}>
         <b>
           {followUpIcon(f)} {followUpLabel(f)}
         </b>
@@ -324,6 +353,7 @@ export default function ThingsToDoCard() {
             </button>
           </div>
         )}
+        </div>
       </div>
     );
   }
