@@ -185,6 +185,9 @@ select migration, applied from (
       and exists (select 1 from shared_training_catalog where title = 'Toddler Tantrums: Why They Happen and How to Respond')),
 
     ('0035 YourKids articles show their platform',
-      exists (select 1 from shared_training_catalog where title = 'AI Chatbots and Teens' and platform = 'YourKids'))
+      exists (select 1 from shared_training_catalog where title = 'AI Chatbots and Teens' and platform = 'YourKids')),
+
+    ('0036 length backfilled from title brackets',
+      exists (select 1 from shared_training_catalog where title = 'Child Exploitation workshop (2 hrs)' and length = '2 hrs'))
 ) as t(migration, applied)
 order by migration;
