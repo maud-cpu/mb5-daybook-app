@@ -203,6 +203,25 @@ export default function CaptureScreen() {
     );
   }
 
+  // Saving only the two contact columns -- not a full-row upsert -- means
+  // this never wipes out lunch payment, PTA details or anything else
+  // already filled in for the child on About us.
+  async function saveSchoolContact(i: number, childName: string) {
+    const child = children.find((c) => c.name === childName);
+    if (!child) return;
+    const sc = pending[i].school_contact;
+    if (!sc) return;
+    const { error } = await supabase
+      .from("child_school_admin")
+      .upsert({ child_id: child.id, teacher_name: sc.name, teacher_contact: sc.contact }, { onConflict: "child_id" });
+    if (error) {
+      showToast("Couldn't save: " + error.message);
+      return;
+    }
+    updatePending(i, { school_contact: null });
+    showToast(`Saved to ${childName}'s School admin`);
+  }
+
   async function saveAll() {
     if (!pending.length) return;
     const rows = pending.map((p) => ({
@@ -617,6 +636,41 @@ export default function CaptureScreen() {
                     </div>
                   );
                 })}
+              {p.school_contact && p.kids.length > 0 && (
+                <div className="note" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <span style={{ flex: "1 1 auto" }}>
+                    📇 Save <b>{p.school_contact.name}</b>
+                    {p.school_contact.contact ? ` (${p.school_contact.contact})` : ""} to{" "}
+                    {p.kids.length > 1 ? (
+                      <select
+                        value={p.kids[0]}
+                        onChange={(e) => updatePending(i, { kids: [e.target.value, ...p.kids.filter((k) => k !== e.target.value)] })}
+                        style={{ width: "auto", display: "inline-block", padding: "2px 4px" }}
+                      >
+                        {p.kids.map((k) => (
+                          <option key={k} value={k}>
+                            {k}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <b>{p.kids[0]}</b>
+                    )}
+                    &apos;s School admin as class teacher?
+                  </span>
+                  <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => saveSchoolContact(i, p.kids[0])}>
+                    Save
+                  </button>
+                  <button
+                    className="x"
+                    style={{ flex: "0 0 auto" }}
+                    title="Don't save this"
+                    onClick={() => updatePending(i, { school_contact: null })}
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
               {adminName && (
                 <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
                   <input

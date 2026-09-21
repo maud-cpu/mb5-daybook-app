@@ -47,6 +47,10 @@ const SortItemSchema = z.object({
   flagNote: z.string().nullable(),
   reminderDate: z.string().nullable().describe("YYYY-MM-DD"),
   training: z.array(z.object({ course: z.string(), why: z.string() })),
+  schoolContact: z
+    .object({ name: z.string(), contact: z.string() })
+    .nullable()
+    .describe("A specific school contact (e.g. class teacher, class rep) named in the text, with an email/phone given for them"),
 });
 const SortResponseSchema = z.object({ items: z.array(SortItemSchema) });
 
@@ -142,8 +146,9 @@ Children known: ${names.join(", ") || "unknown"}. Match spoken names to these wh
 "kids" for each item must only be children the carer actually names or unambiguously refers to (e.g. "she"/"her" meaning the one child just named) in THAT item's own text — never add a child who isn't mentioned there, even if they're mentioned in a different item from the same note.
 For expenses set "kind": "purchase" (amount in pounds), "mileage" (miles driven, one item per journey, round trip if they say so), or "daycare" (care given: from/to clock times if the carer says them, otherwise hours; kids = the child cared for, overnight true if they stayed the night). Daycare and overnight are always ONE ITEM PER CHILD, even when several children were cared for on the same occasion at the same time. Overnight is set INDIVIDUALLY per child based on what actually happened to THAT child.
 For meds, set "medName", "dose", "given" (HH:MM), and "givenBy". One item per child per medicine given.
-Also set "flag" on any item that needs a follow-up: one of ${FLAG_KEYS.join(", ")}, or null. Use "reminder" when the carer explicitly asks to be reminded, OR asks for something to be added/put on the calendar (e.g. "add parents evening to the calendar on the 12th", "put the dentist appointment in the diary for next Tuesday") — set "flagNote" to what the reminder/calendar entry should say, and "reminderDate" to the date it's for (resolve a relative date as above; if they gave no date at all, use today's date). Never set "flag" to "training". Set a safeguarding flag both when the text describes something happening, AND when the carer is asking or wondering whether a behaviour or mark might be a sign of one of these things (e.g. "is this a sign of abuse?") — that question is itself exactly the kind of concern that needs the guidance and support surfaced, not just a literal account of abuse having occurred. Still be cautious about flagging things that are clearly unrelated.
+Also set "flag" on any item that needs a follow-up: one of ${FLAG_KEYS.join(", ")}, or null. Use "reminder" when the carer explicitly asks to be reminded, asks for something to be added/put on the calendar (e.g. "add parents evening to the calendar on the 12th", "put the dentist appointment in the diary for next Tuesday"), OR the item itself describes a specific future meeting, appointment or event with a date the carer would need to attend or act on (e.g. "meeting with teacher on Friday at 3pm", "dentist appointment next Tuesday", "review meeting on the 10th") — even when they didn't explicitly ask to be reminded. Don't use it for a date that's just mentioned in passing about something else (e.g. a birthday recalled from the past, a date something already happened). Set "flagNote" to what the reminder/calendar entry should say, and "reminderDate" to the date it's for (resolve a relative date as above; if they gave no date at all, use today's date). Never set "flag" to "training". Set a safeguarding flag both when the text describes something happening, AND when the carer is asking or wondering whether a behaviour or mark might be a sign of one of these things (e.g. "is this a sign of abuse?") — that question is itself exactly the kind of concern that needs the guidance and support surfaced, not just a literal account of abuse having occurred. Still be cautious about flagging things that are clearly unrelated.
 Separately, consider whether any courses from this list could help (title, with what it covers in brackets where known): ${courses.join(" | ")}. Only ever pick a title that appears verbatim in this list -- never suggest a book, article, video or course that isn't in it, even if you recognise a similarly-named real one; if nothing in the list actually fits, return an empty list rather than inventing something. Set "training" to a list of every one plausibly useful (often none, sometimes more than one), each as {"course":"<the exact title only, without the bracketed description>","why":"<one short clause, specific to why THIS course over the others>"}; empty list if none.
+Also separately: if the text names a specific school contact (the child's class teacher, a class rep, the school office) together with an email address or phone number for that person, set "schoolContact" to {"name":"<their name or role>","contact":"<the email/phone as given>"} so it can be offered as a save to that child's records -- otherwise null. Only for an actual contact detail given for a named/described person, not a general school phone number with no name.
 Reason for day care, if said, is one of: ${DAYCARE_REASONS.join("/")}.
 Split into one item per separate thing, under "items".`;
 
@@ -229,6 +234,7 @@ Split into one item per separate thing, under "items".`;
               : null,
         training_note: trainingNote,
         unmatched,
+        school_contact: p.schoolContact?.name ? { name: p.schoolContact.name, contact: p.schoolContact.contact || "" } : null,
       };
     });
 

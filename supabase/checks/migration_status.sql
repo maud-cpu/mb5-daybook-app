@@ -188,6 +188,12 @@ select migration, applied from (
       exists (select 1 from shared_training_catalog where title = 'AI Chatbots and Teens' and platform = 'YourKids')),
 
     ('0036 length backfilled from title brackets',
-      exists (select 1 from shared_training_catalog where title = 'Child Exploitation workshop (2 hrs)' and length = '2 hrs'))
+      exists (select 1 from shared_training_catalog where title = 'Child Exploitation workshop (2 hrs)' and length = '2 hrs')),
+
+    ('0037 child_school_admin teacher_name/teacher_contact columns',
+      exists (select 1 from information_schema.columns
+         where table_schema = 'public' and table_name = 'child_school_admin' and column_name = 'teacher_name')
+      and exists (select 1 from information_schema.columns
+         where table_schema = 'public' and table_name = 'child_school_admin' and column_name = 'teacher_contact'))
 ) as t(migration, applied)
 order by migration;
