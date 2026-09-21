@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { backstopFlag, FLAG_TRAINING, namesInText } from "@/lib/keywordFlags";
 import { today } from "@/lib/domain";
@@ -16,6 +18,37 @@ const FLAG_KEYS = [
   "school",
   "reminder",
 ] as const;
+
+// A hand-rolled "extract the JSON array between the first [ and last ]"
+// used to break completely the moment any field's text contained a
+// character the model didn't escape perfectly (an email address, an
+// apostrophe, a stray quote) -- one bad character anywhere in the whole
+// batch lost every item's bucket/child/flag/training data, not just the
+// one with the odd character. Structured outputs constrains the response
+// to this exact schema server-side, so it's always valid, parseable JSON.
+const SortItemSchema = z.object({
+  bucket: z.string(),
+  child: z.string(),
+  text: z.string(),
+  kind: z.enum(["purchase", "mileage", "daycare"]).nullable(),
+  amount: z.number().nullable(),
+  miles: z.number().nullable(),
+  from: z.string().nullable().describe("HH:MM"),
+  to: z.string().nullable().describe("HH:MM"),
+  reason: z.string().nullable(),
+  hours: z.number().nullable(),
+  kids: z.array(z.string()),
+  overnight: z.boolean(),
+  medName: z.string().nullable(),
+  dose: z.string().nullable(),
+  given: z.string().nullable().describe("HH:MM"),
+  givenBy: z.string().nullable(),
+  flag: z.string().nullable(),
+  flagNote: z.string().nullable(),
+  reminderDate: z.string().nullable().describe("YYYY-MM-DD"),
+  training: z.array(z.object({ course: z.string(), why: z.string() })),
+});
+const SortResponseSchema = z.object({ items: z.array(SortItemSchema) });
 
 function matchChild(names: string[], x: string | null | undefined): string {
   if (!x) return "";
@@ -112,25 +145,21 @@ For meds, set "medName", "dose", "given" (HH:MM), and "givenBy". One item per ch
 Also set "flag" on any item that needs a follow-up: one of ${FLAG_KEYS.join(", ")}, or null. Use "reminder" when the carer explicitly asks to be reminded, OR asks for something to be added/put on the calendar (e.g. "add parents evening to the calendar on the 12th", "put the dentist appointment in the diary for next Tuesday") — set "flagNote" to what the reminder/calendar entry should say, and "reminderDate" to the date it's for (resolve a relative date as above; if they gave no date at all, use today's date). Never set "flag" to "training". Set a safeguarding flag both when the text describes something happening, AND when the carer is asking or wondering whether a behaviour or mark might be a sign of one of these things (e.g. "is this a sign of abuse?") — that question is itself exactly the kind of concern that needs the guidance and support surfaced, not just a literal account of abuse having occurred. Still be cautious about flagging things that are clearly unrelated.
 Separately, consider whether any courses from this list could help (title, with what it covers in brackets where known): ${courses.join(" | ")}. Only ever pick a title that appears verbatim in this list -- never suggest a book, article, video or course that isn't in it, even if you recognise a similarly-named real one; if nothing in the list actually fits, return an empty list rather than inventing something. Set "training" to a list of every one plausibly useful (often none, sometimes more than one), each as {"course":"<the exact title only, without the bracketed description>","why":"<one short clause, specific to why THIS course over the others>"}; empty list if none.
 Reason for day care, if said, is one of: ${DAYCARE_REASONS.join("/")}.
-Respond with ONLY a JSON array, no prose, no markdown: [{"bucket":"diary","child":"name or empty","text":"...","kind":"purchase|mileage|daycare|null","amount":number|null,"miles":number|null,"from":"HH:MM or null","to":"HH:MM or null","reason":"string or null","hours":number|null,"kids":["names"],"overnight":false,"medName":"string or null","dose":"string or null","given":"HH:MM or null","givenBy":"string or null","flag":"string or null","flagNote":"string or null","reminderDate":"YYYY-MM-DD or null","training":[{"course":"string","why":"string"}]}]`;
+Split into one item per separate thing, under "items".`;
 
   try {
     const anthropic = new Anthropic({ apiKey });
-    const msg = await anthropic.messages.create({
+    const msg = await anthropic.messages.parse({
       model: "claude-sonnet-5",
       max_tokens: 1500,
       system: sys,
       messages: [{ role: "user", content: text }],
+      output_config: { format: zodOutputFormat(SortResponseSchema) },
     });
-    const out = msg.content
-      .map((c) => (c.type === "text" ? c.text : ""))
-      .join("")
-      .replace(/```json|```/g, "")
-      .trim();
-    const match = out.match(/\[[\s\S]*\]/);
-    if (!match) throw new Error("No list in reply");
-    const arr = JSON.parse(match[0]);
-    if (!Array.isArray(arr) || !arr.length) throw new Error("Nothing recognised");
+    if (msg.stop_reason === "refusal") throw new Error("Couldn't process that note");
+    if (msg.stop_reason === "max_tokens") throw new Error("That note was too long to sort in one go");
+    const arr = msg.parsed_output?.items;
+    if (!arr || !arr.length) throw new Error("Nothing recognised");
 
     const items: PendingItem[] = arr.map((p) => {
       const rawChild = p.child ? String(p.child).trim() : "";
@@ -173,12 +202,12 @@ Respond with ONLY a JSON array, no prose, no markdown: [{"bucket":"diary","child
         .join("\n");
 
       return {
-        bucket: BUCKETS[p.bucket as keyof typeof BUCKETS] ? p.bucket : "scratch",
+        bucket: (BUCKETS[p.bucket as keyof typeof BUCKETS] ? p.bucket : "scratch") as PendingItem["bucket"],
         child,
         kids,
         also_in: [],
         text: p.text || "",
-        kind: (["purchase", "mileage", "daycare"].includes(p.kind) ? p.kind : "purchase") as PendingItem["kind"],
+        kind: (p.kind && ["purchase", "mileage", "daycare"].includes(p.kind) ? p.kind : "purchase") as PendingItem["kind"],
         amount: p.amount ?? null,
         miles: p.miles ?? null,
         hours: p.hours ?? null,
