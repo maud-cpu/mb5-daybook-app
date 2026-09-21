@@ -514,4 +514,6 @@ export type PendingItem = Partial<EntryRecord> & {
   send_hub?: string[];
   /** When flag is "reminder": the date it should actually appear on the calendar/Today. */
   reminder_date?: string | null;
+  /** A school contact (e.g. class teacher) the AI spotted in the text, offered as a one-click save to the tagged child's School admin. */
+  school_contact?: { name: string; contact: string } | null;
 };
