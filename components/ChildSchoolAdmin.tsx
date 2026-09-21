@@ -4,8 +4,6 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 type SchoolAdmin = {
-  teacher_name: string;
-  teacher_contact: string;
   lunch_payment: string;
   homework_app_name: string;
   homework_app_url: string;
@@ -21,8 +19,6 @@ type SchoolAdmin = {
 };
 
 const BLANK: SchoolAdmin = {
-  teacher_name: "",
-  teacher_contact: "",
   lunch_payment: "",
   homework_app_name: "",
   homework_app_url: "",
@@ -38,8 +34,6 @@ const BLANK: SchoolAdmin = {
 };
 
 const FIELDS: [keyof SchoolAdmin, string, string, "input" | "textarea"][] = [
-  ["teacher_name", "Class teacher", "name", "input"],
-  ["teacher_contact", "Teacher contact", "phone/email", "input"],
   ["lunch_payment", "Paying for school lunches", "app/website used, or how it works", "input"],
   ["homework_app_name", "Homework app/website", "e.g. Google Classroom, Tapestry, Seesaw", "input"],
   ["homework_app_url", "Homework app link", "", "input"],
@@ -91,6 +85,8 @@ export default function ChildSchoolAdmin({ childId }: { childId: string }) {
     <div style={{ marginTop: 8 }}>
       <p className="hint">
         For a new carer picking this up if this child ever moves suddenly — also pulled into the Handover document.
+        For the class teacher and other named school contacts, use &quot;Key contacts at school&quot; further up this
+        child&apos;s About us page instead.
       </p>
       {FIELDS.map(([key, label, hint, kind]) => (
         <div key={key} style={{ marginTop: 10 }}>

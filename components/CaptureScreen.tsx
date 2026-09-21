@@ -56,35 +56,55 @@ export default function CaptureScreen() {
   const [composing, setComposing] = useState(false);
   const [composeQueue, setComposeQueue] = useState<{ child: string; entryId: string }[]>([]);
   const [courseInfo, setCourseInfo] = useState<Record<string, { url: string; length: string }>>({});
-  const [teacherByChildId, setTeacherByChildId] = useState<Record<string, string>>({});
+  // "Key contacts at school" (About us -> Education) is a repeatable list
+  // stored as a JSON-array string inside children.basics.teacher /
+  // household_children.basics.teacher -- not its own table -- so saving a
+  // school contact from here has to read and write that same field, on
+  // whichever of the two tables the child actually lives in.
+  const [basicsByChildId, setBasicsByChildId] = useState<Record<string, Record<string, string>>>({});
+  const [childTable, setChildTable] = useState<Record<string, "children" | "household_children">>({});
 
   async function loadChildren() {
     const [{ data: visiting }, { data: household }] = await Promise.all([
-      supabase.from("children").select("id, name, born, family, hub_carer_name, hub_carer_email").order("created_at"),
-      supabase.from("household_children").select("id, name, born, hub_carer_name, hub_carer_email").order("created_at"),
+      supabase.from("children").select("id, name, born, family, hub_carer_name, hub_carer_email, basics").order("created_at"),
+      supabase.from("household_children").select("id, name, born, hub_carer_name, hub_carer_email, basics").order("created_at"),
     ]);
     // A child in the household (household_children) is sometimes an actual
     // foster placement too, not just the carer's own/adopted/kinship child --
     // they need to show up here to be tagged on entries the same as any
     // other child, so they're merged in rather than only offering the
     // separate "children" (visiting/placement) table.
-    setChildren([...((visiting as Child[]) ?? []), ...((household as Child[]) ?? []).map((h) => ({ ...h, family: "" }))]);
+    const visitingRows = (visiting as (Child & { basics: Record<string, string> })[]) ?? [];
+    const householdRows = (household as (Child & { basics: Record<string, string> })[]) ?? [];
+    setChildren([...visitingRows, ...householdRows.map((h) => ({ ...h, family: "" }))]);
+    const basicsMap: Record<string, Record<string, string>> = {};
+    const tableMap: Record<string, "children" | "household_children"> = {};
+    visitingRows.forEach((c) => {
+      basicsMap[c.id] = c.basics || {};
+      tableMap[c.id] = "children";
+    });
+    householdRows.forEach((c) => {
+      basicsMap[c.id] = c.basics || {};
+      tableMap[c.id] = "household_children";
+    });
+    setBasicsByChildId(basicsMap);
+    setChildTable(tableMap);
   }
 
-  // So a "meeting with teacher" note only ever prompts to save what's
-  // actually new or different -- not the same teacher's name it already
-  // has on file for that child.
-  async function loadTeachers() {
-    const { data } = await supabase.from("child_school_admin").select("child_id, teacher_name");
-    const map: Record<string, string> = {};
-    (data ?? []).forEach((r: { child_id: string; teacher_name: string }) => (map[r.child_id] = r.teacher_name));
-    setTeacherByChildId(map);
+  type TeacherContact = { name?: string; phone?: string; email?: string };
+  function parseTeacherContacts(raw: string): TeacherContact[] {
+    try {
+      const parsed = JSON.parse(raw || "[]");
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      if (raw) return [{ name: raw }];
+    }
+    return [];
   }
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data load on mount
     loadChildren();
-    loadTeachers();
     supabase
       .from("shared_rates")
       .select("*")
@@ -216,29 +236,40 @@ export default function CaptureScreen() {
   }
 
   // Applies to every tagged child that needs it (e.g. two siblings sharing
-  // the same teacher), not just one. Saving only the two contact columns --
-  // not a full-row upsert -- means this never wipes out lunch payment, PTA
-  // details or anything else already filled in for the child on About us.
+  // the same teacher), not just one. This writes into the SAME "Key
+  // contacts at school" repeatable list shown on About us -- adding a new
+  // contact, or updating one already there with a matching name -- rather
+  // than a separate field nobody would see. Reads and writes the full
+  // basics object so nothing else already saved for that child is lost.
   async function saveSchoolContact(i: number, childNames: string[]) {
     const sc = pending[i].school_contact;
     if (!sc) return;
     const targets = childNames.map((n) => children.find((c) => c.name === n)).filter((c): c is Child => !!c);
     if (!targets.length) return;
-    const { error } = await supabase.from("child_school_admin").upsert(
-      targets.map((c) => ({ child_id: c.id, teacher_name: sc.name, teacher_contact: sc.contact })),
-      { onConflict: "child_id" },
-    );
-    if (error) {
-      showToast("Couldn't save: " + error.message);
-      return;
+    const isEmail = sc.contact.includes("@");
+    for (const c of targets) {
+      const basics = basicsByChildId[c.id] || {};
+      const contacts = parseTeacherContacts(basics.teacher || "");
+      const existingIdx = contacts.findIndex((ct) => (ct.name || "").trim().toLowerCase() === sc.name.trim().toLowerCase());
+      const nextContact: TeacherContact = {
+        name: sc.name,
+        phone: isEmail ? contacts[existingIdx]?.phone || "" : sc.contact || contacts[existingIdx]?.phone || "",
+        email: isEmail ? sc.contact : contacts[existingIdx]?.email || "",
+      };
+      const nextContacts = existingIdx >= 0 ? contacts.map((ct, idx) => (idx === existingIdx ? nextContact : ct)) : [...contacts, nextContact];
+      const nextBasics = { ...basics, teacher: JSON.stringify(nextContacts) };
+      const { error } = await supabase
+        .from(childTable[c.id] || "children")
+        .update({ basics: nextBasics })
+        .eq("id", c.id);
+      if (error) {
+        showToast("Couldn't save: " + error.message);
+        return;
+      }
+      setBasicsByChildId((prev) => ({ ...prev, [c.id]: nextBasics }));
     }
-    setTeacherByChildId((prev) => {
-      const next = { ...prev };
-      targets.forEach((c) => (next[c.id] = sc.name));
-      return next;
-    });
     updatePending(i, { school_contact: null });
-    showToast(`Saved to ${childNames.join(" & ")}'s School admin`);
+    showToast(`Saved to ${childNames.join(" & ")}'s Key contacts at school`);
   }
 
   async function saveAll() {
@@ -663,7 +694,8 @@ export default function CaptureScreen() {
                   const needsUpdate = p.kids.filter((k) => {
                     const c = children.find((ch) => ch.name === k);
                     if (!c) return false;
-                    return (teacherByChildId[c.id] || "").trim().toLowerCase() !== p.school_contact!.name.trim().toLowerCase();
+                    const contacts = parseTeacherContacts(basicsByChildId[c.id]?.teacher || "");
+                    return !contacts.some((ct) => (ct.name || "").trim().toLowerCase() === p.school_contact!.name.trim().toLowerCase());
                   });
                   if (!needsUpdate.length) return null;
                   return (
