@@ -420,6 +420,52 @@ export const FORMS_REFERENCE: FormRefCategory[] = [
     ],
   },
   {
+    key: "child-safety",
+    label: "Keeping children safe — NSPCC & online safety",
+    items: [
+      {
+        name: "NSPCC Speak out. Stay safe. — Introduction for Parents/Carers",
+        note: "the school programme (ages 5–11) that teaches children to recognise abuse and speak out to a safe adult or Childline — watch the intro film shared by school before it's delivered.",
+        url: "https://www.nspcc.org.uk/keeping-children-safe/support-for-parents/speak-out-stay-safe-schools-service/",
+      },
+      {
+        name: "NSPCC — support and advice for parents/carers",
+        note: "articles and guidance on a wide range of keeping-children-safe topics.",
+        url: "https://www.nspcc.org.uk/parents",
+      },
+      {
+        name: "NSPCC Speak out. Stay safe. — activities for families",
+        note: "games and activities to do at home that reinforce the same speaking-out message as the school programme.",
+        url: "https://www.nspcc.org.uk/speakout",
+      },
+      {
+        name: "NSPCC — activities to extend learning at home",
+        note: "more games and activities to help children learn about staying safe.",
+        url: "https://www.nspcc.org.uk/activities",
+      },
+      {
+        name: "NSPCC Online Safety Hub",
+        note: "gaming, social media, sharing images, parental controls and other online-safety topics.",
+        url: "https://www.nspcc.org.uk/onlinesafety",
+      },
+      {
+        name: "Childline for younger children (5–7)",
+        note: "Buddy's accessible Childline site — advice, games and activities, with adjustable text size and read-aloud.",
+        url: "https://www.childline.org.uk/buddy",
+      },
+      {
+        name: "Childline for children (7–11)",
+        note: "the same accessible Childline support aimed at slightly older children.",
+        url: "https://www.childline.org.uk/kids",
+      },
+      {
+        name: "Talk PANTS",
+        note: "NSPCC's simple, free conversation and resources to help keep children safe from sexual abuse.",
+        url: "https://www.nspcc.org.uk/pants",
+      },
+    ],
+  },
+  {
     key: "ending",
     label: "Ending or moving on from a placement",
     items: [

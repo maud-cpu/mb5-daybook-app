@@ -5,6 +5,9 @@ import { createClient } from "@/lib/supabase/client";
 import { daycareAmount, gbp, today } from "@/lib/domain";
 import { withAmazonAffiliateTag } from "@/lib/amazon";
 import ThingsToDoCard from "@/components/ThingsToDoCard";
+import MiniCalendarCard from "@/components/MiniCalendarCard";
+import TodaysEntriesCard from "@/components/TodaysEntriesCard";
+import CaptureTrainingCard from "@/components/CaptureTrainingCard";
 import PhotoField from "@/components/PhotoField";
 import ComposeEmail from "@/components/ComposeEmail";
 import {
@@ -327,9 +330,9 @@ export default function CaptureScreen() {
   return (
     <div>
       <div className="card">
-        <h3>What happened?</h3>
+        <h3>Tell me anything</h3>
         <textarea
-          placeholder="Type what happened. Say where things go — 'diary', 'supervision', 'expenses', 'social worker', 'incident', 'just record'. Mileage and hours of day care get costed automatically."
+          placeholder="A note, or a command — 'diary', 'supervision', 'expenses', 'social worker', 'incident', 'just record', or 'add parents evening to the calendar on the 12th'. Mileage and hours of day care get costed automatically."
           value={cap}
           onChange={(e) => setCap(e.target.value)}
         />
@@ -651,7 +654,12 @@ export default function CaptureScreen() {
         </div>
       )}
 
-      <ThingsToDoCard />
+      <div className="dashboard-grid">
+        <ThingsToDoCard />
+        <MiniCalendarCard />
+        <TodaysEntriesCard />
+        <CaptureTrainingCard />
+      </div>
 
       {toast && <div id="toast" className="show">{toast}</div>}
     </div>
