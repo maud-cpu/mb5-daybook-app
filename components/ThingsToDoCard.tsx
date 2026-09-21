@@ -243,10 +243,12 @@ export default function ThingsToDoCard() {
   const anyUrgent = due.some((x) => x.urgent) || followUps.some((f) => FLAGS[f.flag as keyof typeof FLAGS]?.urgent);
 
   // Missing CSW/GP/duty-line details and a missing EDT number are safeguarding
-  // basics, not routine nagging -- if they sat in the same dismissable list as
-  // "send last month's expenses claim", a quick tidy-up tap could bury a gap
-  // that actually matters. These two have nowhere to hide: no Dismiss button,
-  // and they only ever leave this list once the field is actually filled in.
+  // basics, not routine nagging -- they have nowhere to hide via a Dismiss
+  // button, and only ever leave this list once the field is actually filled
+  // in. But always-visible turned out to be its own kind of stress -- seeing
+  // the same "add CSW details" line every single day was exactly what this
+  // whole redesign is trying to stop. So they get the same new/older
+  // treatment as everything else; they just never get a way to dismiss them.
   const isEssential = (x: DueItem) => x.key.startsWith("nums-") || x.key === "edt";
   const essentialDue = due.filter(isEssential);
   const routineDue = due.filter((x) => !isEssential(x));
@@ -257,11 +259,21 @@ export default function ThingsToDoCard() {
   // in view; anything older is tucked behind a tap instead of repeating.
   const isNewDue = (x: DueItem) => firstSeen[dismissKeyFor(x.key)] === today();
   const isNewFollowUp = (f: FollowUp) => f.created_at?.slice(0, 10) === today();
+  const newEssential = essentialDue.filter(isNewDue);
+  const olderEssential = essentialDue.filter((x) => !isNewDue(x));
   const newRoutine = routineDue.filter(isNewDue);
   const olderRoutine = routineDue.filter((x) => !isNewDue(x));
   const newFollowUps = followUps.filter(isNewFollowUp);
   const olderFollowUps = followUps.filter((f) => !isNewFollowUp(f));
-  const olderCount = olderRoutine.length + olderFollowUps.length;
+  const olderCount = olderEssential.length + olderRoutine.length + olderFollowUps.length;
+
+  function renderEssential(x: DueItem) {
+    return (
+      <div key={x.key} className="rec" style={x.urgent ? { color: "var(--danger)" } : undefined}>
+        <Link href="/dashboard/about">{x.text}</Link>
+      </div>
+    );
+  }
 
   function renderDue(x: DueItem) {
     return (
@@ -320,14 +332,10 @@ export default function ThingsToDoCard() {
     <div className="card" style={{ borderLeft: `4px solid ${anyUrgent ? "var(--danger)" : "var(--marker)"}` }}>
       <h3>Things to do{anyUrgent ? " ⚠" : ""}</h3>
 
-      {essentialDue.length > 0 && (
+      {newEssential.length > 0 && (
         <>
           <b style={{ display: "block", fontSize: 13, color: "var(--grey)" }}>Needs your attention</b>
-          {essentialDue.map((x) => (
-            <div key={x.key} className="rec" style={x.urgent ? { color: "var(--danger)" } : undefined}>
-              <Link href="/dashboard/about">{x.text}</Link>
-            </div>
-          ))}
+          {newEssential.map(renderEssential)}
         </>
       )}
 
@@ -350,6 +358,7 @@ export default function ThingsToDoCard() {
           </p>
           {showOlder && (
             <>
+              {olderEssential.map(renderEssential)}
               {olderRoutine.map(renderDue)}
               {olderFollowUps.map(renderFollowUp)}
             </>
