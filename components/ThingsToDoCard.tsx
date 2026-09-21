@@ -23,6 +23,7 @@ type FollowUp = {
   flag: string;
   flag_note: string;
   training_note: string;
+  created_at: string;
 };
 
 type DoneFollowUp = FollowUp & { flag_done_at: string; flag_dismissed: boolean };
@@ -60,7 +61,8 @@ export default function ThingsToDoCard() {
   const [doneReminders, setDoneReminders] = useState<Reminder[]>([]);
   const [dismissedDue, setDismissedDue] = useState<DismissedDue[]>([]);
   const [showDone, setShowDone] = useState(false);
-  const [showRoutine, setShowRoutine] = useState(true);
+  const [showOlder, setShowOlder] = useState(false);
+  const [firstSeen, setFirstSeen] = useState<Record<string, string>>({});
   const [openId, setOpenId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -89,10 +91,13 @@ export default function ThingsToDoCard() {
       supabase.from("shared_training_catalog").select("title").eq("group_key", "3yr").eq("archived", false),
       supabase.from("training_progress").select("course_title, completed_on"),
       supabase.from("reminders").select("*").order("date"),
-      supabase.from("records").select("id, bucket, child, text, flag, flag_note, training_note").eq("flag_done", false),
       supabase
         .from("records")
-        .select("id, bucket, child, text, flag, flag_note, training_note, flag_done_at, flag_dismissed")
+        .select("id, bucket, child, text, flag, flag_note, training_note, created_at")
+        .eq("flag_done", false),
+      supabase
+        .from("records")
+        .select("id, bucket, child, text, flag, flag_note, training_note, created_at, flag_done_at, flag_dismissed")
         .eq("flag_done", true)
         .order("flag_done_at", { ascending: false })
         .limit(20),
@@ -118,18 +123,36 @@ export default function ThingsToDoCard() {
     const dismissedKeys = new Set(dismissedList.map((d) => d.key));
 
     const allChildren = [...(children ?? []), ...(householdChildren ?? [])];
-    setDue(
-      [
-        ...unreportedIncidentItems(incidents ?? []),
-        ...invoiceMonthItems(settings?.invoice_day ?? 1, settings?.pay_day ?? 28, !!unpaidClaimed?.length),
-        ...bandChangeItems(allChildren),
-        ...trainingItems,
-        ...missingNumbersItems(allChildren),
-        ...edtMissingItem(household?.edt ?? ""),
-        ...dueReminders(remindersList),
-      ].filter((x) => !dismissedKeys.has(dismissKeyFor(x.key))),
-    );
+    const dueList = [
+      ...unreportedIncidentItems(incidents ?? []),
+      ...invoiceMonthItems(settings?.invoice_day ?? 1, settings?.pay_day ?? 28, !!unpaidClaimed?.length),
+      ...bandChangeItems(allChildren),
+      ...trainingItems,
+      ...missingNumbersItems(allChildren),
+      ...edtMissingItem(household?.edt ?? ""),
+      ...dueReminders(remindersList),
+    ].filter((x) => !dismissedKeys.has(dismissKeyFor(x.key)));
+    setDue(dueList);
     setDismissedDue(dismissedList);
+
+    // Nothing here had any record of how long it had actually been sitting
+    // there -- which is exactly what made the list feel like the same wall
+    // of nagging every day. Record the first date each key is ever seen
+    // (ignoreDuplicates leaves an existing row alone), then read it back so
+    // the render below can split "new today" from "been there a while".
+    const dueKeys = dueList.map((x) => dismissKeyFor(x.key));
+    if (dueKeys.length) {
+      await supabase.from("todo_first_seen").upsert(
+        dueKeys.map((k) => ({ key: k })),
+        { onConflict: "user_id,key", ignoreDuplicates: true },
+      );
+      const { data: seenRows } = await supabase.from("todo_first_seen").select("key, first_seen").in("key", dueKeys);
+      const seenMap: Record<string, string> = {};
+      (seenRows ?? []).forEach((r: { key: string; first_seen: string }) => (seenMap[r.key] = r.first_seen));
+      setFirstSeen(seenMap);
+    } else {
+      setFirstSeen({});
+    }
     setAllReminders(remindersList.filter((r) => !r.done));
     setFollowUps(
       ((openRecords as FollowUp[] | null) ?? []).filter((r) => (r.flag && r.flag !== "reminder") || r.training_note),
@@ -228,6 +251,71 @@ export default function ThingsToDoCard() {
   const essentialDue = due.filter(isEssential);
   const routineDue = due.filter((x) => !isEssential(x));
 
+  // The whole point of this split: nothing distinguished "this just appeared"
+  // from "this has been sitting here for weeks", which is exactly what made
+  // the list feel like the same nagging wall every day. New today stays right
+  // in view; anything older is tucked behind a tap instead of repeating.
+  const isNewDue = (x: DueItem) => firstSeen[dismissKeyFor(x.key)] === today();
+  const isNewFollowUp = (f: FollowUp) => f.created_at?.slice(0, 10) === today();
+  const newRoutine = routineDue.filter(isNewDue);
+  const olderRoutine = routineDue.filter((x) => !isNewDue(x));
+  const newFollowUps = followUps.filter(isNewFollowUp);
+  const olderFollowUps = followUps.filter((f) => !isNewFollowUp(f));
+  const olderCount = olderRoutine.length + olderFollowUps.length;
+
+  function renderDue(x: DueItem) {
+    return (
+      <div key={x.key} className="rec" style={x.urgent ? { color: "var(--danger)" } : undefined}>
+        <span>{x.text}</span>
+        <button className="chip" style={{ marginLeft: 8 }} onClick={() => dismissDue(x)}>
+          {x.key.startsWith("rem-") ? "Done" : "Dismiss"}
+        </button>
+      </div>
+    );
+  }
+
+  function renderFollowUp(f: FollowUp) {
+    const open = openId === f.id;
+    const urgent = FLAGS[f.flag as keyof typeof FLAGS]?.urgent;
+    const relatedForm = relatedFormFor(f.flag);
+    return (
+      <div
+        key={f.id}
+        className="rec"
+        style={urgent ? { color: "var(--danger)" } : undefined}
+        onClick={() => setOpenId(open ? null : f.id)}
+      >
+        <b>
+          {followUpIcon(f)} {followUpLabel(f)}
+        </b>
+        {f.child ? " · " + f.child : ""} <small className="muted">{open ? "" : "— tap for details"}</small>
+        {open && (
+          <div onClick={(e) => e.stopPropagation()}>
+            <div className="muted" style={{ margin: "4px 0" }}>
+              {f.text}
+            </div>
+            {followUpGuidance(f) && <div className="note">{followUpGuidance(f)}</div>}
+            {f.training_note && f.flag !== "training" && <div className="note">💡 {f.training_note}</div>}
+            {relatedForm && (
+              <div className="note">
+                📄{" "}
+                <a href={relatedForm.url} target="_blank" rel="noopener noreferrer">
+                  {relatedForm.name} ↗
+                </a>
+              </div>
+            )}
+            <button className="chip on" onClick={() => markFollowUpDone(f.id)}>
+              Mark done
+            </button>{" "}
+            <button className="chip" onClick={() => dismissFollowUp(f.id)}>
+              Dismiss
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="card" style={{ borderLeft: `4px solid ${anyUrgent ? "var(--danger)" : "var(--marker)"}` }}>
       <h3>Things to do{anyUrgent ? " ⚠" : ""}</h3>
@@ -243,26 +331,9 @@ export default function ThingsToDoCard() {
         </>
       )}
 
-      {routineDue.length > 0 && (
-        <>
-          <p
-            className="hint"
-            style={{ marginTop: essentialDue.length > 0 ? 10 : 0, cursor: "pointer" }}
-            onClick={() => setShowRoutine(!showRoutine)}
-          >
-            {showRoutine ? "▾" : "▸"} Reminders & admin ({routineDue.length}) — tap to {showRoutine ? "hide" : "show"}
-          </p>
-          {showRoutine &&
-            routineDue.map((x) => (
-              <div key={x.key} className="rec" style={x.urgent ? { color: "var(--danger)" } : undefined}>
-                <span>{x.text}</span>
-                <button className="chip" style={{ marginLeft: 8 }} onClick={() => dismissDue(x)}>
-                  {x.key.startsWith("rem-") ? "Done" : "Dismiss"}
-                </button>
-              </div>
-            ))}
-        </>
-      )}
+      {newRoutine.map(renderDue)}
+      {newFollowUps.map(renderFollowUp)}
+
       {allReminders.length > 0 && (
         <p className="muted">
           Tap a reminder to add it to your phone calendar for an alert:{" "}
@@ -272,47 +343,19 @@ export default function ThingsToDoCard() {
         </p>
       )}
 
-      {followUps.map((f) => {
-        const open = openId === f.id;
-        const urgent = FLAGS[f.flag as keyof typeof FLAGS]?.urgent;
-        const relatedForm = relatedFormFor(f.flag);
-        return (
-          <div
-            key={f.id}
-            className="rec"
-            style={urgent ? { color: "var(--danger)" } : undefined}
-            onClick={() => setOpenId(open ? null : f.id)}
-          >
-            <b>
-              {followUpIcon(f)} {followUpLabel(f)}
-            </b>
-            {f.child ? " · " + f.child : ""} <small className="muted">{open ? "" : "— tap for details"}</small>
-            {open && (
-              <div onClick={(e) => e.stopPropagation()}>
-                <div className="muted" style={{ margin: "4px 0" }}>
-                  {f.text}
-                </div>
-                {followUpGuidance(f) && <div className="note">{followUpGuidance(f)}</div>}
-                {f.training_note && f.flag !== "training" && <div className="note">💡 {f.training_note}</div>}
-                {relatedForm && (
-                  <div className="note">
-                    📄{" "}
-                    <a href={relatedForm.url} target="_blank" rel="noopener noreferrer">
-                      {relatedForm.name} ↗
-                    </a>
-                  </div>
-                )}
-                <button className="chip on" onClick={() => markFollowUpDone(f.id)}>
-                  Mark done
-                </button>{" "}
-                <button className="chip" onClick={() => dismissFollowUp(f.id)}>
-                  Dismiss
-                </button>
-              </div>
-            )}
-          </div>
-        );
-      })}
+      {olderCount > 0 && (
+        <>
+          <p className="hint" style={{ marginTop: 10, cursor: "pointer" }} onClick={() => setShowOlder(!showOlder)}>
+            {showOlder ? "▾" : "▸"} Been on your list a while ({olderCount}) — tap to {showOlder ? "hide" : "show"}
+          </p>
+          {showOlder && (
+            <>
+              {olderRoutine.map(renderDue)}
+              {olderFollowUps.map(renderFollowUp)}
+            </>
+          )}
+        </>
+      )}
 
       {(doneFollowUps.length > 0 || doneReminders.length > 0 || dismissedDue.length > 0) && (
         <>
