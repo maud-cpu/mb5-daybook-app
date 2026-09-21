@@ -516,4 +516,6 @@ export type PendingItem = Partial<EntryRecord> & {
   reminder_date?: string | null;
   /** A school contact (e.g. class teacher) the AI spotted in the text, offered as a one-click save to the tagged child's School admin. */
   school_contact?: { name: string; contact: string } | null;
+  /** A recurring club/activity the AI spotted in the text, offered as a one-click save to the tagged child's Clubs list. */
+  club?: { name: string; weekday: string; timeFrom: string; timeTo: string; provider: string } | null;
 };

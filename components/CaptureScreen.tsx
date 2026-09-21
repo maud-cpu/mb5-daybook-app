@@ -28,6 +28,7 @@ const MONTH_NAMES = [
 
 const CURRENT_YEAR = new Date().getFullYear();
 const BIRTH_YEARS = Array.from({ length: 26 }, (_, i) => String(CURRENT_YEAR - i));
+const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 function openLabel(length: string): string {
   const medium = (length.split(/,|—/)[0] || "").trim().toLowerCase();
@@ -63,6 +64,16 @@ export default function CaptureScreen() {
   // whichever of the two tables the child actually lives in.
   const [basicsByChildId, setBasicsByChildId] = useState<Record<string, Record<string, string>>>({});
   const [childTable, setChildTable] = useState<Record<string, "children" | "household_children">>({});
+  const [clubsByChildId, setClubsByChildId] = useState<Record<string, { club_name: string }[]>>({});
+
+  async function loadClubs() {
+    const { data } = await supabase.from("child_clubs").select("child_id, club_name");
+    const map: Record<string, { club_name: string }[]> = {};
+    (data ?? []).forEach((r: { child_id: string; club_name: string }) => {
+      (map[r.child_id] ||= []).push({ club_name: r.club_name });
+    });
+    setClubsByChildId(map);
+  }
 
   async function loadChildren() {
     const [{ data: visiting }, { data: household }] = await Promise.all([
@@ -105,6 +116,7 @@ export default function CaptureScreen() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data load on mount
     loadChildren();
+    loadClubs();
     supabase
       .from("shared_rates")
       .select("*")
@@ -270,6 +282,40 @@ export default function CaptureScreen() {
     }
     updatePending(i, { school_contact: null });
     showToast(`Saved to ${childNames.join(" & ")}'s Key contacts at school`);
+  }
+
+  // A club is its own row per child (child_clubs has no natural key to
+  // upsert on, unlike the single school-admin record per child), so this
+  // inserts fresh rather than merging into an existing one -- the "already
+  // on file" check above is what stops it creating a duplicate on a club
+  // mentioned again another day.
+  async function saveClub(i: number, childNames: string[]) {
+    const club = pending[i].club;
+    if (!club) return;
+    const targets = childNames.map((n) => children.find((c) => c.name === n)).filter((c): c is Child => !!c);
+    if (!targets.length) return;
+    const weekday = Math.max(0, WEEKDAYS.indexOf(club.weekday));
+    const { error } = await supabase.from("child_clubs").insert(
+      targets.map((c) => ({
+        child_id: c.id,
+        club_name: club.name,
+        weekday,
+        time_from: club.timeFrom,
+        time_to: club.timeTo,
+        contact_name: club.provider,
+      })),
+    );
+    if (error) {
+      showToast("Couldn't save: " + error.message);
+      return;
+    }
+    setClubsByChildId((prev) => {
+      const next = { ...prev };
+      targets.forEach((c) => (next[c.id] = [...(next[c.id] || []), { club_name: club.name }]));
+      return next;
+    });
+    updatePending(i, { club: null });
+    showToast(`Saved to ${childNames.join(" & ")}'s Clubs`);
   }
 
   async function saveAll() {
@@ -717,6 +763,70 @@ export default function CaptureScreen() {
                         Save as {needsUpdate.join(" & ")}&apos;s teacher
                       </button>{" "}
                       <button className="chip" onClick={() => updatePending(i, { school_contact: null })}>
+                        Don&apos;t save
+                      </button>
+                    </div>
+                  );
+                })()}
+              {p.club &&
+                (() => {
+                  // Only kids who don't already have a club by this name on
+                  // file -- so mentioning "acro dance" again another week
+                  // doesn't offer to add a duplicate.
+                  const needsClub = p.kids.filter((k) => {
+                    const c = children.find((ch) => ch.name === k);
+                    if (!c) return false;
+                    return !(clubsByChildId[c.id] || []).some(
+                      (cl) => cl.club_name.trim().toLowerCase() === p.club!.name.trim().toLowerCase(),
+                    );
+                  });
+                  if (!needsClub.length) return null;
+                  return (
+                    <div className="note">
+                      <div style={{ marginBottom: 6 }}>
+                        🧩 New club for {needsClub.join(" & ")} — check it&apos;s right, then save:
+                      </div>
+                      <div className="row" style={{ margin: "0 0 6px" }}>
+                        <input
+                          placeholder="Club name"
+                          value={p.club.name}
+                          onChange={(e) => updatePending(i, { club: { ...p.club!, name: e.target.value } })}
+                        />
+                        <select
+                          value={p.club.weekday}
+                          onChange={(e) => updatePending(i, { club: { ...p.club!, weekday: e.target.value } })}
+                          style={{ flex: "0 0 auto" }}
+                        >
+                          {WEEKDAYS.map((d) => (
+                            <option key={d} value={d}>
+                              {d}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="row" style={{ margin: "0 0 6px" }}>
+                        <input
+                          type="time"
+                          style={{ flex: "0 0 110px" }}
+                          value={p.club.timeFrom}
+                          onChange={(e) => updatePending(i, { club: { ...p.club!, timeFrom: e.target.value } })}
+                        />
+                        <input
+                          type="time"
+                          style={{ flex: "0 0 110px" }}
+                          value={p.club.timeTo}
+                          onChange={(e) => updatePending(i, { club: { ...p.club!, timeTo: e.target.value } })}
+                        />
+                        <input
+                          placeholder="Provider (optional)"
+                          value={p.club.provider}
+                          onChange={(e) => updatePending(i, { club: { ...p.club!, provider: e.target.value } })}
+                        />
+                      </div>
+                      <button className="chip" onClick={() => saveClub(i, needsClub)}>
+                        Save as {needsClub.join(" & ")}&apos;s club
+                      </button>{" "}
+                      <button className="chip" onClick={() => updatePending(i, { club: null })}>
                         Don&apos;t save
                       </button>
                     </div>
