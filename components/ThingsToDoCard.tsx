@@ -250,12 +250,13 @@ export default function ThingsToDoCard() {
   const anyUrgent = due.some((x) => x.urgent) || followUps.some((f) => FLAGS[f.flag as keyof typeof FLAGS]?.urgent);
 
   // Missing CSW/GP/duty-line details and a missing EDT number are safeguarding
-  // basics, not routine nagging -- they have nowhere to hide via a Dismiss
-  // button, and only ever leave this list once the field is actually filled
-  // in. But always-visible turned out to be its own kind of stress -- seeing
-  // the same "add CSW details" line every single day was exactly what this
-  // whole redesign is trying to stop. So they get the same new/older
-  // treatment as everything else; they just never get a way to dismiss them.
+  // basics that only ever leave this list once the field is actually filled
+  // in -- so they used to sit permanently at the top, "new" or not, and that
+  // was exactly the nagging she kept coming back to say was stressing her
+  // out. They now never appear in the un-collapsed part of the list at all --
+  // they're admin housekeeping, not a today-shaped task -- and live only in
+  // "Been on your list a while" like everything else that's been sitting
+  // around, however long they've actually been outstanding.
   const isEssential = (x: DueItem) => x.key.startsWith("nums-") || x.key === "edt";
   const essentialDue = due.filter(isEssential);
   const routineDue = due.filter((x) => !isEssential(x));
@@ -266,7 +267,6 @@ export default function ThingsToDoCard() {
   // in view; anything older is tucked behind a tap instead of repeating.
   const isNewDue = (x: DueItem) => firstSeen[dismissKeyFor(x.key)] === today();
   const isNewFollowUp = (f: FollowUp) => f.created_at?.slice(0, 10) === today();
-  const newEssential = essentialDue.filter(isNewDue);
   const newRoutine = routineDue.filter(isNewDue);
   const newFollowUps = followUps.filter(isNewFollowUp);
 
@@ -276,7 +276,7 @@ export default function ThingsToDoCard() {
   // queries happened to return.
   const byFirstSeenDesc = (a: DueItem, b: DueItem) =>
     (firstSeen[dismissKeyFor(b.key)] || "").localeCompare(firstSeen[dismissKeyFor(a.key)] || "");
-  const olderEssential = essentialDue.filter((x) => !isNewDue(x)).sort(byFirstSeenDesc);
+  const olderEssential = [...essentialDue].sort(byFirstSeenDesc);
   const olderRoutine = routineDue.filter((x) => !isNewDue(x)).sort(byFirstSeenDesc);
   const olderFollowUps = followUps.filter((f) => !isNewFollowUp(f)).sort((a, b) => b.created_at.localeCompare(a.created_at));
   const olderCount = olderEssential.length + olderRoutine.length + olderFollowUps.length;
@@ -361,13 +361,6 @@ export default function ThingsToDoCard() {
   return (
     <div className="card" style={{ borderLeft: `4px solid ${anyUrgent ? "var(--danger)" : "var(--marker)"}` }}>
       <h3>Things to do{anyUrgent ? " ⚠" : ""}</h3>
-
-      {newEssential.length > 0 && (
-        <>
-          <b style={{ display: "block", fontSize: 13, color: "var(--grey)" }}>Needs your attention</b>
-          {newEssential.map(renderEssential)}
-        </>
-      )}
 
       {newRoutine.map(renderDue)}
       {newFollowUps.map(renderFollowUp)}
