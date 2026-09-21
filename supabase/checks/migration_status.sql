@@ -175,6 +175,9 @@ select migration, applied from (
 
     ('0032 child_school_admin and child_clubs tables',
       to_regclass('public.child_school_admin') is not null
-      and to_regclass('public.child_clubs') is not null)
+      and to_regclass('public.child_clubs') is not null),
+
+    ('0033 todo_first_seen table',
+      to_regclass('public.todo_first_seen') is not null)
 ) as t(migration, applied)
 order by migration;
