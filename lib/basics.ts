@@ -75,6 +75,13 @@ export const BASICS_SECTIONS: BasicsSection[] = [
     ],
   },
   {
+    title: "Food",
+    fields: [
+      { key: "food_likes", label: "Likes", placeholder: "favourite meals, snacks" },
+      { key: "food_dislikes", label: "Dislikes", placeholder: "won't eat, texture issues, etc" },
+    ],
+  },
+  {
     title: "Education",
     fields: [
       { key: "school", label: "School & year", placeholder: "name · phone · year · class" },
