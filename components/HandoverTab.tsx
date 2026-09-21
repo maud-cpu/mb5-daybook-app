@@ -35,8 +35,6 @@ const CLUB_WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "
 // below already states for card PINs/passwords/DOB: nothing that could let
 // someone into an account travels in a document that leaves the house.
 const SCHOOL_ADMIN_EXPORT_FIELDS: [string, string][] = [
-  ["teacher_name", "Class teacher"],
-  ["teacher_contact", "Teacher contact"],
   ["lunch_payment", "Paying for school lunches"],
   ["homework_app_name", "Homework app/website"],
   ["homework_app_url", "Homework app link"],
