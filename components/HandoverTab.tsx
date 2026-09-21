@@ -72,16 +72,36 @@ function blankHousehold(): Profile {
  * anything into the actual handover field it takes over completely, so
  * this never overwrites something already filled in on purpose.
  */
+// "Key contacts at school" is a repeatable list (see lib/basics.ts), stored
+// as a JSON-array string -- not read as plain text like every other basics
+// field, so it needs parsing before it's fit to drop into a sentence.
+function formatSchoolContacts(raw: string): string {
+  try {
+    const parsed = JSON.parse(raw || "[]");
+    if (!Array.isArray(parsed)) return "";
+    return parsed
+      .map((c: { name?: string; phone?: string; email?: string }) =>
+        [c.name, [c.phone, c.email].filter(Boolean).join(" / ")].filter(Boolean).join(" — "),
+      )
+      .filter(Boolean)
+      .join("; ");
+  } catch {
+    return raw;
+  }
+}
+
 function suggestProfile(child: ChildRow): Partial<Profile> {
   const b = child.basics || {};
   const health = [b.gp && `GP: ${b.gp}`, b.allergies && `Allergies/medication: ${b.allergies}`, b.nhs && `NHS number: ${b.nhs}`]
     .filter(Boolean)
     .join("\n");
-  const school = [b.school && `School: ${b.school}`, b.teacher && `Key contact: ${b.teacher}`].filter(Boolean).join("\n");
+  const schoolContacts = formatSchoolContacts(b.teacher || "");
+  const school = [b.school && `School: ${b.school}`, schoolContacts && `Key contact: ${schoolContacts}`].filter(Boolean).join("\n");
+  const food = [b.food_likes && `Likes: ${b.food_likes}`, b.food_dislikes && `Dislikes: ${b.food_dislikes}`].filter(Boolean).join("\n");
   const nogo = [b.nocontact && `Must NOT have contact: ${b.nocontact}`, b.photos && `Photo/social media: ${b.photos}`]
     .filter(Boolean)
     .join("\n");
-  return { health, school, contact: b.contact || "", nogo };
+  return { health, school, food, contact: b.contact || "", nogo };
 }
 
 function suggestHousehold(selectedChildren: ChildRow[], aboutHousehold: AboutHousehold): Partial<Profile> {
