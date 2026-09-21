@@ -182,6 +182,9 @@ select migration, applied from (
 
     ('0034 YourKids articles seeded into shared_training_catalog',
       exists (select 1 from shared_training_catalog where title = 'AI Chatbots and Teens')
-      and exists (select 1 from shared_training_catalog where title = 'Toddler Tantrums: Why They Happen and How to Respond'))
+      and exists (select 1 from shared_training_catalog where title = 'Toddler Tantrums: Why They Happen and How to Respond')),
+
+    ('0035 YourKids articles show their platform',
+      exists (select 1 from shared_training_catalog where title = 'AI Chatbots and Teens' and platform = 'YourKids'))
 ) as t(migration, applied)
 order by migration;
