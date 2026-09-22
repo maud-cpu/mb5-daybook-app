@@ -22,6 +22,7 @@ type Course = {
   is_face_to_face: boolean;
   session_date: string | null;
   archived: boolean;
+  updated_at: string;
 };
 type Platform = { name: string; url: string };
 
@@ -178,6 +179,7 @@ export default function AdminSharedContent() {
   const [bulkStatus, setBulkStatus] = useState("");
   const [courseTab, setCourseTab] = useState<"active" | "archived">("active");
   const [courseSearch, setCourseSearch] = useState("");
+  const [courseSort, setCourseSort] = useState<"manual" | "newest" | "oldest">("manual");
   const [fetchingUrlFor, setFetchingUrlFor] = useState<Set<string>>(new Set());
   const [newCourseTitle, setNewCourseTitle] = useState<Record<string, string>>({});
 
@@ -733,13 +735,23 @@ export default function AdminSharedContent() {
         </button>
       </div>
 
-      <input
-        type="text"
-        placeholder="Search by title or description…"
-        value={courseSearch}
-        onChange={(e) => setCourseSearch(e.target.value)}
-        style={{ margin: "8px 0" }}
-      />
+      <div className="row" style={{ margin: "8px 0", flexWrap: "wrap" }}>
+        <input
+          type="text"
+          placeholder="Search by title or description…"
+          value={courseSearch}
+          onChange={(e) => setCourseSearch(e.target.value)}
+        />
+        <select
+          value={courseSort}
+          onChange={(e) => setCourseSort(e.target.value as "manual" | "newest" | "oldest")}
+          style={{ flex: "0 0 auto", width: "auto" }}
+        >
+          <option value="manual">Manual order</option>
+          <option value="newest">Newest added first</option>
+          <option value="oldest">Oldest added first</option>
+        </select>
+      </div>
 
       {["pre", "once", "3yr", "next"]
         .filter((g) =>
@@ -760,6 +772,11 @@ export default function AdminSharedContent() {
                 (courseTab === "archived" ? c.archived : !c.archived) &&
                 matchesCourseSearch(c, courseSearch),
             )
+            .sort((a, b) => {
+              if (courseSort === "newest") return b.updated_at.localeCompare(a.updated_at);
+              if (courseSort === "oldest") return a.updated_at.localeCompare(b.updated_at);
+              return 0;
+            })
             .map((c) => (
               <div key={c.id} style={{ borderBottom: "1px solid #eee", padding: "6px 0" }}>
                 <div className="row" style={{ alignItems: "center" }}>
