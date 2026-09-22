@@ -432,6 +432,28 @@ nav.tabbar a.on {
   }
 }
 
+/* Training & Resources: "Suggested from your notes" next to the compulsory
+   courses instead of both being full-width stacked cards -- the right side
+   can hold more than one card (pre-placement/once-only/3-yearly), so only
+   the left card's own margin is reset, not cards nested on the right. */
+.training-top-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 16px;
+}
+
+.training-top-grid > .card {
+  margin-bottom: 0;
+}
+
+@media (min-width: 720px) {
+  .training-top-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

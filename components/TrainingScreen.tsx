@@ -20,6 +20,7 @@ type Course = {
   external_rating_note: string;
   is_face_to_face: boolean;
   session_date: string | null;
+  updated_at: string;
 };
 
 type Platform = { name: string; url: string };
@@ -58,6 +59,22 @@ function mediumOf(c: Course): string {
 
 function isMandatory(c: Course): boolean {
   return c.group_key !== "next";
+}
+
+const NEXT_SORTS = [
+  ["random", "Shuffle"],
+  ["newest", "Newest added"],
+  ["length", "Length"],
+] as const;
+
+// A stable pseudo-random number for (seed, id) -- gives a shuffled order
+// that stays put across re-renders within a page load (typing in the
+// search box shouldn't reshuffle the list), but looks different each time
+// the page is loaded fresh, since `seed` is regenerated then.
+function seededRandom(seed: number, id: string): number {
+  let h = seed * 2654435761;
+  for (let i = 0; i < id.length; i++) h = (h ^ id.charCodeAt(i)) * 16777619;
+  return Math.abs(Math.sin(h));
 }
 
 function statusFor(course: Course, completedOn: string | undefined) {
@@ -170,6 +187,8 @@ export default function TrainingScreen() {
   const [sessionDates, setSessionDates] = useState<Record<string, string>>({});
   const [dismissed, setDismissed] = useState<{ title: string; dismissed_at: string }[]>([]);
   const [showDismissed, setShowDismissed] = useState(false);
+  const [nextSort, setNextSort] = useState<(typeof NEXT_SORTS)[number][0]>("random");
+  const [randomSeed] = useState(() => Math.random());
 
   async function load() {
     const [{ data: c }, { data: pl }, { data: pr }, { data: notes }, { data: fb }, { data: userData }, { data: dis }] =
@@ -296,19 +315,89 @@ export default function TrainingScreen() {
     return true;
   }
 
-  const groups = GROUP_ORDER.map((key) => ({
-    key,
-    label: courses.find((c) => c.group_key === key)?.group_label || key,
-    rows: courses.filter(
+  const groups = GROUP_ORDER.map((key) => {
+    const rows = courses.filter(
       (c) => c.group_key === key && !personalTitles.has(c.title.trim().toLowerCase()) && matchesFilters(c),
-    ),
-  })).filter((g) => g.rows.length);
+    );
+    // "next" (the non-mandatory, suggested-to-consider group) defaults to a
+    // shuffled order rather than always showing the same courses first --
+    // a fixed sort_order made the ones further down easy to never notice.
+    if (key === "next") {
+      rows.sort((a, b) => {
+        if (nextSort === "newest") return b.updated_at.localeCompare(a.updated_at);
+        if (nextSort === "length") return (minutesOf(a.length) ?? 9999) - (minutesOf(b.length) ?? 9999);
+        return seededRandom(randomSeed, a.id) - seededRandom(randomSeed, b.id);
+      });
+    }
+    return { key, label: courses.find((c) => c.group_key === key)?.group_label || key, rows };
+  }).filter((g) => g.rows.length);
+  const mandatoryGroups = groups.filter((g) => g.key !== "next");
+  const nextGroup = groups.find((g) => g.key === "next");
   const personalEntries = Object.entries(personal).filter(([title]) => {
     if (dismissedTitles.has(title.trim().toLowerCase())) return false;
     const course = courses.find((c) => c.title.trim().toLowerCase() === title.trim().toLowerCase());
     return course ? matchesFilters(course) : title.toLowerCase().includes(search.trim().toLowerCase());
   });
   const filtersActive = search.trim() || mediaFilter || lengthFilter;
+
+  function renderGroupCard(g: { key: string; label: string; rows: Course[] }, extra?: React.ReactNode) {
+    return (
+      <div className="card" key={g.key}>
+        <h3>{g.label}</h3>
+        {extra}
+        {g.rows.map((c) => {
+          const completedOn = progress[c.title];
+          const status = statusFor(c, completedOn);
+          const url = withAmazonAffiliateTag(c.url || platformUrl(c.platform));
+          return (
+            <div key={c.id} className="row" style={{ alignItems: "center", borderBottom: "1px solid #eee", padding: "6px 0" }}>
+              <div style={{ flex: 1 }}>
+                <b>
+                  {isMandatory(c) && "⭐ "}
+                  {c.title}
+                </b>
+                <br />
+                <small className="muted">{[c.how, c.platform, c.length].filter(Boolean).join(" · ")}</small>
+                {status.label && (
+                  <>
+                    <br />
+                    <small style={{ color: status.color }}>{status.label}</small>
+                  </>
+                )}
+                <RatingWidget course={c} feedback={feedback} myUserId={myUserId} onRate={rateCourse} />
+                {c.is_face_to_face && (
+                  <div style={{ marginTop: 4 }}>
+                    <small className="muted">
+                      🎓 Face to face{c.session_date ? ` — shared date ${c.session_date}` : ""} — on your calendar once a
+                      date&apos;s set
+                    </small>
+                    <br />
+                    <input
+                      type="date"
+                      placeholder="Your session date, if different"
+                      value={sessionDates[c.title] || ""}
+                      onChange={(e) => setSessionDate(c.title, e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+              {url && (
+                <a className="chip" style={{ flex: "0 0 auto" }} href={url} target="_blank" rel="noopener noreferrer">
+                  Open ↗
+                </a>
+              )}
+              <input
+                type="date"
+                style={{ flex: "0 0 150px" }}
+                value={completedOn || ""}
+                onChange={(e) => setCompleted(c.title, e.target.value)}
+              />
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -356,11 +445,15 @@ export default function TrainingScreen() {
       <div className="card">
         <FormsReference />
       </div>
-      {personalEntries.length > 0 && (
-        <div className="card" style={{ border: "2px solid var(--accent)" }}>
-          <h3>Suggested from your notes</h3>
-          <p className="note">These came up because of something you actually wrote, not just the general list below.</p>
-          {personalEntries.map(([title, info]) => {
+      {(() => {
+        const compulsory = mandatoryGroups.map((g) => renderGroupCard(g));
+        if (personalEntries.length === 0) return compulsory;
+        return (
+          <div className="training-top-grid">
+            <div className="card" style={{ border: "2px solid var(--accent)" }}>
+              <h3>Suggested from your notes</h3>
+              <p className="note">These came up because of something you actually wrote, not just the general list below.</p>
+              {personalEntries.map(([title, info]) => {
             const course = courses.find((c) => c.title.trim().toLowerCase() === title.trim().toLowerCase());
             const completedOn = progress[title];
             const status = course ? statusFor(course, completedOn) : { label: "", color: "" };
@@ -411,9 +504,12 @@ export default function TrainingScreen() {
                 </button>
               </div>
             );
-          })}
-        </div>
-      )}
+              })}
+            </div>
+            <div>{compulsory}</div>
+          </div>
+        );
+      })()}
       {dismissed.length > 0 && (
         <div className="card">
           <p className="hint" style={{ cursor: "pointer" }} onClick={() => setShowDismissed(!showDismissed)}>
@@ -436,67 +532,24 @@ export default function TrainingScreen() {
             ))}
         </div>
       )}
-      {groups.map((g) => (
-        <div className="card" key={g.key}>
-          <h3>{g.label}</h3>
-          {g.rows.map((c) => {
-            const completedOn = progress[c.title];
-            const status = statusFor(c, completedOn);
-            const url = withAmazonAffiliateTag(c.url || platformUrl(c.platform));
-            return (
-              <div
-                key={c.id}
-                className="row"
-                style={{ alignItems: "center", borderBottom: "1px solid #eee", padding: "6px 0" }}
-              >
-                <div style={{ flex: 1 }}>
-                  <b>
-                    {isMandatory(c) && "⭐ "}
-                    {c.title}
-                  </b>
-                  <br />
-                  <small className="muted">
-                    {[c.how, c.platform, c.length].filter(Boolean).join(" · ")}
-                  </small>
-                  {status.label && (
-                    <>
-                      <br />
-                      <small style={{ color: status.color }}>{status.label}</small>
-                    </>
-                  )}
-                  <RatingWidget course={c} feedback={feedback} myUserId={myUserId} onRate={rateCourse} />
-                  {c.is_face_to_face && (
-                    <div style={{ marginTop: 4 }}>
-                      <small className="muted">
-                        🎓 Face to face{c.session_date ? ` — shared date ${c.session_date}` : ""} — on your calendar once
-                        a date&apos;s set
-                      </small>
-                      <br />
-                      <input
-                        type="date"
-                        placeholder="Your session date, if different"
-                        value={sessionDates[c.title] || ""}
-                        onChange={(e) => setSessionDate(c.title, e.target.value)}
-                      />
-                    </div>
-                  )}
-                </div>
-                {url && (
-                  <a className="chip" style={{ flex: "0 0 auto" }} href={url} target="_blank" rel="noopener noreferrer">
-                    Open ↗
-                  </a>
-                )}
-                <input
-                  type="date"
-                  style={{ flex: "0 0 150px" }}
-                  value={completedOn || ""}
-                  onChange={(e) => setCompleted(c.title, e.target.value)}
-                />
-              </div>
-            );
-          })}
-        </div>
-      ))}
+      {nextGroup &&
+        renderGroupCard(
+          nextGroup,
+          <div className="row" style={{ margin: "0 0 10px", alignItems: "center", justifyContent: "space-between" }}>
+            <p className="hint" style={{ margin: 0 }}>Other courses worth considering, in no particular order.</p>
+            <select
+              value={nextSort}
+              onChange={(e) => setNextSort(e.target.value as (typeof NEXT_SORTS)[number][0])}
+              style={{ flex: "0 0 auto" }}
+            >
+              {NEXT_SORTS.map(([k, l]) => (
+                <option key={k} value={k}>
+                  {l}
+                </option>
+              ))}
+            </select>
+          </div>,
+        )}
       {filtersActive && personalEntries.length === 0 && groups.length === 0 && (
         <div className="card">
           <p className="empty">No training matches that search — try clearing the filters above.</p>

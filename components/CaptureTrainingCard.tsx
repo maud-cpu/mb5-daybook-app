@@ -7,6 +7,15 @@ import { withAmazonAffiliateTag } from "@/lib/amazon";
 
 type Suggestion = { title: string; reasons: string[]; length: string; url: string };
 
+// A stable pseudo-random number for (seed, id) -- gives a shuffled order
+// that doesn't move around on re-render, but looks different each time the
+// page loads fresh, since `seed` is regenerated then.
+function seededRandom(seed: number, id: string): number {
+  let h = seed * 2654435761;
+  for (let i = 0; i < id.length; i++) h = (h ^ id.charCodeAt(i)) * 16777619;
+  return Math.abs(Math.sin(h));
+}
+
 // Same source as Training & Resources' "Suggested from your notes" card
 // (records.training_note) and the same dismissed_training_suggestions
 // table, so dismissing one place dismisses it everywhere.
@@ -14,6 +23,7 @@ export default function CaptureTrainingCard() {
   const supabase = createClient();
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [randomSeed] = useState(() => Math.random());
 
   async function load() {
     const [{ data: notes }, { data: dismissed }, { data: courses }, { data: platforms }] = await Promise.all([
@@ -48,12 +58,14 @@ export default function CaptureTrainingCard() {
     });
 
     setSuggestions(
-      Object.entries(map).map(([title, info]) => ({
-        title,
-        reasons: info.reasons,
-        length: courseByTitle[title.trim().toLowerCase()]?.length || "",
-        url: courseByTitle[title.trim().toLowerCase()]?.url || "",
-      })),
+      Object.entries(map)
+        .map(([title, info]) => ({
+          title,
+          reasons: info.reasons,
+          length: courseByTitle[title.trim().toLowerCase()]?.length || "",
+          url: courseByTitle[title.trim().toLowerCase()]?.url || "",
+        }))
+        .sort((a, b) => seededRandom(randomSeed, a.title) - seededRandom(randomSeed, b.title)),
     );
     setLoaded(true);
   }
