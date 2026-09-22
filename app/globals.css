@@ -432,6 +432,17 @@ nav.tabbar a.on {
   }
 }
 
+/* About us: two separate, non-touching wheels -- household and regular
+   visitors aren't the same circle of people, so they don't share one. Side
+   by side with room to breathe on a wide screen, stacked on a phone. */
+.about-wheels {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 28px;
+}
+
 /* Training & Resources: "Suggested from your notes" next to the compulsory
    courses instead of both being full-width stacked cards -- the right side
    can hold more than one card (pre-placement/once-only/3-yearly), so only
