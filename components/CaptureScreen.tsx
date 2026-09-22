@@ -569,12 +569,13 @@ export default function CaptureScreen() {
   return (
     <div>
       <div className="capture-top-grid">
-        <div className="card">
+        <div className="card" style={{ display: "flex", flexDirection: "column" }}>
           <h3>Tell me anything</h3>
           <textarea
             placeholder="A note, or a command — 'diary', 'supervision', 'expenses', 'social worker', 'incident', 'just record', or 'add parents evening to the calendar on the 12th'. Mileage and hours of day care get costed automatically."
             value={cap}
             onChange={(e) => setCap(e.target.value)}
+            style={{ flex: 1, minHeight: 200 }}
           />
           <button className="btn" disabled={busy || !cap.trim()} onClick={sortIt}>
             {busy ? "Sorting…" : "Sort it"}
