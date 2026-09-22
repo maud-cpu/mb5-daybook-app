@@ -408,6 +408,7 @@ ${sortedSelected
         const child = children.find((c) => c.name === n);
         if (!child) return null;
         const p = profileOf(child.id);
+        const suggested = suggestProfile(child);
         return (
           <div className="card" key={child.id}>
             <h3>{n}</h3>
@@ -416,20 +417,50 @@ ${sortedSelected
             </button>
             <p className="note">Fills empty boxes only, from what&apos;s actually in your diary entries about {n}.</p>
             {draftErrors[child.id] && <p style={{ color: "var(--danger)", fontSize: 14 }}>{draftErrors[child.id]}</p>}
-            {PROFILE_FIELDS.map(([k, label, hint]) => (
-              <div key={k} style={{ marginBottom: 10 }}>
-                <b>{label}</b>
-                <p className="muted" style={{ margin: "0 0 4px" }}>
-                  {hint}
-                </p>
-                <textarea
-                  key={`${k}-${profiles[child.id]?.[k] ?? ""}`}
-                  placeholder={`Nothing yet — ${hint}`}
-                  defaultValue={p[k]}
-                  onBlur={(e) => saveProfileField(child.id, k, e.target.value)}
-                />
-              </div>
-            ))}
+            {PROFILE_FIELDS.map(([k, label, hint]) => {
+              const savedValue = (profiles[child.id]?.[k] || "").trim();
+              const suggestedValue = (suggested[k] || "").trim();
+              // If About us has something new that the saved box doesn't
+              // already contain (e.g. a dislike added after Food was last
+              // saved), offer to pull it in rather than silently staying
+              // stale forever -- saving a field here otherwise takes over
+              // completely and stops updating from About us.
+              const hasNewSuggestion = suggestedValue && !savedValue.includes(suggestedValue) && suggestedValue !== savedValue;
+              return (
+                <div key={k} style={{ marginBottom: 10 }}>
+                  <div className="row" style={{ alignItems: "center", margin: 0, gap: 8 }}>
+                    <b style={{ flex: 1 }}>{label}</b>
+                    {hasNewSuggestion && (
+                      <button
+                        className="chip"
+                        style={{ margin: 0, flex: "0 0 auto" }}
+                        onClick={() => saveProfileField(child.id, k, suggested[k]!)}
+                      >
+                        ↻ Update from About us
+                      </button>
+                    )}
+                  </div>
+                  <p className="muted" style={{ margin: "0 0 4px" }}>
+                    {hint}
+                  </p>
+                  <textarea
+                    key={`${k}-${profiles[child.id]?.[k] ?? ""}`}
+                    placeholder={`Nothing yet — ${hint}`}
+                    defaultValue={p[k]}
+                    onFocus={(e) => (e.target.dataset.initial = e.target.value)}
+                    onBlur={(e) => {
+                      // Tabbing or clicking through an unedited, suggested box
+                      // was saving the suggestion as if it had been typed on
+                      // purpose -- once saved it's treated as final and never
+                      // updated again, so e.g. a later "doesn't like carrots"
+                      // note stopped showing up under Food. Only save when the
+                      // text actually changed while focused.
+                      if (e.target.value !== e.target.dataset.initial) saveProfileField(child.id, k, e.target.value);
+                    }}
+                  />
+                </div>
+              );
+            })}
             {(schoolAdmin[child.id] || clubsByChild[child.id]?.length) && (
               <div className="note">
                 <b>From School admin / Clubs (About us)</b>
@@ -461,20 +492,45 @@ ${sortedSelected
           Fields below are suggested from About Us where you haven&apos;t filled them in here — check they still
           match before saving.
         </p>
-        {HOUSEHOLD_FIELDS.map(([k, label, hint]) => (
-          <div key={k} style={{ marginBottom: 10 }}>
-            <b>{label}</b>
-            <p className="muted" style={{ margin: "0 0 4px" }}>
-              {hint}
-            </p>
-            <textarea
-              key={`${k}-${sortedSelected.join(",")}`}
-              placeholder={`Nothing yet — ${hint}`}
-              defaultValue={householdOf()[k]}
-              onBlur={(e) => saveHouseholdField(k, e.target.value)}
-            />
-          </div>
-        ))}
+        {(() => {
+          const hhSelectedChildren = sortedSelected.length
+            ? (sortedSelected.map((n) => children.find((c) => c.name === n)).filter(Boolean) as ChildRow[])
+            : children;
+          const hhSuggested = suggestHousehold(hhSelectedChildren, aboutHousehold);
+          return HOUSEHOLD_FIELDS.map(([k, label, hint]) => {
+            const savedValue = (household[k] || "").trim();
+            const suggestedValue = (hhSuggested[k] || "").trim();
+            const hasNewSuggestion = suggestedValue && !savedValue.includes(suggestedValue) && suggestedValue !== savedValue;
+            return (
+              <div key={k} style={{ marginBottom: 10 }}>
+                <div className="row" style={{ alignItems: "center", margin: 0, gap: 8 }}>
+                  <b style={{ flex: 1 }}>{label}</b>
+                  {hasNewSuggestion && (
+                    <button
+                      className="chip"
+                      style={{ margin: 0, flex: "0 0 auto" }}
+                      onClick={() => saveHouseholdField(k, hhSuggested[k]!)}
+                    >
+                      ↻ Update from About us
+                    </button>
+                  )}
+                </div>
+                <p className="muted" style={{ margin: "0 0 4px" }}>
+                  {hint}
+                </p>
+                <textarea
+                  key={`${k}-${sortedSelected.join(",")}`}
+                  placeholder={`Nothing yet — ${hint}`}
+                  defaultValue={householdOf()[k]}
+                  onFocus={(e) => (e.target.dataset.initial = e.target.value)}
+                  onBlur={(e) => {
+                    if (e.target.value !== e.target.dataset.initial) saveHouseholdField(k, e.target.value);
+                  }}
+                />
+              </div>
+            );
+          });
+        })()}
       </div>
 
       <div className="card">
