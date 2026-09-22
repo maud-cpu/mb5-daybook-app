@@ -5,7 +5,13 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
-import { REMINDER_CATEGORIES, REPEAT_OPTIONS, Reminder, reminderCategoryLabel } from "@/lib/types";
+import {
+  REMINDER_CATEGORIES,
+  REPEAT_OPTIONS,
+  Reminder,
+  reminderCategoryIcon,
+  reminderCategoryText,
+} from "@/lib/types";
 import { addDays, clubText, groupClubsByOccurrence, mondayStartWeekday, occurrenceDates, personColor } from "@/lib/calendarHelpers";
 import PeoplePicker, { PersonOption } from "@/components/PeoplePicker";
 import PersonTags, { PersonDot } from "@/components/PersonTags";
@@ -446,49 +452,66 @@ export default function CalendarScreen() {
                 </div>
               </div>
             ) : r.id.startsWith(F2F_PREFIX) ? (
-              <div key={r.id} className="rec">
-                <Link href="/dashboard/training">🎓 {r.text}</Link>
-              </div>
+              <Link key={r.id} href="/dashboard/training" className="day-item">
+                <span className="day-item-icon">{reminderCategoryIcon(r.category)}</span>
+                <span className="day-item-body">
+                  <span className="day-item-title">{r.text}</span>
+                  <span className="day-item-meta">
+                    <span>{reminderCategoryText(r.category)}</span>
+                  </span>
+                </span>
+              </Link>
             ) : r.id.startsWith(CLUB_PREFIX) ? (
-              <div key={r.id} className="rec">
-                <Link href={`/dashboard/about?person=${encodeURIComponent(r.people[0] || "")}&open=clubs`}>
-                  {reminderCategoryLabel(r.category)} {r.text}
-                </Link>
-                <PersonTags people={r.people} />
-              </div>
-            ) : (
-              <div key={r.id} style={{ opacity: r.done ? 0.5 : 1 }}>
-                <div className="rec" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
-                  <span style={{ cursor: "pointer" }} onClick={() => startEdit(r)}>
-                    <span className="muted" style={{ fontSize: 12 }}>
-                      {reminderCategoryLabel(r.category)}
-                    </span>{" "}
-                    <b>{r.text}</b>
-                    {r.series_id ? " 🔁" : ""}
+              <Link
+                key={r.id}
+                href={`/dashboard/about?person=${encodeURIComponent(r.people[0] || "")}&open=clubs`}
+                className="day-item"
+              >
+                <span className="day-item-icon">{reminderCategoryIcon(r.category)}</span>
+                <span className="day-item-body">
+                  <span className="day-item-title">
+                    {r.text} <span className="day-item-recur" title="Repeats every week">🔁</span>
+                  </span>
+                  <span className="day-item-meta">
+                    <span>{reminderCategoryText(r.category)}</span>
                     <PersonTags people={r.people} />
-                    {r.amount != null ? ` · £${Number(r.amount).toFixed(2)}` : ""}
-                    {r.done ? " (done)" : ""}
                   </span>
-                  <span style={{ display: "flex", gap: 4, flex: "0 0 auto" }}>
-                    {r.source_text && (
-                      <button
-                        className="chip"
-                        title="Show the original email this came from"
-                        onClick={() => setShowSourceFor(showSourceFor === r.id ? null : r.id)}
-                      >
-                        ℹ️
-                      </button>
-                    )}
-                    <button className="chip" onClick={() => toggleDone(r)}>
-                      {r.done ? "Undo" : "Done"}
-                    </button>
-                  </span>
+                </span>
+              </Link>
+            ) : (
+              <div key={r.id} className={`day-item${r.done ? " done" : ""}`}>
+                <span className="day-item-icon">{reminderCategoryIcon(r.category)}</span>
+                <div className="day-item-body" onClick={() => startEdit(r)}>
+                  <div className="day-item-title">
+                    {r.text}
+                    {r.series_id ? <span className="day-item-recur" title="Repeats"> 🔁</span> : ""}
+                  </div>
+                  <div className="day-item-meta">
+                    <span>{reminderCategoryText(r.category)}</span>
+                    <PersonTags people={r.people} />
+                    {r.amount != null ? <span>£{Number(r.amount).toFixed(2)}</span> : ""}
+                    {r.done ? <span>Done</span> : ""}
+                  </div>
+                  {showSourceFor === r.id && r.source_text && (
+                    <p className="note" style={{ whiteSpace: "pre-wrap", marginTop: 4 }}>
+                      {r.source_text}
+                    </p>
+                  )}
                 </div>
-                {showSourceFor === r.id && r.source_text && (
-                  <p className="note" style={{ whiteSpace: "pre-wrap", marginTop: 4 }}>
-                    {r.source_text}
-                  </p>
-                )}
+                <div className="day-item-actions">
+                  {r.source_text && (
+                    <button
+                      className="chip"
+                      title="Show the original email this came from"
+                      onClick={() => setShowSourceFor(showSourceFor === r.id ? null : r.id)}
+                    >
+                      ℹ️
+                    </button>
+                  )}
+                  <button className="chip" onClick={() => toggleDone(r)}>
+                    {r.done ? "Undo" : "Done"}
+                  </button>
+                </div>
               </div>
             ),
           )}
