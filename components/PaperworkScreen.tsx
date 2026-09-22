@@ -127,12 +127,12 @@ export default function PaperworkScreen() {
               <>
                 {unclaimed.length === 0 && <p className="empty">Nothing unclaimed this month.</p>}
                 {unclaimed.map((r) => (
-                  <label key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", cursor: "pointer" }}>
+                  <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}>
                     <span style={{ flex: 1 }}>{describeExpense(rates, children, r)}</span>
                     <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => setClaimed(r.id, true)}>
                       ✓ Claimed
                     </button>
-                  </label>
+                  </div>
                 ))}
                 <div className="total" style={{ marginTop: 10 }}>
                   {gbp(expenseTotals(rates, children, unclaimed).total)} unclaimed
@@ -241,6 +241,10 @@ function MonthReport({
   return (
     <div className="card">
       <h3>Compile a month</h3>
+      <p className="note">
+        Raw material for your diaries and other reports, an expense claim, or a social worker update — read it
+        through before it goes anywhere.
+      </p>
       <p>
         {records.length} entries recorded in {monthLabel}.
       </p>
@@ -256,7 +260,6 @@ function MonthReport({
       ) : (
         <p className="empty">Nothing recorded this month.</p>
       )}
-      <p className="note">Raw material for your Mockingbird return, expense claim, or a social worker update — read it through before it goes anywhere.</p>
     </div>
   );
 }
