@@ -4,11 +4,17 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { BASICS_SECTIONS, RepeatableSubfield } from "@/lib/basics";
 import { Child, LIVES_CATS, livesHereOf, MB_OPTIONS, VISITS_CATS } from "@/lib/types";
+import { personColor } from "@/lib/calendarHelpers";
 import ChildSchoolAdmin from "@/components/ChildSchoolAdmin";
 import ChildClubs from "@/components/ChildClubs";
+import RadialWheel, { WheelNode } from "@/components/RadialWheel";
 
 const ADULT_ROLES = ["Foster carer", "Adult child", "Live-in grandparent", "Other"];
 const VISITOR_ROLES = ["Mockingbird hub carer", "Respite support worker", "Family friend / helper", "Other"];
+
+function firstName(name: string): string {
+  return (name || "").trim().split(/\s+/)[0] || "?";
+}
 
 type RepeatableItem = Record<string, string> & { _k: string };
 
@@ -267,27 +273,30 @@ const emptyHousehold: Household = {
   hub_leader_email: "",
 };
 
+const CENTER_COLOR = "#1f5e52";
+const SSW_COLOR = "#96712f";
+const ADD_HH_CHILD = "add-household-child";
+const ADD_VISIT_CHILD = "add-visiting-child";
+const ADD_VISITOR = "add-visitor";
+const SSW_NODE = "ssw";
+const CENTER_NODE = "center";
+
 export default function AboutScreen() {
   const supabase = createClient();
   const [children, setChildren] = useState<Child[]>([]);
   const [basics, setBasics] = useState<Record<string, Record<string, string>>>({});
   const [household, setHousehold] = useState<Household>(emptyHousehold);
   const [adults, setAdults] = useState<Adult[]>([]);
-  const [addingAdult, setAddingAdult] = useState(false);
   const [newAdult, setNewAdult] = useState({ name: "", phone: "", email: "", role: ADULT_ROLES[0] });
   const [householdChildren, setHouseholdChildren] = useState<HouseholdChild[]>([]);
-  const [addingHouseholdChild, setAddingHouseholdChild] = useState(false);
   const [newHouseholdChild, setNewHouseholdChild] = useState({ name: "", born: "", category: "", notes: "" });
   const [visitors, setVisitors] = useState<Visitor[]>([]);
-  const [addingVisitor, setAddingVisitor] = useState(false);
   const [newVisitor, setNewVisitor] = useState({ name: "", phone: "", email: "", role: VISITOR_ROLES[0] });
-  const [addingVisitingChild, setAddingVisitingChild] = useState(false);
   const [newVisitingChild, setNewVisitingChild] = useState({ name: "", born: "", category: VISITS_CATS[0][0] as string });
-  const [openChild, setOpenChild] = useState<string | null>(null);
-  const [openHouseholdChild, setOpenHouseholdChild] = useState<string | null>(null);
   const [openSchoolAdmin, setOpenSchoolAdmin] = useState<string | null>(null);
   const [openClubs, setOpenClubs] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState("");
+  const [selected, setSelected] = useState<string | null>(null);
 
   async function load() {
     const [{ data: kids }, { data: hh }, { data: adultRows }, { data: householdChildRows }, { data: visitorRows }] = await Promise.all([
@@ -367,6 +376,7 @@ export default function AboutScreen() {
     if (!confirm(`Remove ${name || "this child"}? Their diary entries and other records are kept, just no longer linked to a child in this list.`)) return;
     setChildren((prev) => prev.filter((c) => c.id !== childId));
     await supabase.from("children").delete().eq("id", childId);
+    setSelected(null);
   }
 
   async function saveHouseholdChildBasics(childId: string, key: string, value: string) {
@@ -386,8 +396,7 @@ export default function AboutScreen() {
     if (!newAdult.name.trim()) return;
     await supabase.from("household_adults").insert(newAdult);
     setNewAdult({ name: "", phone: "", email: "", role: ADULT_ROLES[0] });
-    setAddingAdult(false);
-    load();
+    await load();
   }
 
   async function updateAdult(id: string, patch: Partial<Adult>) {
@@ -404,8 +413,8 @@ export default function AboutScreen() {
     if (!newHouseholdChild.name.trim()) return;
     await supabase.from("household_children").insert({ ...newHouseholdChild, born: newHouseholdChild.born || null });
     setNewHouseholdChild({ name: "", born: "", category: "", notes: "" });
-    setAddingHouseholdChild(false);
-    load();
+    setSelected(null);
+    await load();
   }
 
   async function updateHouseholdChild(id: string, patch: Partial<HouseholdChild>) {
@@ -416,14 +425,15 @@ export default function AboutScreen() {
   async function removeHouseholdChild(id: string) {
     setHouseholdChildren((prev) => prev.filter((c) => c.id !== id));
     await supabase.from("household_children").delete().eq("id", id);
+    setSelected(null);
   }
 
   async function addVisitor() {
     if (!newVisitor.name.trim()) return;
     await supabase.from("household_visitors").insert(newVisitor);
     setNewVisitor({ name: "", phone: "", email: "", role: VISITOR_ROLES[0] });
-    setAddingVisitor(false);
-    load();
+    setSelected(null);
+    await load();
   }
 
   async function updateVisitor(id: string, patch: Partial<Visitor>) {
@@ -434,6 +444,7 @@ export default function AboutScreen() {
   async function removeVisitor(id: string) {
     setVisitors((prev) => prev.filter((v) => v.id !== id));
     await supabase.from("household_visitors").delete().eq("id", id);
+    setSelected(null);
   }
 
   async function addVisitingChild() {
@@ -445,35 +456,66 @@ export default function AboutScreen() {
       lives_here: false,
     });
     setNewVisitingChild({ name: "", born: "", category: VISITS_CATS[0][0] });
-    setAddingVisitingChild(false);
-    load();
+    setSelected(null);
+    await load();
   }
 
-  return (
-    <div>
-      <div className="card">
-        <h3>Adults in your household</h3>
-        <p className="hint">Everyone in the household — so it&apos;s all in one place, not scattered across contacts.</p>
-        {adults.map((a) => (
-          <div className="item" key={a.id}>
-            <div className="row">
-              <input value={a.name} onChange={(e) => updateAdult(a.id, { name: e.target.value })} />
-              <select value={a.role} onChange={(e) => updateAdult(a.id, { role: e.target.value })}>
-                {ADULT_ROLES.map((r) => (
-                  <option key={r}>{r}</option>
-                ))}
-              </select>
-              <button className="x" onClick={() => removeAdult(a.id)}>
-                ×
-              </button>
+  const livingChildren = children.filter((c) => livesHereOf(c) !== false);
+  const visitingChildren = children.filter((c) => livesHereOf(c) === false);
+  const carerAdults = adults.filter((a) => a.role === "Foster carer");
+
+  const centerLabel = carerAdults.length ? carerAdults.map((a) => firstName(a.name)).join(" & ") : "+ Add carer";
+  const center: WheelNode = { id: CENTER_NODE, label: centerLabel, color: CENTER_COLOR };
+
+  const ring1: WheelNode[] = [
+    ...livingChildren.map((c) => ({ id: `child:${c.id}`, label: firstName(c.name), color: personColor(c.name) })),
+    ...householdChildren.map((c) => ({ id: `hh:${c.id}`, label: firstName(c.name), color: personColor(c.name) })),
+    { id: ADD_HH_CHILD, label: "+", color: "", dashed: true },
+  ];
+
+  const ring2: WheelNode[] = [
+    ...visitingChildren.map((c) => ({ id: `visit:${c.id}`, label: firstName(c.name), color: personColor(c.name) })),
+    ...visitors.map((v) => ({ id: `visitor:${v.id}`, label: firstName(v.name), color: SSW_COLOR })),
+    { id: SSW_NODE, label: household.ssw_name ? firstName(household.ssw_name) : "SSW", color: SSW_COLOR },
+    { id: ADD_VISIT_CHILD, label: "+ child", color: "", dashed: true },
+    { id: ADD_VISITOR, label: "+ adult", color: "", dashed: true },
+  ];
+
+  function closeButton() {
+    return (
+      <button className="chip" style={{ marginTop: 10 }} onClick={() => setSelected(null)}>
+        ← Back to everyone
+      </button>
+    );
+  }
+
+  function renderSelected() {
+    if (!selected) return null;
+
+    if (selected === CENTER_NODE) {
+      return (
+        <div className="card">
+          <h3>Adults in your household</h3>
+          <p className="hint">Everyone in the household — so it&apos;s all in one place, not scattered across contacts.</p>
+          {adults.map((a) => (
+            <div className="item" key={a.id}>
+              <div className="row">
+                <input value={a.name} onChange={(e) => updateAdult(a.id, { name: e.target.value })} />
+                <select value={a.role} onChange={(e) => updateAdult(a.id, { role: e.target.value })}>
+                  {ADULT_ROLES.map((r) => (
+                    <option key={r}>{r}</option>
+                  ))}
+                </select>
+                <button className="x" onClick={() => removeAdult(a.id)}>
+                  ×
+                </button>
+              </div>
+              <div className="row">
+                <input placeholder="Phone" value={a.phone} onChange={(e) => updateAdult(a.id, { phone: e.target.value })} />
+                <input placeholder="Email" value={a.email} onChange={(e) => updateAdult(a.id, { email: e.target.value })} />
+              </div>
             </div>
-            <div className="row">
-              <input placeholder="Phone" value={a.phone} onChange={(e) => updateAdult(a.id, { phone: e.target.value })} />
-              <input placeholder="Email" value={a.email} onChange={(e) => updateAdult(a.id, { email: e.target.value })} />
-            </div>
-          </div>
-        ))}
-        {addingAdult ? (
+          ))}
           <div style={{ marginTop: 8 }}>
             <input placeholder="Name" value={newAdult.name} onChange={(e) => setNewAdult({ ...newAdult, name: e.target.value })} />
             <div className="row" style={{ marginTop: 6 }}>
@@ -487,150 +529,374 @@ export default function AboutScreen() {
                 ))}
               </select>
               <button className="chip" style={{ flex: "0 0 auto" }} onClick={addAdult}>
-                Add
-              </button>
-              <button className="x" onClick={() => setAddingAdult(false)}>
-                ×
+                + Add adult
               </button>
             </div>
           </div>
-        ) : (
-          <button className="chip add" onClick={() => setAddingAdult(true)}>
-            + adult
+
+          <h3 style={{ marginTop: 18 }}>Your Mockingbird</h3>
+          <p className="hint">Are you part of a Mockingbird constellation?</p>
+          <select
+            value={household.is_mockingbird === null ? "" : household.is_mockingbird ? "1" : "0"}
+            onChange={(e) => saveHousehold({ is_mockingbird: e.target.value === "" ? null : e.target.value === "1" })}
+          >
+            <option value="">— not set —</option>
+            <option value="1">Yes</option>
+            <option value="0">No</option>
+          </select>
+          {household.is_mockingbird && (
+            <div className="row" style={{ marginTop: 8 }}>
+              <input
+                placeholder="Hub leader name"
+                value={household.hub_leader_name}
+                onChange={(e) => saveHousehold({ hub_leader_name: e.target.value })}
+              />
+              <input
+                placeholder="Hub leader phone"
+                value={household.hub_leader_phone}
+                onChange={(e) => saveHousehold({ hub_leader_phone: e.target.value })}
+              />
+              <input
+                placeholder="Hub leader email"
+                value={household.hub_leader_email}
+                onChange={(e) => saveHousehold({ hub_leader_email: e.target.value })}
+              />
+            </div>
+          )}
+          {savedAt && <p className="hint">Saved {savedAt}</p>}
+          {closeButton()}
+        </div>
+      );
+    }
+
+    if (selected === SSW_NODE) {
+      return (
+        <div className="card">
+          <h3>Your supervising social worker</h3>
+          <div className="row">
+            <input placeholder="SSW name" value={household.ssw_name} onChange={(e) => saveHousehold({ ssw_name: e.target.value })} />
+            <input placeholder="SSW phone" value={household.ssw_phone} onChange={(e) => saveHousehold({ ssw_phone: e.target.value })} />
+          </div>
+          <input placeholder="SSW email" value={household.ssw_email} onChange={(e) => saveHousehold({ ssw_email: e.target.value })} />
+          <div className="row" style={{ marginTop: 10 }}>
+            <input
+              placeholder="SSW's manager name"
+              value={household.ssw_manager_name}
+              onChange={(e) => saveHousehold({ ssw_manager_name: e.target.value })}
+            />
+            <input
+              placeholder="SSW's manager phone"
+              value={household.ssw_manager_phone}
+              onChange={(e) => saveHousehold({ ssw_manager_phone: e.target.value })}
+            />
+          </div>
+          <label style={{ marginTop: 10, display: "block" }}>Emergency Duty Team (out-of-hours) number</label>
+          <input value={household.edt} onChange={(e) => saveHousehold({ edt: e.target.value })} />
+          {savedAt && <p className="hint">Saved {savedAt}</p>}
+          {closeButton()}
+        </div>
+      );
+    }
+
+    if (selected === ADD_HH_CHILD) {
+      return (
+        <div className="card">
+          <h3>Add a child in your household</h3>
+          <p className="hint">
+            A child living here who isn&apos;t an active fostering placement — your own, adopted, kinship, SGO, or a
+            child who themselves fosters. New foster placements are added from Capture.
+          </p>
+          <div className="row">
+            <input
+              placeholder="Name"
+              value={newHouseholdChild.name}
+              onChange={(e) => setNewHouseholdChild({ ...newHouseholdChild, name: e.target.value })}
+            />
+            <input
+              type="date"
+              style={{ flex: "0 0 150px" }}
+              value={newHouseholdChild.born}
+              onChange={(e) => setNewHouseholdChild({ ...newHouseholdChild, born: e.target.value })}
+            />
+          </div>
+          <div className="row" style={{ marginTop: 6 }}>
+            <select
+              value={newHouseholdChild.category}
+              onChange={(e) => setNewHouseholdChild({ ...newHouseholdChild, category: e.target.value })}
+            >
+              <option value="">— placement type —</option>
+              {LIVES_CATS.map(([k, l]) => (
+                <option key={k} value={k}>
+                  {l}
+                </option>
+              ))}
+            </select>
+            <input
+              placeholder="Notes (optional)"
+              value={newHouseholdChild.notes}
+              onChange={(e) => setNewHouseholdChild({ ...newHouseholdChild, notes: e.target.value })}
+            />
+          </div>
+          <button className="chip" style={{ marginTop: 8 }} onClick={addHouseholdChild}>
+            + Add
           </button>
-        )}
-      </div>
+          {closeButton()}
+        </div>
+      );
+    }
 
-      <div className="card">
-        <h3>Your Mockingbird</h3>
-        <p className="hint">Are you part of a Mockingbird constellation?</p>
-        <select
-          value={household.is_mockingbird === null ? "" : household.is_mockingbird ? "1" : "0"}
-          onChange={(e) => saveHousehold({ is_mockingbird: e.target.value === "" ? null : e.target.value === "1" })}
-        >
-          <option value="">— not set —</option>
-          <option value="1">Yes</option>
-          <option value="0">No</option>
-        </select>
-        {household.is_mockingbird && (
-          <div className="row" style={{ marginTop: 8 }}>
+    if (selected === ADD_VISIT_CHILD) {
+      return (
+        <div className="card">
+          <h3>Add a visiting child</h3>
+          <p className="hint">Respite, daycare or sleepover — a child who visits but doesn&apos;t live here.</p>
+          <div className="row">
             <input
-              placeholder="Hub leader name"
-              value={household.hub_leader_name}
-              onChange={(e) => saveHousehold({ hub_leader_name: e.target.value })}
+              placeholder="Name"
+              value={newVisitingChild.name}
+              onChange={(e) => setNewVisitingChild({ ...newVisitingChild, name: e.target.value })}
             />
             <input
-              placeholder="Hub leader phone"
-              value={household.hub_leader_phone}
-              onChange={(e) => saveHousehold({ hub_leader_phone: e.target.value })}
-            />
-            <input
-              placeholder="Hub leader email"
-              value={household.hub_leader_email}
-              onChange={(e) => saveHousehold({ hub_leader_email: e.target.value })}
+              type="date"
+              style={{ flex: "0 0 150px" }}
+              value={newVisitingChild.born}
+              onChange={(e) => setNewVisitingChild({ ...newVisitingChild, born: e.target.value })}
             />
           </div>
-        )}
-      </div>
+          <div className="row" style={{ marginTop: 6 }}>
+            <select
+              value={newVisitingChild.category}
+              onChange={(e) => setNewVisitingChild({ ...newVisitingChild, category: e.target.value })}
+            >
+              {VISITS_CATS.map(([k, l]) => (
+                <option key={k} value={k}>
+                  {l}
+                </option>
+              ))}
+            </select>
+            <button className="chip" style={{ flex: "0 0 auto" }} onClick={addVisitingChild}>
+              + Add
+            </button>
+          </div>
+          {closeButton()}
+        </div>
+      );
+    }
 
-      <div className="card">
-        <h3>Children in your household</h3>
-        <p className="hint">
-          Children living here who aren&apos;t an active fostering placement in the list below — your own, adopted,
-          kinship, SGO, or a child who themselves fosters. Still looked after, still on an SGO, or otherwise has
-          social work/health/education details worth keeping? Expand them below to fill those in too.
-        </p>
-        {householdChildren.map((c) => {
-          const open = openHouseholdChild === c.id;
-          return (
-            <div className="item" key={c.id}>
-              <div className="row">
-                <input value={c.name} onChange={(e) => updateHouseholdChild(c.id, { name: e.target.value })} />
-                <input
-                  type="date"
-                  style={{ flex: "0 0 150px" }}
-                  value={c.born || ""}
-                  onChange={(e) => updateHouseholdChild(c.id, { born: e.target.value || null })}
-                />
-                <button className="x" onClick={() => removeHouseholdChild(c.id)}>
-                  ×
-                </button>
-              </div>
-              <div className="row">
-                <select value={c.category} onChange={(e) => updateHouseholdChild(c.id, { category: e.target.value })}>
-                  <option value="">— placement type —</option>
-                  {LIVES_CATS.map(([k, l]) => (
-                    <option key={k} value={k}>
-                      {l}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  placeholder="Notes (optional)"
-                  value={c.notes}
-                  onChange={(e) => updateHouseholdChild(c.id, { notes: e.target.value })}
-                />
-              </div>
-              <div className="chips" style={{ marginTop: 6 }}>
-                <button className="chip" onClick={() => setOpenSchoolAdmin(openSchoolAdmin === c.id ? null : c.id)}>
-                  🏫 School admin
-                </button>
-                <button className="chip" onClick={() => setOpenClubs(openClubs === c.id ? null : c.id)}>
-                  🧩 Clubs
-                </button>
-              </div>
-              {openSchoolAdmin === c.id && <ChildSchoolAdmin childId={c.id} />}
-              {openClubs === c.id && <ChildClubs childId={c.id} />}
-              {c.category !== "fosters" && (
-                <>
-                  <p
-                    className="hint"
-                    style={{ marginTop: 6, cursor: "pointer" }}
-                    onClick={() => setOpenHouseholdChild(open ? null : c.id)}
-                  >
-                    {open ? "▾ Hide" : "▸ Social work / health / education details"}
-                  </p>
-                  {open && (
-                    <ChildBasicsPanel
-                      showMockingbird={false}
-                      mockingbird={c.mockingbird}
-                      onMockingbird={(v) => updateHouseholdChild(c.id, { mockingbird: v })}
-                      hubCarerName={c.hub_carer_name}
-                      hubCarerPhone={c.hub_carer_phone}
-                      hubCarerEmail={c.hub_carer_email}
-                      onHubCarer={(field, v) => updateHouseholdChild(c.id, { [field]: v })}
-                      showSurreyContact={["sgo", "adopted"].includes(c.category)}
-                      surreyContact={c.surrey_contact}
-                      onSurreyContact={(v) => updateHouseholdChild(c.id, { surrey_contact: v })}
-                      basics={c.basics || {}}
-                      onBasics={(key, value) => saveHouseholdChildBasics(c.id, key, value)}
-                    />
-                  )}
-                </>
-              )}
-            </div>
-          );
-        })}
-        {addingHouseholdChild ? (
-          <div style={{ marginTop: 8 }}>
-            <div className="row">
-              <input
-                placeholder="Name"
-                value={newHouseholdChild.name}
-                onChange={(e) => setNewHouseholdChild({ ...newHouseholdChild, name: e.target.value })}
+    if (selected === ADD_VISITOR) {
+      return (
+        <div className="card">
+          <h3>Add a visitor</h3>
+          <p className="hint">An adult connected to the household who doesn&apos;t live here.</p>
+          <input placeholder="Name" value={newVisitor.name} onChange={(e) => setNewVisitor({ ...newVisitor, name: e.target.value })} />
+          <div className="row" style={{ marginTop: 6 }}>
+            <input placeholder="Phone" value={newVisitor.phone} onChange={(e) => setNewVisitor({ ...newVisitor, phone: e.target.value })} />
+            <input placeholder="Email" value={newVisitor.email} onChange={(e) => setNewVisitor({ ...newVisitor, email: e.target.value })} />
+          </div>
+          <div className="row" style={{ marginTop: 6 }}>
+            <select value={newVisitor.role} onChange={(e) => setNewVisitor({ ...newVisitor, role: e.target.value })}>
+              {VISITOR_ROLES.map((r) => (
+                <option key={r}>{r}</option>
+              ))}
+            </select>
+            <button className="chip" style={{ flex: "0 0 auto" }} onClick={addVisitor}>
+              + Add
+            </button>
+          </div>
+          {closeButton()}
+        </div>
+      );
+    }
+
+    if (selected.startsWith("visitor:")) {
+      const id = selected.slice("visitor:".length);
+      const v = visitors.find((x) => x.id === id);
+      if (!v) return null;
+      return (
+        <div className="card">
+          <div className="row" style={{ alignItems: "center" }}>
+            <h3 style={{ flex: 1, margin: 0 }}>{v.name || "Visitor"}</h3>
+            <button className="x" onClick={() => removeVisitor(v.id)}>
+              ×
+            </button>
+          </div>
+          <div className="row" style={{ marginTop: 8 }}>
+            <input value={v.name} onChange={(e) => updateVisitor(v.id, { name: e.target.value })} />
+            <select value={v.role} onChange={(e) => updateVisitor(v.id, { role: e.target.value })}>
+              {VISITOR_ROLES.map((r) => (
+                <option key={r}>{r}</option>
+              ))}
+            </select>
+          </div>
+          <div className="row">
+            <input placeholder="Phone" value={v.phone} onChange={(e) => updateVisitor(v.id, { phone: e.target.value })} />
+            <input placeholder="Email" value={v.email} onChange={(e) => updateVisitor(v.id, { email: e.target.value })} />
+          </div>
+          {closeButton()}
+        </div>
+      );
+    }
+
+    if (selected.startsWith("hh:")) {
+      const id = selected.slice("hh:".length);
+      const c = householdChildren.find((x) => x.id === id);
+      if (!c) return null;
+      const open = openSchoolAdmin === c.id;
+      const clubsOpen = openClubs === c.id;
+      return (
+        <div className="card">
+          <div className="row" style={{ alignItems: "center" }}>
+            <h3 style={{ flex: 1, margin: 0 }}>{c.name || "Child"}</h3>
+            <button className="x" onClick={() => removeHouseholdChild(c.id)}>
+              ×
+            </button>
+          </div>
+          <div className="row" style={{ marginTop: 8 }}>
+            <input value={c.name} onChange={(e) => updateHouseholdChild(c.id, { name: e.target.value })} />
+            <input
+              type="date"
+              style={{ flex: "0 0 150px" }}
+              value={c.born || ""}
+              onChange={(e) => updateHouseholdChild(c.id, { born: e.target.value || null })}
+            />
+          </div>
+          <div className="row">
+            <select value={c.category} onChange={(e) => updateHouseholdChild(c.id, { category: e.target.value })}>
+              <option value="">— placement type —</option>
+              {LIVES_CATS.map(([k, l]) => (
+                <option key={k} value={k}>
+                  {l}
+                </option>
+              ))}
+            </select>
+            <input placeholder="Notes (optional)" value={c.notes} onChange={(e) => updateHouseholdChild(c.id, { notes: e.target.value })} />
+          </div>
+          <div className="chips" style={{ marginTop: 6 }}>
+            <button className="chip" onClick={() => setOpenSchoolAdmin(open ? null : c.id)}>
+              🏫 School admin
+            </button>
+            <button className="chip" onClick={() => setOpenClubs(clubsOpen ? null : c.id)}>
+              🧩 Clubs
+            </button>
+          </div>
+          {open && <ChildSchoolAdmin childId={c.id} />}
+          {clubsOpen && <ChildClubs childId={c.id} />}
+          {c.category !== "fosters" && (
+            <div style={{ marginTop: 10 }}>
+              <ChildBasicsPanel
+                showMockingbird={false}
+                mockingbird={c.mockingbird}
+                onMockingbird={(v) => updateHouseholdChild(c.id, { mockingbird: v })}
+                hubCarerName={c.hub_carer_name}
+                hubCarerPhone={c.hub_carer_phone}
+                hubCarerEmail={c.hub_carer_email}
+                onHubCarer={(field, v) => updateHouseholdChild(c.id, { [field]: v })}
+                showSurreyContact={["sgo", "adopted"].includes(c.category)}
+                surreyContact={c.surrey_contact}
+                onSurreyContact={(v) => updateHouseholdChild(c.id, { surrey_contact: v })}
+                basics={c.basics || {}}
+                onBasics={(key, value) => saveHouseholdChildBasics(c.id, key, value)}
               />
-              <input
-                type="date"
-                style={{ flex: "0 0 150px" }}
-                value={newHouseholdChild.born}
-                onChange={(e) => setNewHouseholdChild({ ...newHouseholdChild, born: e.target.value })}
-              />
             </div>
-            <div className="row" style={{ marginTop: 6 }}>
-              <select
-                value={newHouseholdChild.category}
-                onChange={(e) => setNewHouseholdChild({ ...newHouseholdChild, category: e.target.value })}
-              >
+          )}
+          {closeButton()}
+        </div>
+      );
+    }
+
+    if (selected.startsWith("visit:")) {
+      const id = selected.slice("visit:".length);
+      const c = children.find((x) => x.id === id);
+      if (!c) return null;
+      const cb = basics[c.id] || {};
+      return (
+        <div className="card">
+          <div className="row" style={{ alignItems: "center" }}>
+            <h3 style={{ flex: 1, margin: 0 }}>{c.name || "Child"}</h3>
+            <button className="x" onClick={() => removeChild(c.id, c.name)}>
+              ×
+            </button>
+          </div>
+          <div className="row" style={{ marginTop: 8 }}>
+            <input value={c.name} onChange={(e) => saveChild(c.id, { name: e.target.value })} />
+            <input
+              type="date"
+              style={{ flex: "0 0 150px" }}
+              value={c.born || ""}
+              onChange={(e) => saveChild(c.id, { born: e.target.value || null })}
+            />
+          </div>
+          <select value={c.category} onChange={(e) => saveChild(c.id, { category: e.target.value })}>
+            <option value="">— placement type —</option>
+            {VISITS_CATS.map(([k, l]) => (
+              <option key={k} value={k}>
+                {l}
+              </option>
+            ))}
+          </select>
+          <div style={{ marginTop: 10 }}>
+            <ChildBasicsPanel
+              showMockingbird={true}
+              mockingbird={c.mockingbird}
+              onMockingbird={(v) => saveChild(c.id, { mockingbird: v })}
+              hubCarerName={c.hub_carer_name}
+              hubCarerPhone={c.hub_carer_phone}
+              hubCarerEmail={c.hub_carer_email}
+              onHubCarer={(field, v) => saveChild(c.id, { [field]: v })}
+              showSurreyContact={["sgo", "adopted"].includes(c.category)}
+              surreyContact={c.surrey_contact}
+              onSurreyContact={(v) => saveChild(c.id, { surrey_contact: v })}
+              basics={cb}
+              onBasics={(key, value) => saveChildBasics(c.id, key, value)}
+            />
+          </div>
+          {closeButton()}
+        </div>
+      );
+    }
+
+    if (selected.startsWith("child:")) {
+      const id = selected.slice("child:".length);
+      const c = children.find((x) => x.id === id);
+      if (!c) return null;
+      const cb = basics[c.id] || {};
+      const open = openSchoolAdmin === c.id;
+      const clubsOpen = openClubs === c.id;
+      return (
+        <div className="card">
+          <div className="row" style={{ alignItems: "center" }}>
+            <h3 style={{ flex: 1, margin: 0 }}>{c.name}</h3>
+            <button className="x" onClick={() => removeChild(c.id, c.name)}>
+              ×
+            </button>
+          </div>
+          <div className="muted">
+            {LIVES_CATS.find(([k]) => k === c.category)?.[1] ?? (c.lives_here === true ? "Lives with us" : "Not set yet")}
+            {c.mockingbird ? " · " + (MB_OPTIONS.find(([k]) => k === c.mockingbird)?.[1] ?? c.mockingbird) : ""}
+          </div>
+          <div className="chips" style={{ marginTop: 6 }}>
+            <button className="chip" onClick={() => setOpenSchoolAdmin(open ? null : c.id)}>
+              🏫 School admin
+            </button>
+            <button className="chip" onClick={() => setOpenClubs(clubsOpen ? null : c.id)}>
+              🧩 Clubs
+            </button>
+          </div>
+          {open && <ChildSchoolAdmin childId={c.id} />}
+          {clubsOpen && <ChildClubs childId={c.id} />}
+          <div style={{ marginTop: 10 }}>
+            <b style={{ fontSize: 14 }}>Living arrangement</b>
+            <select
+              style={{ marginTop: 6 }}
+              value={c.lives_here === null || c.lives_here === undefined ? "" : c.lives_here ? "1" : "0"}
+              onChange={(e) => saveChild(c.id, { lives_here: e.target.value === "1", category: "" })}
+            >
+              <option value="">— lives with us, or visits? —</option>
+              <option value="1">Lives with us</option>
+              <option value="0">Visits (sleepover / daycare / short break)</option>
+            </select>
+            {c.lives_here === true && (
+              <select style={{ marginTop: 6 }} value={c.category} onChange={(e) => saveChild(c.id, { category: e.target.value })}>
                 <option value="">— placement type —</option>
                 {LIVES_CATS.map(([k, l]) => (
                   <option key={k} value={k}>
@@ -638,300 +904,64 @@ export default function AboutScreen() {
                   </option>
                 ))}
               </select>
-              <input
-                placeholder="Notes (optional)"
-                value={newHouseholdChild.notes}
-                onChange={(e) => setNewHouseholdChild({ ...newHouseholdChild, notes: e.target.value })}
-              />
-              <button className="chip" style={{ flex: "0 0 auto" }} onClick={addHouseholdChild}>
-                Add
-              </button>
-              <button className="x" onClick={() => setAddingHouseholdChild(false)}>
-                ×
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button className="chip add" onClick={() => setAddingHouseholdChild(true)}>
-            + child
-          </button>
-        )}
-      </div>
-
-      <div className="card">
-        <h3>People who come and visit regularly</h3>
-        <p className="hint">Respite/daycare children and other adults connected to the household who don&apos;t live here.</p>
-        <b style={{ display: "block", marginTop: 8 }}>Children</b>
-        {children
-          .filter((c) => livesHereOf(c) === false)
-          .map((c) => {
-            const open = openChild === c.id;
-            const cb = basics[c.id] || {};
-            return (
-              <div className="item" key={c.id}>
-                <div className="row">
-                  <input value={c.name} onChange={(e) => saveChild(c.id, { name: e.target.value })} />
-                  <input
-                    type="date"
-                    style={{ flex: "0 0 150px" }}
-                    value={c.born || ""}
-                    onChange={(e) => saveChild(c.id, { born: e.target.value || null })}
-                  />
-                  <button className="x" onClick={() => removeChild(c.id, c.name)}>
-                    ×
-                  </button>
-                </div>
-                <select value={c.category} onChange={(e) => saveChild(c.id, { category: e.target.value })}>
-                  <option value="">— placement type —</option>
-                  {VISITS_CATS.map(([k, l]) => (
-                    <option key={k} value={k}>
-                      {l}
-                    </option>
-                  ))}
-                </select>
-                <p className="hint" style={{ marginTop: 6, cursor: "pointer" }} onClick={() => setOpenChild(open ? null : c.id)}>
-                  {open ? "▾ Hide" : "▸ Mockingbird / health / education details"}
+            )}
+            {c.category === "fosters" ? (
+              <>
+                <p className="hint" style={{ marginTop: 8 }}>
+                  Notes
                 </p>
-                {open && (
-                  <ChildBasicsPanel
-                    showMockingbird={true}
-                    mockingbird={c.mockingbird}
-                    onMockingbird={(v) => saveChild(c.id, { mockingbird: v })}
-                    hubCarerName={c.hub_carer_name}
-                    hubCarerPhone={c.hub_carer_phone}
-                    hubCarerEmail={c.hub_carer_email}
-                    onHubCarer={(field, v) => saveChild(c.id, { [field]: v })}
-                    showSurreyContact={["sgo", "adopted"].includes(c.category)}
-                    surreyContact={c.surrey_contact}
-                    onSurreyContact={(v) => saveChild(c.id, { surrey_contact: v })}
-                    basics={cb}
-                    onBasics={(key, value) => saveChildBasics(c.id, key, value)}
-                  />
-                )}
-              </div>
-            );
-          })}
-        {addingVisitingChild ? (
-          <div style={{ marginTop: 8 }}>
-            <div className="row">
-              <input
-                placeholder="Name"
-                value={newVisitingChild.name}
-                onChange={(e) => setNewVisitingChild({ ...newVisitingChild, name: e.target.value })}
+                <textarea
+                  placeholder="Anything worth noting — no CSW/health/education details needed for a child who themselves fosters"
+                  defaultValue={cb.notes || ""}
+                  onBlur={(e) => saveChildBasics(c.id, "notes", e.target.value)}
+                />
+              </>
+            ) : (
+              <ChildBasicsPanel
+                // A child confirmed as living in this household is automatically part of
+                // whichever Mockingbird constellation the household itself belongs to (see
+                // "Your Mockingbird" above) -- no need to ask again per child. Left showing
+                // for "not set yet" since we don't know their living arrangement yet.
+                showMockingbird={c.lives_here !== true}
+                mockingbird={c.mockingbird}
+                onMockingbird={(v) => saveChild(c.id, { mockingbird: v })}
+                hubCarerName={c.hub_carer_name}
+                hubCarerPhone={c.hub_carer_phone}
+                hubCarerEmail={c.hub_carer_email}
+                onHubCarer={(field, v) => saveChild(c.id, { [field]: v })}
+                showSurreyContact={["sgo", "adopted"].includes(c.category)}
+                surreyContact={c.surrey_contact}
+                onSurreyContact={(v) => saveChild(c.id, { surrey_contact: v })}
+                basics={cb}
+                onBasics={(key, value) => saveChildBasics(c.id, key, value)}
               />
-              <input
-                type="date"
-                style={{ flex: "0 0 150px" }}
-                value={newVisitingChild.born}
-                onChange={(e) => setNewVisitingChild({ ...newVisitingChild, born: e.target.value })}
-              />
-            </div>
-            <div className="row" style={{ marginTop: 6 }}>
-              <select
-                value={newVisitingChild.category}
-                onChange={(e) => setNewVisitingChild({ ...newVisitingChild, category: e.target.value })}
-              >
-                {VISITS_CATS.map(([k, l]) => (
-                  <option key={k} value={k}>
-                    {l}
-                  </option>
-                ))}
-              </select>
-              <button className="chip" style={{ flex: "0 0 auto" }} onClick={addVisitingChild}>
-                Add
-              </button>
-              <button className="x" onClick={() => setAddingVisitingChild(false)}>
-                ×
-              </button>
-            </div>
+            )}
           </div>
-        ) : (
-          <button className="chip add" onClick={() => setAddingVisitingChild(true)}>
-            + child
-          </button>
-        )}
+          {closeButton()}
+        </div>
+      );
+    }
 
-        <b style={{ display: "block", marginTop: 14 }}>Adults</b>
-        {visitors.map((v) => (
-          <div className="item" key={v.id}>
-            <div className="row">
-              <input value={v.name} onChange={(e) => updateVisitor(v.id, { name: e.target.value })} />
-              <select value={v.role} onChange={(e) => updateVisitor(v.id, { role: e.target.value })}>
-                {VISITOR_ROLES.map((r) => (
-                  <option key={r}>{r}</option>
-                ))}
-              </select>
-              <button className="x" onClick={() => removeVisitor(v.id)}>
-                ×
-              </button>
-            </div>
-            <div className="row">
-              <input placeholder="Phone" value={v.phone} onChange={(e) => updateVisitor(v.id, { phone: e.target.value })} />
-              <input placeholder="Email" value={v.email} onChange={(e) => updateVisitor(v.id, { email: e.target.value })} />
-            </div>
-          </div>
-        ))}
-        {addingVisitor ? (
-          <div style={{ marginTop: 8 }}>
-            <input placeholder="Name" value={newVisitor.name} onChange={(e) => setNewVisitor({ ...newVisitor, name: e.target.value })} />
-            <div className="row" style={{ marginTop: 6 }}>
-              <input placeholder="Phone" value={newVisitor.phone} onChange={(e) => setNewVisitor({ ...newVisitor, phone: e.target.value })} />
-              <input placeholder="Email" value={newVisitor.email} onChange={(e) => setNewVisitor({ ...newVisitor, email: e.target.value })} />
-            </div>
-            <div className="row" style={{ marginTop: 6 }}>
-              <select value={newVisitor.role} onChange={(e) => setNewVisitor({ ...newVisitor, role: e.target.value })}>
-                {VISITOR_ROLES.map((r) => (
-                  <option key={r}>{r}</option>
-                ))}
-              </select>
-              <button className="chip" style={{ flex: "0 0 auto" }} onClick={addVisitor}>
-                Add
-              </button>
-              <button className="x" onClick={() => setAddingVisitor(false)}>
-                ×
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button className="chip add" onClick={() => setAddingVisitor(true)}>
-            + adult
-          </button>
-        )}
-      </div>
+    return null;
+  }
 
+  return (
+    <div>
       <div className="card">
-        <h3>Your supervising social worker</h3>
-        <div className="row">
-          <input
-            placeholder="SSW name"
-            value={household.ssw_name}
-            onChange={(e) => saveHousehold({ ssw_name: e.target.value })}
-          />
-          <input
-            placeholder="SSW phone"
-            value={household.ssw_phone}
-            onChange={(e) => saveHousehold({ ssw_phone: e.target.value })}
-          />
-        </div>
-        <input
-          placeholder="SSW email"
-          value={household.ssw_email}
-          onChange={(e) => saveHousehold({ ssw_email: e.target.value })}
-        />
-        <div className="row" style={{ marginTop: 10 }}>
-          <input
-            placeholder="SSW's manager name"
-            value={household.ssw_manager_name}
-            onChange={(e) => saveHousehold({ ssw_manager_name: e.target.value })}
-          />
-          <input
-            placeholder="SSW's manager phone"
-            value={household.ssw_manager_phone}
-            onChange={(e) => saveHousehold({ ssw_manager_phone: e.target.value })}
-          />
-        </div>
-        <label style={{ marginTop: 10, display: "block" }}>Emergency Duty Team (out-of-hours) number</label>
-        <input value={household.edt} onChange={(e) => saveHousehold({ edt: e.target.value })} />
-        {savedAt && <p className="hint">Saved {savedAt}</p>}
+        <h3>About us</h3>
+        <p className="hint">
+          Your main carer(s) in the middle, everyone else around them. Tap a circle to see and edit their details.
+        </p>
+        <RadialWheel center={center} ring1={ring1} ring2={ring2} selectedId={selected} onSelect={setSelected} />
       </div>
 
-      {children.length === 0 && (
+      {children.length === 0 && householdChildren.length === 0 && (
         <div className="card">
-          <p className="empty">No children added yet — add one from the Capture tab.</p>
+          <p className="empty">No children added yet — add one from the Capture tab, or the + circle above.</p>
         </div>
       )}
 
-      {children
-        .filter((c) => livesHereOf(c) !== false)
-        .map((c) => {
-        const open = openChild === c.id;
-        const cb = basics[c.id] || {};
-        return (
-          <div className="card" key={c.id}>
-            <div className="row" style={{ alignItems: "center" }}>
-              <h3 style={{ cursor: "pointer", flex: 1, margin: 0 }} onClick={() => setOpenChild(open ? null : c.id)}>
-                {open ? "▾" : "▸"} {c.name}
-              </h3>
-              <button className="x" onClick={() => removeChild(c.id, c.name)}>
-                ×
-              </button>
-            </div>
-            {!open && (
-              <div className="muted">
-                {livesHereOf(c) === false
-                  ? "Visits us"
-                  : (LIVES_CATS.find(([k]) => k === c.category)?.[1] ?? (livesHereOf(c) === true ? "Lives with us" : "Not set yet"))}
-                {c.mockingbird ? " · " + (MB_OPTIONS.find(([k]) => k === c.mockingbird)?.[1] ?? c.mockingbird) : ""}
-              </div>
-            )}
-            <div className="chips" style={{ marginTop: 6 }}>
-              <button className="chip" onClick={() => setOpenSchoolAdmin(openSchoolAdmin === c.id ? null : c.id)}>
-                🏫 School admin
-              </button>
-              <button className="chip" onClick={() => setOpenClubs(openClubs === c.id ? null : c.id)}>
-                🧩 Clubs
-              </button>
-            </div>
-            {openSchoolAdmin === c.id && <ChildSchoolAdmin childId={c.id} />}
-            {openClubs === c.id && <ChildClubs childId={c.id} />}
-            {open && (
-              <div style={{ marginBottom: 12 }}>
-                <b style={{ fontSize: 14 }}>Living arrangement</b>
-                <select
-                  style={{ marginTop: 6 }}
-                  value={c.lives_here === null || c.lives_here === undefined ? "" : c.lives_here ? "1" : "0"}
-                  onChange={(e) => saveChild(c.id, { lives_here: e.target.value === "1", category: "" })}
-                >
-                  <option value="">— lives with us, or visits? —</option>
-                  <option value="1">Lives with us</option>
-                  <option value="0">Visits (sleepover / daycare / short break)</option>
-                </select>
-                {c.lives_here === true && (
-                  <select style={{ marginTop: 6 }} value={c.category} onChange={(e) => saveChild(c.id, { category: e.target.value })}>
-                    <option value="">— placement type —</option>
-                    {LIVES_CATS.map(([k, l]) => (
-                      <option key={k} value={k}>
-                        {l}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                {c.category === "fosters" ? (
-                  <>
-                    <p className="hint" style={{ marginTop: 8 }}>
-                      Notes
-                    </p>
-                    <textarea
-                      placeholder="Anything worth noting — no CSW/health/education details needed for a child who themselves fosters"
-                      defaultValue={cb.notes || ""}
-                      onBlur={(e) => saveChildBasics(c.id, "notes", e.target.value)}
-                    />
-                  </>
-                ) : (
-                  <ChildBasicsPanel
-                    // A child confirmed as living in this household is automatically part of
-                    // whichever Mockingbird constellation the household itself belongs to (see
-                    // "Your Mockingbird" above) -- no need to ask again per child. Left showing
-                    // for "not set yet" since we don't know their living arrangement yet.
-                    showMockingbird={c.lives_here !== true}
-                    mockingbird={c.mockingbird}
-                    onMockingbird={(v) => saveChild(c.id, { mockingbird: v })}
-                    hubCarerName={c.hub_carer_name}
-                    hubCarerPhone={c.hub_carer_phone}
-                    hubCarerEmail={c.hub_carer_email}
-                    onHubCarer={(field, v) => saveChild(c.id, { [field]: v })}
-                    showSurreyContact={["sgo", "adopted"].includes(c.category)}
-                    surreyContact={c.surrey_contact}
-                    onSurreyContact={(v) => saveChild(c.id, { surrey_contact: v })}
-                    basics={cb}
-                    onBasics={(key, value) => saveChildBasics(c.id, key, value)}
-                  />
-                )}
-              </div>
-            )}
-          </div>
-        );
-      })}
+      {renderSelected()}
     </div>
   );
 }
