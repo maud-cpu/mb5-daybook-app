@@ -11,8 +11,21 @@ type NewsItem = {
   body: string;
   category: "training" | "announcement" | "general";
   expires_on: string | null;
+  url: string;
   linked_course_id: string | null;
+  created_at: string;
 };
+
+function fmtDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+// expires_on is a bare YYYY-MM-DD date, not a timestamp -- parsed as UTC
+// midnight, which can read back as the wrong day in some timezones. Anchor
+// it to midday first, the same fix used for dates elsewhere in this app.
+function fmtDateOnly(dateStr: string): string {
+  return fmtDate(dateStr + "T12:00");
+}
 
 const CATEGORY_ICON: Record<NewsItem["category"], string> = {
   training: "🎓",
@@ -60,7 +73,7 @@ export default function NewsCard() {
     const [{ data: news }, { data: dis }] = await Promise.all([
       supabase
         .from("shared_news")
-        .select("id, title, body, category, expires_on, linked_course_id")
+        .select("id, title, body, category, expires_on, url, linked_course_id, created_at")
         .order("created_at", { ascending: false }),
       supabase.from("dismissed_news").select("news_id"),
     ]);
@@ -100,6 +113,7 @@ export default function NewsCard() {
   return (
     <div className="card">
       <h3>News &amp; Events</h3>
+      <div style={{ maxHeight: 260, overflowY: "auto" }}>
       {visible.map((n) => {
         const isLong = n.body.length > BODY_PREVIEW_LENGTH;
         const isExpanded = expanded.has(n.id);
@@ -111,20 +125,33 @@ export default function NewsCard() {
                 {CATEGORY_ICON[n.category]} {n.title}
               </b>
               <br />
-              <small className="muted">{linkify(shown)}</small>{" "}
-              {isLong && (
-                <small className="hint" style={{ cursor: "pointer" }} onClick={() => toggleExpanded(n.id)}>
-                  {isExpanded ? "less" : "more"}
-                </small>
-              )}
-              {n.category === "training" && n.linked_course_id && (
-                <>
-                  {" "}
-                  <Link href={`/dashboard/training?q=${encodeURIComponent(n.title)}`} className="hint">
-                    See in Training & Resources ↗
-                  </Link>
-                </>
-              )}
+              <small className="muted">
+                {linkify(shown)}{" "}
+                {isLong && (
+                  <span style={{ cursor: "pointer", textDecoration: "underline" }} onClick={() => toggleExpanded(n.id)}>
+                    {isExpanded ? "less" : "more"}
+                  </span>
+                )}
+              </small>
+              <br />
+              <small className="muted">
+                Added {fmtDate(n.created_at)}
+                {n.expires_on ? ` · Deadline ${fmtDateOnly(n.expires_on)}` : ""}
+                {n.url && (
+                  <>
+                    {" · "}
+                    <a href={n.url} target="_blank" rel="noopener noreferrer">
+                      Open link ↗
+                    </a>
+                  </>
+                )}
+                {n.category === "training" && n.linked_course_id && (
+                  <>
+                    {" · "}
+                    <Link href={`/dashboard/training?q=${encodeURIComponent(n.title)}`}>See in Training & Resources ↗</Link>
+                  </>
+                )}
+              </small>
             </span>
             <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => dismiss(n.id)}>
               Got it
@@ -132,6 +159,7 @@ export default function NewsCard() {
           </div>
         );
       })}
+      </div>
     </div>
   );
 }
