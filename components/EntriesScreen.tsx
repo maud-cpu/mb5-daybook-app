@@ -473,15 +473,6 @@ function EditForm({
         </div>
       )}
 
-      <label style={{ display: "flex", alignItems: "center", gap: 6, margin: "8px 0" }}>
-        <input
-          type="checkbox"
-          style={{ width: "auto" }}
-          checked={!!draft.shared_with_admin}
-          onChange={(e) => setDraft({ ...draft, shared_with_admin: e.target.checked })}
-        />
-        📤 Shared with admin
-      </label>
       <div className="row">
         <button className="btn" style={{ flex: 1 }} onClick={() => onSave(draft)}>
           Save

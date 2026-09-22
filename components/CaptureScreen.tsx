@@ -53,9 +53,15 @@ export default function CaptureScreen() {
   const [newChildBornMonth, setNewChildBornMonth] = useState("");
   const [newChildBornYear, setNewChildBornYear] = useState("");
   const [newChildFamily, setNewChildFamily] = useState("");
-  const [adminName, setAdminName] = useState("");
+  // Every child actually living in this household -- long term, short term,
+  // birth, kinship, whatever the placement type -- shares the SAME hub as
+  // the carer herself, so there's no per-child hub carer to ask for there;
+  // this is that one shared contact, offered on every entry regardless of
+  // which children (if any) it's tagged with, since the carer herself may
+  // need her own hub carer looped in either way.
+  const [hubLeader, setHubLeader] = useState<{ name: string; email: string } | null>(null);
   const [composing, setComposing] = useState(false);
-  const [composeQueue, setComposeQueue] = useState<{ child: string; entryId: string }[]>([]);
+  const [composeQueue, setComposeQueue] = useState<{ child?: string; entryId: string; hub?: boolean }[]>([]);
   const [courseInfo, setCourseInfo] = useState<Record<string, { url: string; length: string }>>({});
   // "Key contacts at school" (About us -> Education) is a repeatable list
   // stored as a JSON-array string inside children.basics.teacher /
@@ -122,20 +128,14 @@ export default function CaptureScreen() {
       .select("*")
       .single()
       .then(({ data }) => setRates(data as Rates));
-    // Lets a non-admin carer flag a note for the admin carer to see straight
-    // away -- meaningless (and confusing, since it showed her own name) for
-    // the admin carer herself, so their own admin profile is excluded here
-    // rather than checked at render time in every place adminName is used.
     supabase
-      .from("profiles")
-      .select("id, display_name")
-      .eq("role", "admin")
-      .then(async ({ data }) => {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        const others = (data ?? []).filter((a) => a.id !== user?.id);
-        setAdminName(others.map((a) => a.display_name).join(" & "));
+      .from("household")
+      .select("is_mockingbird, hub_leader_name, hub_leader_email")
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.is_mockingbird && data.hub_leader_name) {
+          setHubLeader({ name: data.hub_leader_name, email: data.hub_leader_email || "" });
+        }
       });
     Promise.all([
       supabase.from("shared_training_catalog").select("title, platform, url, length"),
@@ -498,11 +498,12 @@ export default function CaptureScreen() {
       }),
     );
     showToast(`Saved ${rows.length} item${rows.length > 1 ? "s" : ""}`);
-    const queue: { child: string; entryId: string }[] = [];
+    const queue: { child?: string; entryId: string; hub?: boolean }[] = [];
     pending.forEach((p, idx) => {
       const entryId = inserted?.[idx]?.id;
       if (!entryId) return;
       (p.send_hub ?? []).forEach((child) => queue.push({ child, entryId }));
+      if (p.send_own_hub) queue.push({ entryId, hub: true });
     });
     setPending([]);
     setCap("");
@@ -571,7 +572,12 @@ export default function CaptureScreen() {
   if (composing && composeQueue[0]) {
     return (
       <div>
-        <ComposeEmail onClose={closeCompose} presetChildName={composeQueue[0].child} presetEntryId={composeQueue[0].entryId} />
+        <ComposeEmail
+          onClose={closeCompose}
+          presetChildName={composeQueue[0].child}
+          presetEntryId={composeQueue[0].entryId}
+          presetHub={composeQueue[0].hub}
+        />
       </div>
     );
   }
@@ -1012,15 +1018,15 @@ export default function CaptureScreen() {
                     </div>
                   );
                 })()}
-              {adminName && (
+              {hubLeader?.name && (
                 <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
                   <input
                     type="checkbox"
                     style={{ width: "auto" }}
-                    checked={!!p.shared_with_admin}
-                    onChange={(e) => updatePending(i, { shared_with_admin: e.target.checked })}
+                    checked={!!p.send_own_hub}
+                    onChange={(e) => updatePending(i, { send_own_hub: e.target.checked })}
                   />
-                  📤 Also send this one straight to {adminName} — instead of phoning/messaging them separately
+                  📤 Send directly to {hubLeader.name} (your hub carer) — instead of phoning/messaging them separately
                 </label>
               )}
               {p.kids

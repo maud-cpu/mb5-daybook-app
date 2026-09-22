@@ -542,6 +542,8 @@ export type PendingItem = Partial<EntryRecord> & {
   unmatched?: string[];
   /** Kids whose Mockingbird hub carer should be emailed once this item is saved. */
   send_hub?: string[];
+  /** Whether the carer's own hub leader (household-wide, not per-child) should be emailed once this item is saved. */
+  send_own_hub?: boolean;
   /** When flag is "reminder": the date it should actually appear on the calendar/Today. */
   reminder_date?: string | null;
   /** When flag is "reminder": which REMINDER_CATEGORIES this is, e.g. "medical" for a GP/dentist appointment. */
