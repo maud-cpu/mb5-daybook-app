@@ -57,7 +57,7 @@ export default function MiniCalendarCard() {
 
     const map: Record<string, DayItem[]> = {};
     ((rem as { date: string; text: string; people: string[]; category: string }[] | null) ?? []).forEach((r) => {
-      (map[r.date] ||= []).push({ text: r.text, person: r.people[0] || "" });
+      (map[r.date] ||= []).push({ text: r.text, person: r.people.join(" & ") });
     });
     const clubRows = (clubs ?? []) as { id: string; child_id: string; club_name: string; weekday: number; time_from: string; time_to: string }[];
     groupClubsByOccurrence(clubRows, childNameById).forEach((c) => {
