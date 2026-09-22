@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { BASICS_SECTIONS, RepeatableSubfield } from "@/lib/basics";
-import { Child, LIVES_CATS, livesHereOf, MB_OPTIONS, VISITS_CATS } from "@/lib/types";
+import { Child, GENDER_OPTIONS, LIVES_CATS, livesHereOf, MB_OPTIONS, VISITS_CATS } from "@/lib/types";
 import { personColor } from "@/lib/calendarHelpers";
 import ChildSchoolAdmin from "@/components/ChildSchoolAdmin";
 import ChildClubs from "@/components/ChildClubs";
@@ -14,6 +14,22 @@ const VISITOR_ROLES = ["Mockingbird hub carer", "Respite support worker", "Famil
 
 function firstName(name: string): string {
   return (name || "").trim().split(/\s+/)[0] || "?";
+}
+
+// A name alone isn't a reliable signal of pronouns -- asking once here lets
+// generated documents (Handover, diary drafts) get it right instead of
+// guessing from the name and sometimes getting it wrong.
+function GenderSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">— gender —</option>
+      {GENDER_OPTIONS.map(([k, l]) => (
+        <option key={k} value={k}>
+          {l}
+        </option>
+      ))}
+    </select>
+  );
 }
 
 type RepeatableItem = Record<string, string> & { _k: string };
@@ -103,7 +119,7 @@ function YesNoChecklist({ value, onChange, items }: { value: string; onChange: (
   );
 }
 
-type Adult = { id: string; name: string; phone: string; email: string; role: string };
+type Adult = { id: string; name: string; phone: string; email: string; role: string; gender: string };
 type HouseholdChild = {
   id: string;
   name: string;
@@ -116,6 +132,7 @@ type HouseholdChild = {
   hub_carer_phone: string;
   hub_carer_email: string;
   surrey_contact: string;
+  gender: string;
 };
 
 // Shared by every list a child can appear in (lives here, visits, or in your
@@ -243,7 +260,7 @@ function ChildBasicsPanel({
     </>
   );
 }
-type Visitor = { id: string; name: string; phone: string; email: string; role: string };
+type Visitor = { id: string; name: string; phone: string; email: string; role: string; gender: string };
 
 type Household = {
   ssw_name: string;
@@ -287,12 +304,12 @@ export default function AboutScreen() {
   const [basics, setBasics] = useState<Record<string, Record<string, string>>>({});
   const [household, setHousehold] = useState<Household>(emptyHousehold);
   const [adults, setAdults] = useState<Adult[]>([]);
-  const [newAdult, setNewAdult] = useState({ name: "", phone: "", email: "", role: ADULT_ROLES[0] });
+  const [newAdult, setNewAdult] = useState({ name: "", phone: "", email: "", role: ADULT_ROLES[0], gender: "" });
   const [householdChildren, setHouseholdChildren] = useState<HouseholdChild[]>([]);
-  const [newHouseholdChild, setNewHouseholdChild] = useState({ name: "", born: "", category: "", notes: "" });
+  const [newHouseholdChild, setNewHouseholdChild] = useState({ name: "", born: "", category: "", notes: "", gender: "" });
   const [visitors, setVisitors] = useState<Visitor[]>([]);
-  const [newVisitor, setNewVisitor] = useState({ name: "", phone: "", email: "", role: VISITOR_ROLES[0] });
-  const [newVisitingChild, setNewVisitingChild] = useState({ name: "", born: "", category: VISITS_CATS[0][0] as string });
+  const [newVisitor, setNewVisitor] = useState({ name: "", phone: "", email: "", role: VISITOR_ROLES[0], gender: "" });
+  const [newVisitingChild, setNewVisitingChild] = useState({ name: "", born: "", category: VISITS_CATS[0][0] as string, gender: "" });
   const [openSchoolAdmin, setOpenSchoolAdmin] = useState<string | null>(null);
   const [openClubs, setOpenClubs] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState("");
@@ -302,7 +319,9 @@ export default function AboutScreen() {
     const [{ data: kids }, { data: hh }, { data: adultRows }, { data: householdChildRows }, { data: visitorRows }] = await Promise.all([
       supabase
         .from("children")
-        .select("id, name, born, family, basics, category, lives_here, mockingbird, hub_carer_name, hub_carer_phone, hub_carer_email, surrey_contact")
+        .select(
+          "id, name, born, family, basics, category, lives_here, mockingbird, hub_carer_name, hub_carer_phone, hub_carer_email, surrey_contact, gender",
+        )
         .order("created_at"),
       supabase.from("household").select("*").maybeSingle(),
       supabase.from("household_adults").select("*").order("created_at"),
@@ -395,7 +414,7 @@ export default function AboutScreen() {
   async function addAdult() {
     if (!newAdult.name.trim()) return;
     await supabase.from("household_adults").insert(newAdult);
-    setNewAdult({ name: "", phone: "", email: "", role: ADULT_ROLES[0] });
+    setNewAdult({ name: "", phone: "", email: "", role: ADULT_ROLES[0], gender: "" });
     await load();
   }
 
@@ -412,7 +431,7 @@ export default function AboutScreen() {
   async function addHouseholdChild() {
     if (!newHouseholdChild.name.trim()) return;
     await supabase.from("household_children").insert({ ...newHouseholdChild, born: newHouseholdChild.born || null });
-    setNewHouseholdChild({ name: "", born: "", category: "", notes: "" });
+    setNewHouseholdChild({ name: "", born: "", category: "", notes: "", gender: "" });
     setSelected(null);
     await load();
   }
@@ -431,7 +450,7 @@ export default function AboutScreen() {
   async function addVisitor() {
     if (!newVisitor.name.trim()) return;
     await supabase.from("household_visitors").insert(newVisitor);
-    setNewVisitor({ name: "", phone: "", email: "", role: VISITOR_ROLES[0] });
+    setNewVisitor({ name: "", phone: "", email: "", role: VISITOR_ROLES[0], gender: "" });
     setSelected(null);
     await load();
   }
@@ -454,8 +473,9 @@ export default function AboutScreen() {
       born: newVisitingChild.born || null,
       category: newVisitingChild.category,
       lives_here: false,
+      gender: newVisitingChild.gender,
     });
-    setNewVisitingChild({ name: "", born: "", category: VISITS_CATS[0][0] });
+    setNewVisitingChild({ name: "", born: "", category: VISITS_CATS[0][0], gender: "" });
     setSelected(null);
     await load();
   }
@@ -513,6 +533,7 @@ export default function AboutScreen() {
               <div className="row">
                 <input placeholder="Phone" value={a.phone} onChange={(e) => updateAdult(a.id, { phone: e.target.value })} />
                 <input placeholder="Email" value={a.email} onChange={(e) => updateAdult(a.id, { email: e.target.value })} />
+                <GenderSelect value={a.gender} onChange={(v) => updateAdult(a.id, { gender: v })} />
               </div>
             </div>
           ))}
@@ -528,6 +549,7 @@ export default function AboutScreen() {
                   <option key={r}>{r}</option>
                 ))}
               </select>
+              <GenderSelect value={newAdult.gender} onChange={(v) => setNewAdult({ ...newAdult, gender: v })} />
               <button className="chip" style={{ flex: "0 0 auto" }} onClick={addAdult}>
                 + Add adult
               </button>
@@ -637,6 +659,9 @@ export default function AboutScreen() {
               onChange={(e) => setNewHouseholdChild({ ...newHouseholdChild, notes: e.target.value })}
             />
           </div>
+          <div className="row" style={{ marginTop: 6 }}>
+            <GenderSelect value={newHouseholdChild.gender} onChange={(v) => setNewHouseholdChild({ ...newHouseholdChild, gender: v })} />
+          </div>
           <button className="chip" style={{ marginTop: 8 }} onClick={addHouseholdChild}>
             + Add
           </button>
@@ -674,6 +699,7 @@ export default function AboutScreen() {
                 </option>
               ))}
             </select>
+            <GenderSelect value={newVisitingChild.gender} onChange={(v) => setNewVisitingChild({ ...newVisitingChild, gender: v })} />
             <button className="chip" style={{ flex: "0 0 auto" }} onClick={addVisitingChild}>
               + Add
             </button>
@@ -699,6 +725,7 @@ export default function AboutScreen() {
                 <option key={r}>{r}</option>
               ))}
             </select>
+            <GenderSelect value={newVisitor.gender} onChange={(v) => setNewVisitor({ ...newVisitor, gender: v })} />
             <button className="chip" style={{ flex: "0 0 auto" }} onClick={addVisitor}>
               + Add
             </button>
@@ -731,6 +758,7 @@ export default function AboutScreen() {
           <div className="row">
             <input placeholder="Phone" value={v.phone} onChange={(e) => updateVisitor(v.id, { phone: e.target.value })} />
             <input placeholder="Email" value={v.email} onChange={(e) => updateVisitor(v.id, { email: e.target.value })} />
+            <GenderSelect value={v.gender} onChange={(val) => updateVisitor(v.id, { gender: val })} />
           </div>
           {closeButton()}
         </div>
@@ -770,6 +798,9 @@ export default function AboutScreen() {
               ))}
             </select>
             <input placeholder="Notes (optional)" value={c.notes} onChange={(e) => updateHouseholdChild(c.id, { notes: e.target.value })} />
+          </div>
+          <div className="row">
+            <GenderSelect value={c.gender} onChange={(v) => updateHouseholdChild(c.id, { gender: v })} />
           </div>
           <div className="chips" style={{ marginTop: 6 }}>
             <button className="chip" onClick={() => setOpenSchoolAdmin(open ? null : c.id)}>
@@ -826,14 +857,17 @@ export default function AboutScreen() {
               onChange={(e) => saveChild(c.id, { born: e.target.value || null })}
             />
           </div>
-          <select value={c.category} onChange={(e) => saveChild(c.id, { category: e.target.value })}>
-            <option value="">— placement type —</option>
-            {VISITS_CATS.map(([k, l]) => (
-              <option key={k} value={k}>
-                {l}
-              </option>
-            ))}
-          </select>
+          <div className="row">
+            <select value={c.category} onChange={(e) => saveChild(c.id, { category: e.target.value })}>
+              <option value="">— placement type —</option>
+              {VISITS_CATS.map(([k, l]) => (
+                <option key={k} value={k}>
+                  {l}
+                </option>
+              ))}
+            </select>
+            <GenderSelect value={c.gender} onChange={(v) => saveChild(c.id, { gender: v })} />
+          </div>
           <div style={{ marginTop: 10 }}>
             <ChildBasicsPanel
               showMockingbird={true}
@@ -873,6 +907,9 @@ export default function AboutScreen() {
           <div className="muted">
             {LIVES_CATS.find(([k]) => k === c.category)?.[1] ?? (c.lives_here === true ? "Lives with us" : "Not set yet")}
             {c.mockingbird ? " · " + (MB_OPTIONS.find(([k]) => k === c.mockingbird)?.[1] ?? c.mockingbird) : ""}
+          </div>
+          <div className="row" style={{ marginTop: 6 }}>
+            <GenderSelect value={c.gender} onChange={(v) => saveChild(c.id, { gender: v })} />
           </div>
           <div className="chips" style={{ marginTop: 6 }}>
             <button className="chip" onClick={() => setOpenSchoolAdmin(open ? null : c.id)}>

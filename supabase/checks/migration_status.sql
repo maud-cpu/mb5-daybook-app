@@ -194,6 +194,12 @@ select migration, applied from (
       exists (select 1 from information_schema.columns
          where table_schema = 'public' and table_name = 'child_school_admin' and column_name = 'teacher_name')
       and exists (select 1 from information_schema.columns
-         where table_schema = 'public' and table_name = 'child_school_admin' and column_name = 'teacher_contact'))
+         where table_schema = 'public' and table_name = 'child_school_admin' and column_name = 'teacher_contact')),
+
+    ('0038 gender column on children/household_children/household_adults/household_visitors',
+      exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'children' and column_name = 'gender')
+      and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'household_children' and column_name = 'gender')
+      and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'household_adults' and column_name = 'gender')
+      and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'household_visitors' and column_name = 'gender'))
 ) as t(migration, applied)
 order by migration;

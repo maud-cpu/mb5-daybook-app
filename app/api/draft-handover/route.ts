@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { PROFILE_FIELDS } from "@/lib/handover";
+import { pronounsFor } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -34,7 +35,19 @@ export async function POST(req: NextRequest) {
     .map((r) => `[${r.date}] [${r.bucket}] ${r.text}`)
     .join("\n");
 
-  const sys = `You draft a "handover profile" for ${childName}, a child in foster care, from a UK foster carer's raw day-to-day notes -- this is a practical guide another carer would read before looking after ${childName} during a stay (a sleepover, holiday cover or similar), so it should be specific and useful at a glance, not vague. Use only what is actually in the notes -- never invent a routine, preference or fact that isn't there. Write each section in plain British English, as short practical bullet points or sentences a carer could act on. Return ONLY JSON with these keys, one string each: ${PROFILE_FIELDS.map((f) => f[0]).join(", ")}. Use an empty string for any section the notes say nothing useful about -- do not pad it with generic advice.`;
+  // A name alone isn't a reliable signal of gender, and guessing wrong
+  // misgendered a child in generated text -- use what's on file instead of
+  // leaving the model to guess from the name.
+  const [{ data: cRow }, { data: hhRow }] = await Promise.all([
+    supabase.from("children").select("gender").eq("name", childName).maybeSingle(),
+    supabase.from("household_children").select("gender").eq("name", childName).maybeSingle(),
+  ]);
+  const pronouns = pronounsFor(cRow?.gender || hhRow?.gender || "");
+  const pronounNote = pronouns
+    ? ` Use ${pronouns.subject}/${pronouns.object}/${pronouns.possessive} pronouns for ${childName}.`
+    : ` ${childName}'s gender isn't recorded -- avoid guessing a pronoun from the name; use ${childName}'s name again rather than he/she/they where a pronoun would otherwise be needed.`;
+
+  const sys = `You draft a "handover profile" for ${childName}, a child in foster care, from a UK foster carer's raw day-to-day notes -- this is a practical guide another carer would read before looking after ${childName} during a stay (a sleepover, holiday cover or similar), so it should be specific and useful at a glance, not vague.${pronounNote} Use only what is actually in the notes -- never invent a routine, preference or fact that isn't there. Write each section in plain British English, as short practical bullet points or sentences a carer could act on. Return ONLY JSON with these keys, one string each: ${PROFILE_FIELDS.map((f) => f[0]).join(", ")}. Use an empty string for any section the notes say nothing useful about -- do not pad it with generic advice.`;
 
   try {
     const anthropic = new Anthropic({ apiKey });
