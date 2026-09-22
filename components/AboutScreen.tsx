@@ -832,7 +832,7 @@ export default function AboutScreen() {
               🏫 School admin
             </button>
             <button className="chip" onClick={() => setOpenClubs(clubsOpen ? null : c.id)}>
-              🧩 Clubs
+              🧩 Club admin
             </button>
           </div>
           {open && <ChildSchoolAdmin childId={c.id} />}
@@ -941,7 +941,7 @@ export default function AboutScreen() {
               🏫 School admin
             </button>
             <button className="chip" onClick={() => setOpenClubs(clubsOpen ? null : c.id)}>
-              🧩 Clubs
+              🧩 Club admin
             </button>
           </div>
           {open && <ChildSchoolAdmin childId={c.id} />}

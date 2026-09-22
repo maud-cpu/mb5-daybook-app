@@ -29,15 +29,18 @@ function fmt(iso: string): string {
 
 export default function EntriesScreen() {
   const supabase = createClient();
+  const searchParams = useSearchParams();
   const [records, setRecords] = useState<EntryRecord[]>([]);
   const [children, setChildren] = useState<Child[]>([]);
   const [rates, setRates] = useState<Rates | null>(null);
   const [tab, setTab] = useState<"all" | Bucket>("all");
-  const [erange, setErange] = useState("7d");
+  // A record linked in from elsewhere (e.g. "edit this expense" from
+  // Paperwork) might be older than the default 7-day window -- widen it so
+  // that record is actually in the visible list for its edit form to show.
+  const [erange, setErange] = useState(() => (searchParams.get("edit") ? "all" : "7d"));
   const [childFilter, setChildFilter] = useState<string[]>([]);
-  const [editId, setEditId] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(searchParams.get("edit"));
   const [loading, setLoading] = useState(true);
-  const searchParams = useSearchParams();
   const [composing, setComposing] = useState(searchParams.get("compose") === "1");
   const [sendPreset, setSendPreset] = useState<{ child: string; entryId: string } | null>(null);
   const [selectMode, setSelectMode] = useState(false);
@@ -95,6 +98,14 @@ export default function EntriesScreen() {
         : inRangeRecs.filter((r) => r.bucket === tab || (r.also_in || []).includes(tab)),
     [inRangeRecs, tab],
   );
+
+  useEffect(() => {
+    // A deep-linked edit (e.g. from Paperwork) could land anywhere in a
+    // long "all time" list -- scroll straight to it instead of leaving her
+    // to hunt for the one row already open for editing.
+    if (!editId) return;
+    document.getElementById(`rec-${editId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [editId, shown]);
 
   function toggleChildFilter(name: string) {
     setChildFilter((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
@@ -239,7 +250,7 @@ export default function EntriesScreen() {
         )}
         {shown.length === 0 && <p className="empty">Nothing here yet.</p>}
         {shown.map((r) => (
-          <div className={`rec${r.done ? " done" : ""}${tab === "incident" ? " incident" : ""}`} key={r.id}>
+          <div id={`rec-${r.id}`} className={`rec${r.done ? " done" : ""}${tab === "incident" ? " incident" : ""}`} key={r.id}>
             {selectMode ? (
               <input
                 type="checkbox"
