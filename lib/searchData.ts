@@ -4,7 +4,7 @@ export type SearchData = {
   people: { name: string; href: string }[];
   entries: { id: string; text: string; date: string; bucket: string }[];
   reminders: { id: string; text: string; date: string }[];
-  courses: { id: string; title: string }[];
+  courses: { id: string; title: string; url: string; description: string }[];
 };
 
 export type SearchResult = {
@@ -24,7 +24,7 @@ export async function loadSearchData(supabase: ReturnType<typeof createClient>):
     // table on every search-panel open.
     supabase.from("records").select("id, bucket, text, date").order("date", { ascending: false }).limit(500),
     supabase.from("reminders").select("id, text, date").eq("done", false),
-    supabase.from("shared_training_catalog").select("id, title").eq("archived", false),
+    supabase.from("shared_training_catalog").select("id, title, url, description").eq("archived", false),
   ]);
   return {
     people: [
@@ -39,7 +39,7 @@ export async function loadSearchData(supabase: ReturnType<typeof createClient>):
     ],
     entries: (records as { id: string; bucket: string; text: string; date: string }[] | null) ?? [],
     reminders: (reminders as { id: string; text: string; date: string }[] | null) ?? [],
-    courses: (courses as { id: string; title: string }[] | null) ?? [],
+    courses: (courses as { id: string; title: string; url: string; description: string }[] | null) ?? [],
   };
 }
 
@@ -93,14 +93,22 @@ export function filterSearchData(
     .slice(0, limit)
     .forEach((r) => results.push({ key: `r:${r.id}`, kind: "reminder", label: r.text, sub: `Calendar · ${r.date}`, href: `/dashboard/calendar?date=${r.date}` }));
 
-  const courses = data.courses.filter((c) => c.title.toLowerCase().includes(q));
+  // Searched by URL or by a word from its description before too -- title
+  // alone missed both, which made a resource whose title didn't happen to
+  // repeat the search term look like it wasn't in the catalogue at all.
+  const courses = data.courses.filter(
+    (c) =>
+      c.title.toLowerCase().includes(q) ||
+      c.url.toLowerCase().includes(q) ||
+      c.description.toLowerCase().includes(q),
+  );
   counts.course = courses.length;
   courses.slice(0, limit).forEach((c) =>
     results.push({
       key: `c:${c.id}`,
       kind: "course",
-      label: c.title,
-      sub: "Training & Resources",
+      label: c.title || c.url || "Untitled resource",
+      sub: c.url ? `Training & Resources · ${c.url}` : "Training & Resources",
       href: `/dashboard/training?q=${encodeURIComponent(c.title)}`,
     }),
   );

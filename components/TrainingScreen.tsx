@@ -15,6 +15,7 @@ type Course = {
   how: string;
   platform: string;
   url: string;
+  description: string;
   length: string;
   sort_order: number;
   external_rating: number | null;
@@ -361,7 +362,10 @@ export default function TrainingScreen() {
   );
 
   function matchesFilters(c: Course): boolean {
-    if (search.trim() && !c.title.toLowerCase().includes(search.trim().toLowerCase())) return false;
+    const q = search.trim().toLowerCase();
+    if (q && !c.title.toLowerCase().includes(q) && !c.url.toLowerCase().includes(q) && !c.description.toLowerCase().includes(q)) {
+      return false;
+    }
     if (mediaFilter && mediumOf(c) !== mediaFilter) return false;
     if (lengthFilter && lengthBucketOf(c) !== lengthFilter) return false;
     return true;
