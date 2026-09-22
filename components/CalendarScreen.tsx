@@ -392,7 +392,8 @@ export default function CalendarScreen() {
           {dayItems.length === 0 && <p className="empty">Nothing on this day.</p>}
           {dayItems.map((r) =>
             editingId === r.id && editDraft ? (
-              <div key={r.id} style={{ marginBottom: 10 }}>
+              <div key={r.id} className="item" style={{ border: "2px solid var(--pine)", marginBottom: 10 }}>
+                <b style={{ display: "block", color: "var(--pine)", marginBottom: 6, fontSize: 13 }}>✏️ Editing this entry</b>
                 <input value={editDraft.text} onChange={(e) => setEditDraft({ ...editDraft, text: e.target.value })} />
                 <div className="row" style={{ marginTop: 6 }}>
                   <input
