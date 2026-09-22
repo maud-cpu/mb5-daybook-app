@@ -547,11 +547,11 @@ export default function TrainingScreen() {
                       <small className="muted">· {course.length}</small>
                     </>
                   )}
-                  {info.reasons.map((r, i) => (
-                    <small key={i} className="muted" style={{ display: "block", marginTop: 2 }}>
-                      💡 {r}
+                  {info.reasons.length > 0 && (
+                    <small className="muted" style={{ display: "block", marginTop: 2 }}>
+                      💡 {info.reasons.join(" · ")}
                     </small>
-                  ))}
+                  )}
                   {status.label && (
                     <>
                       <br />
@@ -579,7 +579,7 @@ export default function TrainingScreen() {
             );
               })}
             </div>
-            <div>{compulsory}</div>
+            <div className="training-top-grid-col">{compulsory}</div>
           </div>
         );
       })()}
