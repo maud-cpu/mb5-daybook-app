@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
 import { REMINDER_CATEGORIES, REPEAT_OPTIONS, Reminder, reminderCategoryLabel } from "@/lib/types";
-import { addDays, clubText, mondayStartWeekday, occurrenceDates, personColor } from "@/lib/calendarHelpers";
+import { addDays, clubText, groupClubsByOccurrence, mondayStartWeekday, occurrenceDates, personColor } from "@/lib/calendarHelpers";
 import PeoplePicker, { PersonOption } from "@/components/PeoplePicker";
 import PersonTags, { PersonDot } from "@/components/PersonTags";
 
@@ -37,16 +37,16 @@ function f2fReminder(id: string, text: string, date: string): Reminder {
 // in the visible month whenever that day's weekday matches. Edited from
 // About us, not here -- read-only, like a face-to-face training session.
 const CLUB_PREFIX = "club:";
-function clubReminder(clubId: string, text: string, date: string, childName: string): Reminder {
+function clubReminder(clubKey: string, text: string, date: string, childNames: string[]): Reminder {
   return {
-    id: `${CLUB_PREFIX}${clubId}:${date}`,
+    id: `${CLUB_PREFIX}${clubKey}:${date}`,
     text,
     date,
     done: false,
     done_at: null,
     category: "club",
     child: "",
-    people: [childName],
+    people: childNames,
     amount: null,
     series_id: null,
     source_text: "",
@@ -144,13 +144,12 @@ export default function CalendarScreen() {
     ((kids as { id: string; name: string }[] | null) ?? []).forEach((c) => (childNameById[c.id] = c.name));
     ((hhKids as { id: string; name: string }[] | null) ?? []).forEach((c) => (childNameById[c.id] = c.name));
     const clubReminders: Reminder[] = [];
-    (clubs ?? []).forEach((c: { id: string; child_id: string; club_name: string; weekday: number; time_from: string; time_to: string }) => {
-      const childName = childNameById[c.child_id];
-      if (!childName || !c.club_name) return;
+    const clubRows = (clubs ?? []) as { id: string; child_id: string; club_name: string; weekday: number; time_from: string; time_to: string }[];
+    groupClubsByOccurrence(clubRows, childNameById).forEach((c) => {
       const text = clubText(c.club_name, c.time_from, c.time_to);
       for (let d = 1; d <= daysInMonth(year, month); d++) {
         const iso = isoOf(year, month, d);
-        if (mondayStartWeekday(iso) === c.weekday) clubReminders.push(clubReminder(c.id, text, iso, childName));
+        if (mondayStartWeekday(iso) === c.weekday) clubReminders.push(clubReminder(c.id, text, iso, c.childNames));
       }
     });
 

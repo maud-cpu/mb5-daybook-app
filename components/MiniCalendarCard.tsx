@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
-import { clubText, mondayStartWeekday, personColor } from "@/lib/calendarHelpers";
+import { clubText, groupClubsByOccurrence, mondayStartWeekday, personColor } from "@/lib/calendarHelpers";
 
 const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
 
@@ -59,13 +59,14 @@ export default function MiniCalendarCard() {
     ((rem as { date: string; text: string; people: string[]; category: string }[] | null) ?? []).forEach((r) => {
       (map[r.date] ||= []).push({ text: r.text, person: r.people[0] || "" });
     });
-    (clubs ?? []).forEach((c: { id: string; child_id: string; club_name: string; weekday: number; time_from: string; time_to: string }) => {
-      const childName = childNameById[c.child_id];
-      if (!childName || !c.club_name) return;
-      const text = clubText(c.club_name, c.time_from, c.time_to);
+    const clubRows = (clubs ?? []) as { id: string; child_id: string; club_name: string; weekday: number; time_from: string; time_to: string }[];
+    groupClubsByOccurrence(clubRows, childNameById).forEach((c) => {
+      const base = clubText(c.club_name, c.time_from, c.time_to);
+      const text = c.childNames.length > 1 ? `${base} (${c.childNames.join(" & ")})` : base;
+      const person = c.childNames.length > 1 ? "" : c.childNames[0];
       for (let d = 1; d <= daysInMonth(year, month); d++) {
         const iso = isoOf(year, month, d);
-        if (mondayStartWeekday(iso) === c.weekday) (map[iso] ||= []).push({ text, person: childName });
+        if (mondayStartWeekday(iso) === c.weekday) (map[iso] ||= []).push({ text, person });
       }
     });
     setByDate(map);

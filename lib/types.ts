@@ -525,6 +525,7 @@ export type PendingItem = Partial<EntryRecord> & {
     timeFrom: string;
     timeTo: string;
     provider: string;
+    contactInfo: string;
     cost: string;
     website: string;
     notes: string;

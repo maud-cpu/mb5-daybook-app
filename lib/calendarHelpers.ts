@@ -51,6 +51,31 @@ export function clubText(clubName: string, timeFrom: string, timeTo: string): st
   return time ? `${clubName} (${time})` : clubName;
 }
 
+// child_clubs has one row per child, so the same club shared by two children
+// (e.g. siblings at the same weekly class) is two rows with identical
+// name/day/time. Without this, every calendar view shows that club twice on
+// the same day -- group the rows for one occurrence into one entry with all
+// the children's names, instead.
+export function groupClubsByOccurrence<
+  T extends { child_id: string; club_name: string; weekday: number; time_from: string; time_to: string },
+>(rows: T[], childNameById: Record<string, string>): (T & { childNames: string[] })[] {
+  const order: string[] = [];
+  const groups = new Map<string, T & { childNames: string[] }>();
+  for (const row of rows) {
+    const childName = childNameById[row.child_id];
+    if (!childName || !row.club_name) continue;
+    const key = [row.club_name.trim().toLowerCase(), row.weekday, row.time_from, row.time_to].join("|");
+    const existing = groups.get(key);
+    if (existing) {
+      if (!existing.childNames.includes(childName)) existing.childNames.push(childName);
+    } else {
+      groups.set(key, { ...row, childNames: [childName] });
+      order.push(key);
+    }
+  }
+  return order.map((k) => groups.get(k)!);
+}
+
 // A fixed palette rather than generated colours, so every colour stays
 // legible on a light background and distinct from its neighbours.
 const PERSON_PALETTE = [
