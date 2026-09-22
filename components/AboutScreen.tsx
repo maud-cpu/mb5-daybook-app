@@ -485,15 +485,18 @@ export default function AboutScreen() {
   const carerAdults = adults.filter((a) => a.role === "Foster carer");
 
   const centerLabel = carerAdults.length ? carerAdults.map((a) => firstName(a.name)).join(" & ") : "+ Add carer";
-  const center: WheelNode = { id: CENTER_NODE, label: centerLabel, color: CENTER_COLOR };
+  const householdCenter: WheelNode = { id: CENTER_NODE, label: centerLabel, color: CENTER_COLOR };
 
-  const ring1: WheelNode[] = [
+  const householdRing: WheelNode[] = [
     ...livingChildren.map((c) => ({ id: `child:${c.id}`, label: firstName(c.name), color: personColor(c.name) })),
     ...householdChildren.map((c) => ({ id: `hh:${c.id}`, label: firstName(c.name), color: personColor(c.name) })),
     { id: ADD_HH_CHILD, label: "+", color: "", dashed: true },
   ];
 
-  const ring2: WheelNode[] = [
+  // A separate, non-touching wheel -- people who visit regularly aren't
+  // part of the household, so they don't belong orbiting the same centre.
+  const visitorsCenter: WheelNode = { id: "visitors-hub", label: "Visitors", color: SSW_COLOR };
+  const visitorsRing: WheelNode[] = [
     ...visitingChildren.map((c) => ({ id: `visit:${c.id}`, label: firstName(c.name), color: personColor(c.name) })),
     ...visitors.map((v) => ({ id: `visitor:${v.id}`, label: firstName(v.name), color: SSW_COLOR })),
     { id: SSW_NODE, label: household.ssw_name ? firstName(household.ssw_name) : "SSW", color: SSW_COLOR },
@@ -987,9 +990,25 @@ export default function AboutScreen() {
       <div className="card">
         <h3>About us</h3>
         <p className="hint">
-          Your main carer(s) in the middle, everyone else around them. Tap a circle to see and edit their details.
+          Your household on the left, people who visit regularly on the right. Tap a circle to see and edit their
+          details.
         </p>
-        <RadialWheel center={center} ring1={ring1} ring2={ring2} selectedId={selected} onSelect={setSelected} />
+        <div className="about-wheels">
+          <RadialWheel
+            center={householdCenter}
+            ring1={householdRing}
+            selectedId={selected}
+            onSelect={setSelected}
+            maxWidth="380px"
+          />
+          <RadialWheel
+            center={visitorsCenter}
+            ring1={visitorsRing}
+            selectedId={selected}
+            onSelect={setSelected}
+            maxWidth="380px"
+          />
+        </div>
       </div>
 
       {children.length === 0 && householdChildren.length === 0 && (

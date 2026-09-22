@@ -78,25 +78,28 @@ function NodeButton({
 export default function RadialWheel({
   center,
   ring1,
-  ring2,
+  ring2 = [],
   selectedId,
   onSelect,
+  maxWidth = "520px",
 }: {
   center: WheelNode;
   ring1: WheelNode[];
-  ring2: WheelNode[];
+  ring2?: WheelNode[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /** Caps how wide this wheel grows -- lets two wheels sit side by side. */
+  maxWidth?: string;
 }) {
   const r1 = layoutRing(ring1, 33);
   const r2 = layoutRing(ring2, 46);
   const all = [...r1, ...r2];
 
   return (
-    <div style={{ position: "relative", width: "min(92vw, 520px)", aspectRatio: "1", margin: "10px auto" }}>
+    <div style={{ position: "relative", width: `min(92vw, ${maxWidth})`, aspectRatio: "1", margin: "10px auto" }}>
       <svg viewBox="0 0 100 100" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
         <circle cx="50" cy="50" r="33" fill="none" stroke="var(--line)" strokeWidth="0.4" />
-        <circle cx="50" cy="50" r="46" fill="none" stroke="var(--line)" strokeWidth="0.4" />
+        {ring2.length > 0 && <circle cx="50" cy="50" r="46" fill="none" stroke="var(--line)" strokeWidth="0.4" />}
         {all.map((n) => (
           <line
             key={n.id}
