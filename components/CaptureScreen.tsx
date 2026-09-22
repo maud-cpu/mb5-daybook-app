@@ -10,7 +10,7 @@ import MiniCalendarCard from "@/components/MiniCalendarCard";
 import TodaysEntriesCard from "@/components/TodaysEntriesCard";
 import CaptureTrainingCard from "@/components/CaptureTrainingCard";
 import PhotoField from "@/components/PhotoField";
-import ComposeEmail from "@/components/ComposeEmail";
+import DirectHubEmail from "@/components/DirectHubEmail";
 import {
   BUCKETS,
   Bucket,
@@ -62,7 +62,9 @@ export default function CaptureScreen() {
   // need her own hub carer looped in either way.
   const [hubLeader, setHubLeader] = useState<{ name: string; email: string } | null>(null);
   const [composing, setComposing] = useState(false);
-  const [composeQueue, setComposeQueue] = useState<{ child?: string; entryId: string; hub?: boolean }[]>([]);
+  const [composeQueue, setComposeQueue] = useState<
+    { hubName: string; hubEmail: string; childName?: string; text: string; bucket: Bucket; date: string }[]
+  >([]);
   const [courseInfo, setCourseInfo] = useState<Record<string, { url: string; length: string }>>({});
   // "Key contacts at school" (About us -> Education) is a repeatable list
   // stored as a JSON-array string inside children.basics.teacher /
@@ -499,12 +501,19 @@ export default function CaptureScreen() {
       }),
     );
     showToast(`Saved ${rows.length} item${rows.length > 1 ? "s" : ""}`);
-    const queue: { child?: string; entryId: string; hub?: boolean }[] = [];
+    const d = today();
+    const queue: { hubName: string; hubEmail: string; childName?: string; text: string; bucket: Bucket; date: string }[] = [];
     pending.forEach((p, idx) => {
-      const entryId = inserted?.[idx]?.id;
-      if (!entryId) return;
-      (p.send_hub ?? []).forEach((child) => queue.push({ child, entryId }));
-      if (p.send_own_hub) queue.push({ entryId, hub: true });
+      if (!inserted?.[idx]) return;
+      (p.send_hub ?? []).forEach((childName) => {
+        const c = children.find((ch) => ch.name === childName);
+        if (c) {
+          queue.push({ hubName: c.hub_carer_name || "their hub carer", hubEmail: c.hub_carer_email || "", childName, text: p.text, bucket: p.bucket, date: d });
+        }
+      });
+      if (p.send_own_hub && hubLeader) {
+        queue.push({ hubName: hubLeader.name, hubEmail: hubLeader.email, childName: p.kids[0], text: p.text, bucket: p.bucket, date: d });
+      }
     });
     setPending([]);
     setCap("");
@@ -573,12 +582,7 @@ export default function CaptureScreen() {
   if (composing && composeQueue[0]) {
     return (
       <div>
-        <ComposeEmail
-          onClose={closeCompose}
-          presetChildName={composeQueue[0].child}
-          presetEntryId={composeQueue[0].entryId}
-          presetHub={composeQueue[0].hub}
-        />
+        <DirectHubEmail onClose={closeCompose} {...composeQueue[0]} />
       </div>
     );
   }
