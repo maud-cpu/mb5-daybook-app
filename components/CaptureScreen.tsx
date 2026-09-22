@@ -1024,8 +1024,11 @@ export default function CaptureScreen() {
                       checked={(p.send_hub ?? []).includes(c.name)}
                       onChange={() => toggleSendHub(i, c.name)}
                     />
-                    📤 Also send this to {c.name}&apos;s Mockingbird hub carer{c.hub_carer_name ? ` (${c.hub_carer_name})` : ""} — instead of
-                    messaging them separately
+                    📤{" "}
+                    {c.hub_carer_name
+                      ? `Send directly to ${c.hub_carer_name} (${c.name}'s hub carer)`
+                      : `Also send this to ${c.name}'s hub carer`}{" "}
+                    — instead of phoning/messaging them separately
                   </label>
                 ))}
             </div>
