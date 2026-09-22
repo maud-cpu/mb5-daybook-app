@@ -415,7 +415,7 @@ export default function TrainingScreen() {
           const status = statusFor(c, completedOn);
           const url = withAmazonAffiliateTag(c.url || platformUrl(c.platform));
           return (
-            <div key={c.id} className="row" style={{ alignItems: "center", borderBottom: "1px solid #eee", padding: "6px 0" }}>
+            <div key={c.id} className="row" style={{ alignItems: "center", flexWrap: "wrap", borderBottom: "1px solid #eee", padding: "6px 0" }}>
               <div style={{ flex: 1 }}>
                 <b title={c.title}>
                   {isMandatory(c) && "⭐ "}
@@ -534,7 +534,7 @@ export default function TrainingScreen() {
               <div
                 key={title}
                 className="row"
-                style={{ alignItems: "flex-start", borderBottom: "1px solid #eee", padding: "6px 0" }}
+                style={{ alignItems: "flex-start", flexWrap: "wrap", borderBottom: "1px solid #eee", padding: "6px 0" }}
               >
                 <div style={{ flex: 1 }}>
                   <b title={title}>
@@ -595,7 +595,7 @@ export default function TrainingScreen() {
                 const course = courses.find((c) => c.title.trim().toLowerCase() === title.trim().toLowerCase());
                 const url = course ? withAmazonAffiliateTag(course.url || platformUrl(course.platform)) : "";
                 return (
-                  <div key={title} className="rec" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                  <div key={title} className="rec" style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
                     <span style={{ flex: 1 }}>
                       <b title={title}>{shortTitle(title)}</b>
                       <br />
