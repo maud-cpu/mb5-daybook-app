@@ -266,6 +266,67 @@ nav.tabbar a.on {
   font-weight: 700;
 }
 
+/* On a screen wide enough to have room for it, the main menu moves to a
+   left-hand sidebar instead of a bottom bar -- easier to reach with a mouse,
+   and every section stays visibly labelled rather than needing a tap to
+   check where you are. The bottom bar stays for a phone, still the more
+   reachable spot for a thumb. */
+.dashboard-view {
+  padding: 12px 14px 90px;
+  max-width: 640px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+@media (min-width: 900px) {
+  body {
+    padding-bottom: 0;
+  }
+
+  .topbar {
+    margin-left: 224px;
+  }
+
+  .dashboard-view {
+    margin: 0 0 0 224px;
+    padding: 24px 24px 40px;
+  }
+
+  nav.tabbar {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: auto;
+    width: 224px;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    border-top: 0;
+    border-right: 1.5px solid var(--line);
+    box-shadow: 2px 0 12px rgba(30, 28, 15, 0.05);
+    padding: 88px 12px 20px;
+    gap: 3px;
+  }
+
+  nav.tabbar button,
+  nav.tabbar a {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+    padding: 11px 12px;
+    font-size: 14.5px;
+  }
+
+  nav.tabbar button span,
+  nav.tabbar a span {
+    display: inline-block;
+    margin-bottom: 0;
+    font-size: 19px;
+  }
+}
+
 /* ---------------------------------------------------------------------
    Cards, rows and lists -- the building blocks every screen is made of.
    --------------------------------------------------------------------- */
@@ -327,11 +388,13 @@ nav.tabbar a.on {
   background: #fbfaf6;
 }
 
-/* Capture page dashboard: 2x2 boxes on wider screens, one column on a
-   phone -- the natural place this app is mostly used. */
+/* Capture page dashboard: the calendar sits full-width above this (a
+   week strip needs the room), and these three boxes sit in one balanced
+   row on wider screens -- one column on a phone, the natural place this
+   app is mostly used. */
 .dashboard-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
   align-items: start;
   margin-bottom: 16px;
@@ -342,7 +405,7 @@ nav.tabbar a.on {
   height: 100%;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 900px) {
   .dashboard-grid {
     grid-template-columns: 1fr;
   }

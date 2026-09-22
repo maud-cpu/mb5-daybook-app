@@ -14,7 +14,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <SignOutButton />
       </header>
       <QuickAccessButtons />
-      <div id="view" style={{ padding: "12px 14px 90px", maxWidth: 640, margin: "0 auto", width: "100%" }}>
+      <div id="view" className="dashboard-view">
         <RouteRemount>{children}</RouteRemount>
       </div>
       <NavBar />

@@ -85,21 +85,23 @@ export default function MiniCalendarCard() {
 
   return (
     <div className="card">
-      <div className="row" style={{ alignItems: "center", justifyContent: "space-between", margin: "0 0 4px" }}>
-        <button className="chip" onClick={() => setWeekStart(addDays(weekStart, -7))}>
+      <div className="row" style={{ alignItems: "center", justifyContent: "space-between", margin: "0 0 2px" }}>
+        <button className="chip" style={{ padding: "5px 10px", margin: 0 }} onClick={() => setWeekStart(addDays(weekStart, -7))}>
           ‹
         </button>
         <div style={{ textAlign: "center" }}>
-          <h3 style={{ margin: 0 }}>📅 This week</h3>
-          <small className="muted">{fmtRange(days[0], days[6])}</small>
+          <h3 style={{ margin: 0, fontSize: 15.5 }}>📅 This week</h3>
+          <small className="muted" style={{ fontSize: 11.5 }}>
+            {fmtRange(days[0], days[6])}
+          </small>
         </div>
-        <button className="chip" onClick={() => setWeekStart(addDays(weekStart, 7))}>
+        <button className="chip" style={{ padding: "5px 10px", margin: 0 }} onClick={() => setWeekStart(addDays(weekStart, 7))}>
           ›
         </button>
       </div>
       {!isCurrentWeek && (
-        <p style={{ textAlign: "center", margin: "0 0 8px" }}>
-          <button className="chip" style={{ margin: 0 }} onClick={() => setWeekStart(weekStartOf(t))}>
+        <p style={{ textAlign: "center", margin: "4px 0 0" }}>
+          <button className="chip" style={{ margin: 0, padding: "4px 10px", fontSize: 12 }} onClick={() => setWeekStart(weekStartOf(t))}>
             Back to this week
           </button>
         </p>
@@ -111,73 +113,58 @@ export default function MiniCalendarCard() {
         <div
           style={{
             display: "flex",
-            gap: 8,
+            gap: 5,
             overflowX: "auto",
             scrollSnapType: "x proximity",
-            paddingBottom: 4,
-            marginTop: 8,
+            paddingBottom: 2,
+            marginTop: 6,
           }}
         >
           {days.map((iso) => {
             const items = byDate[iso] ?? [];
             const isToday = iso === t;
-            const weekdayLabel = new Date(iso + "T12:00").toLocaleDateString("en-GB", { weekday: "short" });
+            const weekdayLabel = new Date(iso + "T12:00").toLocaleDateString("en-GB", { weekday: "narrow" });
             return (
               <div
                 key={iso}
                 style={{
-                  flex: "0 0 106px",
+                  flex: "1 1 0",
+                  minWidth: 40,
                   scrollSnapAlign: "start",
                   border: isToday ? "2px solid var(--marker)" : "1.5px solid var(--line)",
                   background: isToday ? "var(--marker-bg)" : "#fbfaf6",
-                  borderRadius: "var(--radius-md)",
-                  padding: "8px 6px",
+                  borderRadius: "var(--radius-sm)",
+                  padding: "5px 3px",
                   display: "flex",
                   flexDirection: "column",
-                  gap: 5,
+                  gap: 3,
                 }}
               >
                 <div style={{ textAlign: "center" }}>
-                  <div className="muted" style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.3 }}>
+                  <div className="muted" style={{ fontSize: 9.5, fontWeight: 700, textTransform: "uppercase" }}>
                     {weekdayLabel}
                   </div>
-                  <div style={{ fontSize: 17, fontWeight: isToday ? 800 : 600, color: isToday ? "var(--pine)" : "var(--ink)" }}>
+                  <div style={{ fontSize: 13.5, fontWeight: isToday ? 800 : 600, color: isToday ? "var(--pine)" : "var(--ink)" }}>
                     {fmtDayNum(iso)}
                   </div>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 3, minHeight: 20 }}>
-                  {items.length === 0 ? (
-                    <div className="muted" style={{ fontSize: 10.5, textAlign: "center", opacity: 0.55 }}>
-                      —
+                <div style={{ display: "flex", flexDirection: "column", gap: 2, minHeight: 8 }}>
+                  {items.slice(0, 2).map((it, idx) => (
+                    <div
+                      key={idx}
+                      title={it.text}
+                      style={{
+                        background: it.color,
+                        borderRadius: 5,
+                        height: 5,
+                        width: "100%",
+                      }}
+                    />
+                  ))}
+                  {items.length > 2 && (
+                    <div className="muted" style={{ fontSize: 8.5, textAlign: "center" }}>
+                      +{items.length - 2}
                     </div>
-                  ) : (
-                    <>
-                      {items.slice(0, 3).map((it, idx) => (
-                        <div
-                          key={idx}
-                          title={it.text}
-                          style={{
-                            background: it.color,
-                            color: "#fff",
-                            borderRadius: 7,
-                            padding: "3px 5px",
-                            fontSize: 10.5,
-                            fontWeight: 600,
-                            lineHeight: 1.25,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {it.icon} {it.text}
-                        </div>
-                      ))}
-                      {items.length > 3 && (
-                        <div className="muted" style={{ fontSize: 10, textAlign: "center" }}>
-                          +{items.length - 3} more
-                        </div>
-                      )}
-                    </>
                   )}
                 </div>
               </div>
@@ -186,7 +173,34 @@ export default function MiniCalendarCard() {
         </div>
       )}
 
-      <p className="hint" style={{ marginTop: 10, marginBottom: 0 }}>
+      {(() => {
+        const todayItems = byDate[t] ?? [];
+        return todayItems.length > 0 ? (
+          <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 3 }}>
+            {todayItems.slice(0, 4).map((it, idx) => (
+              <div
+                key={idx}
+                style={{
+                  background: it.color,
+                  color: "#fff",
+                  borderRadius: 7,
+                  padding: "4px 7px",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  lineHeight: 1.3,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {it.icon} {it.text}
+              </div>
+            ))}
+          </div>
+        ) : null;
+      })()}
+
+      <p className="hint" style={{ marginTop: 8, marginBottom: 0 }}>
         <Link href="/dashboard/calendar">Open full calendar ↗</Link>
       </p>
     </div>

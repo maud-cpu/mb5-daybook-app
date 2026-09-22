@@ -1035,9 +1035,10 @@ export default function CaptureScreen() {
         </div>
       )}
 
+      <MiniCalendarCard />
+
       <div className="dashboard-grid">
         <ThingsToDoCard />
-        <MiniCalendarCard />
         <TodaysEntriesCard />
         <CaptureTrainingCard />
       </div>
