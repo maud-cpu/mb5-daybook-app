@@ -75,10 +75,10 @@ type ParsedResource = {
  * link ourselves from the title/author we've already cleanly extracted
  * sidesteps all of that.
  */
-function matchesCourseSearch(c: { title: string; description: string }, search: string): boolean {
+function matchesCourseSearch(c: { title: string; description: string; url: string }, search: string): boolean {
   const q = search.trim().toLowerCase();
   if (!q) return true;
-  return c.title.toLowerCase().includes(q) || c.description.toLowerCase().includes(q);
+  return c.title.toLowerCase().includes(q) || c.description.toLowerCase().includes(q) || c.url.toLowerCase().includes(q);
 }
 
 function amazonSearchUrl(title: string, author: string): string {
