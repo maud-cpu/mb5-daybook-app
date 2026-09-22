@@ -6,19 +6,12 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { extractEmail, extractPhone, today } from "@/lib/domain";
 import { clubText, groupClubsByOccurrence, mondayStartWeekday } from "@/lib/calendarHelpers";
-import { BUCKETS, Reminder, reminderCategoryLabel } from "@/lib/types";
+import { Reminder, reminderCategoryLabel } from "@/lib/types";
+import { SearchData, SearchResult, filterSearchData, loadSearchData } from "@/lib/searchData";
 
-const SEARCH_PAGE_SIZE = 5;
+const SEARCH_PREVIEW_SIZE = 5;
 
 type Item = { label: string; name: string; value: string };
-
-type SearchResult = { key: string; kind: "person" | "entry" | "reminder" | "course"; label: string; sub: string; href: string };
-type SearchData = {
-  people: { name: string; href: string }[];
-  entries: { id: string; text: string; date: string; bucket: string }[];
-  reminders: { id: string; text: string; date: string }[];
-  courses: { id: string; title: string }[];
-};
 
 function normalizePhone(v: string): string {
   return v.replace(/[\s\-()]/g, "");
@@ -61,7 +54,6 @@ export default function QuickAccessButtons() {
   const [loading, setLoading] = useState(false);
   const [searchData, setSearchData] = useState<SearchData | null>(null);
   const [query, setQuery] = useState("");
-  const [resultLimit, setResultLimit] = useState(SEARCH_PAGE_SIZE);
 
   async function load(kind: "phone" | "email") {
     setLoading(true);
@@ -179,22 +171,7 @@ export default function QuickAccessButtons() {
   // every keystroke.
   async function loadSearch() {
     setLoading(true);
-    const [{ data: kids }, { data: hhKids }, { data: records }, { data: reminders }, { data: courses }] = await Promise.all([
-      supabase.from("children").select("name"),
-      supabase.from("household_children").select("name"),
-      supabase.from("records").select("id, bucket, text, date").order("date", { ascending: false }).limit(500),
-      supabase.from("reminders").select("id, text, date").eq("done", false),
-      supabase.from("shared_training_catalog").select("id, title").eq("archived", false),
-    ]);
-    setSearchData({
-      people: [
-        ...((kids as { name: string }[] | null) ?? []).map((c) => ({ name: c.name, href: `/dashboard/about?person=${encodeURIComponent(c.name)}` })),
-        ...((hhKids as { name: string }[] | null) ?? []).map((c) => ({ name: c.name, href: `/dashboard/about?person=${encodeURIComponent(c.name)}` })),
-      ],
-      entries: (records as { id: string; bucket: string; text: string; date: string }[] | null) ?? [],
-      reminders: (reminders as { id: string; text: string; date: string }[] | null) ?? [],
-      courses: (courses as { id: string; title: string }[] | null) ?? [],
-    });
+    setSearchData(await loadSearchData(supabase));
     setLoading(false);
   }
 
@@ -205,44 +182,25 @@ export default function QuickAccessButtons() {
     }
     setOpen("search");
     setQuery("");
-    setResultLimit(SEARCH_PAGE_SIZE);
     if (!searchData) loadSearch();
   }
 
-  function onSearchChange(v: string) {
-    setQuery(v);
-    setResultLimit(SEARCH_PAGE_SIZE);
+  function goToFullResults() {
+    if (!query.trim()) return;
+    setOpen(null);
+    router.push(`/dashboard/search?q=${encodeURIComponent(query.trim())}`);
   }
 
-  const { results, hasMore } = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q || !searchData) return { results: [] as SearchResult[], hasMore: false };
-    const out: SearchResult[] = [];
-    let more = false;
-    const cap = <T,>(matches: T[]) => {
-      if (matches.length > resultLimit) more = true;
-      return matches.slice(0, resultLimit);
-    };
-    cap(searchData.people.filter((p) => p.name.toLowerCase().includes(q))).forEach((p) =>
-      out.push({ key: `p:${p.name}`, kind: "person", label: p.name, sub: "Person", href: p.href }),
-    );
-    cap(searchData.entries.filter((e) => e.text.toLowerCase().includes(q))).forEach((e) =>
-      out.push({
-        key: `e:${e.id}`,
-        kind: "entry",
-        label: e.text.length > 70 ? e.text.slice(0, 70) + "…" : e.text,
-        sub: `${BUCKETS[e.bucket as keyof typeof BUCKETS] || e.bucket} · ${e.date}`,
-        href: `/dashboard/entries?edit=${e.id}`,
-      }),
-    );
-    cap(searchData.reminders.filter((r) => r.text.toLowerCase().includes(q))).forEach((r) =>
-      out.push({ key: `r:${r.id}`, kind: "reminder", label: r.text, sub: `Calendar · ${r.date}`, href: `/dashboard/calendar?date=${r.date}` }),
-    );
-    cap(searchData.courses.filter((c) => c.title.toLowerCase().includes(q))).forEach((c) =>
-      out.push({ key: `c:${c.id}`, kind: "course", label: c.title, sub: "Training & Resources", href: `/dashboard/training?q=${encodeURIComponent(c.title)}` }),
-    );
-    return { results: out, hasMore: more };
-  }, [query, searchData, resultLimit]);
+  // The popover is a quick preview, not the whole search experience -- it
+  // shows a handful per category and, the moment any category actually has
+  // more than that, points at the full /dashboard/search page instead of
+  // trying to grow a fixed-width dropdown to fit an open-ended result count.
+  const { results, counts } = useMemo(
+    () => (searchData ? filterSearchData(searchData, query, SEARCH_PREVIEW_SIZE) : { results: [] as SearchResult[], counts: null }),
+    [query, searchData],
+  );
+  const totalMatches = counts ? counts.person + counts.entry + counts.reminder + counts.course : 0;
+  const hasMore = totalMatches > results.length;
 
   return (
     <div>
@@ -262,12 +220,19 @@ export default function QuickAccessButtons() {
       </div>
       {open === "search" && (
         <div id="qaPanel" className="show">
-          <input
-            autoFocus
-            placeholder="Search people, entries, reminders, training…"
-            value={query}
-            onChange={(e) => onSearchChange(e.target.value)}
-          />
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              goToFullResults();
+            }}
+          >
+            <input
+              autoFocus
+              placeholder="Search people, entries, reminders, training…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </form>
           {loading && <p className="hint">Loading…</p>}
           {!loading && query.trim() && results.length === 0 && <p className="empty">Nothing found.</p>}
           {!loading &&
@@ -278,9 +243,9 @@ export default function QuickAccessButtons() {
                 <small className="muted">{r.sub}</small>
               </Link>
             ))}
-          {!loading && hasMore && (
-            <button className="chip" style={{ marginTop: 8, width: "100%" }} onClick={() => setResultLimit((n) => n + SEARCH_PAGE_SIZE * 2)}>
-              Show more results
+          {!loading && query.trim() && (results.length > 0 || hasMore) && (
+            <button className="chip" style={{ marginTop: 8, width: "100%" }} onClick={goToFullResults}>
+              {hasMore ? `See all ${totalMatches} results ↗` : "See full results page ↗"}
             </button>
           )}
         </div>

@@ -122,11 +122,21 @@ export default function CaptureScreen() {
       .select("*")
       .single()
       .then(({ data }) => setRates(data as Rates));
+    // Lets a non-admin carer flag a note for the admin carer to see straight
+    // away -- meaningless (and confusing, since it showed her own name) for
+    // the admin carer herself, so their own admin profile is excluded here
+    // rather than checked at render time in every place adminName is used.
     supabase
       .from("profiles")
-      .select("display_name")
+      .select("id, display_name")
       .eq("role", "admin")
-      .then(({ data }) => setAdminName((data ?? []).map((a) => a.display_name).join(" & ")));
+      .then(async ({ data }) => {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        const others = (data ?? []).filter((a) => a.id !== user?.id);
+        setAdminName(others.map((a) => a.display_name).join(" & "));
+      });
     Promise.all([
       supabase.from("shared_training_catalog").select("title, platform, url, length"),
       supabase.from("shared_training_platforms").select("name, url"),
