@@ -411,6 +411,27 @@ nav.tabbar a.on {
   }
 }
 
+/* Calendar page: the selected day's entries + "Add an entry" sit next to
+   "Paste an email" instead of that being a separate box at the bottom of
+   the page -- one column on a phone. */
+.calendar-top-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 16px;
+}
+
+.calendar-top-grid .card {
+  margin-bottom: 0;
+}
+
+@media (min-width: 720px) {
+  .calendar-top-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

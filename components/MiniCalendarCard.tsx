@@ -36,6 +36,7 @@ export default function MiniCalendarCard() {
   const [weekStart, setWeekStart] = useState(weekStartOf(t));
   const [byDate, setByDate] = useState<Record<string, DayItem[]>>({});
   const [loaded, setLoaded] = useState(false);
+  const [selected, setSelected] = useState(t);
 
   async function load() {
     const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -83,10 +84,18 @@ export default function MiniCalendarCard() {
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const isCurrentWeek = weekStart === weekStartOf(t);
 
+  function changeWeek(newStart: string) {
+    setWeekStart(newStart);
+    // Keep "today" selected when today is in view; otherwise land on the
+    // first day of whichever week just came into view rather than leaving
+    // "selected" pointing at a date that's no longer shown.
+    setSelected(newStart === weekStartOf(t) ? t : newStart);
+  }
+
   return (
     <div className="card">
       <div className="row" style={{ alignItems: "center", justifyContent: "space-between", margin: "0 0 2px" }}>
-        <button className="chip" style={{ padding: "5px 10px", margin: 0 }} onClick={() => setWeekStart(addDays(weekStart, -7))}>
+        <button className="chip" style={{ padding: "5px 10px", margin: 0 }} onClick={() => changeWeek(addDays(weekStart, -7))}>
           ‹
         </button>
         <div style={{ textAlign: "center" }}>
@@ -95,13 +104,13 @@ export default function MiniCalendarCard() {
             {fmtRange(days[0], days[6])}
           </small>
         </div>
-        <button className="chip" style={{ padding: "5px 10px", margin: 0 }} onClick={() => setWeekStart(addDays(weekStart, 7))}>
+        <button className="chip" style={{ padding: "5px 10px", margin: 0 }} onClick={() => changeWeek(addDays(weekStart, 7))}>
           ›
         </button>
       </div>
       {!isCurrentWeek && (
         <p style={{ textAlign: "center", margin: "4px 0 0" }}>
-          <button className="chip" style={{ margin: 0, padding: "4px 10px", fontSize: 12 }} onClick={() => setWeekStart(weekStartOf(t))}>
+          <button className="chip" style={{ margin: 0, padding: "4px 10px", fontSize: 12 }} onClick={() => changeWeek(weekStartOf(t))}>
             Back to this week
           </button>
         </p>
@@ -123,28 +132,32 @@ export default function MiniCalendarCard() {
           {days.map((iso) => {
             const items = byDate[iso] ?? [];
             const isToday = iso === t;
+            const isSelected = iso === selected;
             const weekdayLabel = new Date(iso + "T12:00").toLocaleDateString("en-GB", { weekday: "narrow" });
             return (
-              <div
+              <button
                 key={iso}
+                onClick={() => setSelected(iso)}
                 style={{
                   flex: "1 1 0",
                   minWidth: 40,
                   scrollSnapAlign: "start",
-                  border: isToday ? "2px solid var(--marker)" : "1.5px solid var(--line)",
-                  background: isToday ? "var(--marker-bg)" : "#fbfaf6",
+                  border: isSelected ? "2px solid var(--pine)" : isToday ? "2px solid var(--marker)" : "1.5px solid var(--line)",
+                  background: isSelected ? "var(--pine-soft)" : isToday ? "var(--marker-bg)" : "#fbfaf6",
                   borderRadius: "var(--radius-sm)",
                   padding: "5px 3px",
                   display: "flex",
                   flexDirection: "column",
                   gap: 3,
+                  cursor: "pointer",
+                  font: "inherit",
                 }}
               >
                 <div style={{ textAlign: "center" }}>
                   <div className="muted" style={{ fontSize: 9.5, fontWeight: 700, textTransform: "uppercase" }}>
                     {weekdayLabel}
                   </div>
-                  <div style={{ fontSize: 13.5, fontWeight: isToday ? 800 : 600, color: isToday ? "var(--pine)" : "var(--ink)" }}>
+                  <div style={{ fontSize: 13.5, fontWeight: isToday || isSelected ? 800 : 600, color: isSelected ? "var(--pine)" : isToday ? "var(--pine)" : "var(--ink)" }}>
                     {fmtDayNum(iso)}
                   </div>
                 </div>
@@ -167,37 +180,52 @@ export default function MiniCalendarCard() {
                     </div>
                   )}
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
       )}
 
       {(() => {
-        const todayItems = byDate[t] ?? [];
-        return todayItems.length > 0 ? (
-          <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 3 }}>
-            {todayItems.slice(0, 4).map((it, idx) => (
-              <div
-                key={idx}
-                style={{
-                  background: it.color,
-                  color: "#fff",
-                  borderRadius: 7,
-                  padding: "4px 7px",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  lineHeight: 1.3,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {it.icon} {it.text}
+        const selectedItems = byDate[selected] ?? [];
+        const label =
+          selected === t
+            ? "Today"
+            : new Date(selected + "T12:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" });
+        return (
+          <div style={{ marginTop: 8 }}>
+            <small className="muted" style={{ fontWeight: 700 }}>
+              {label}
+            </small>
+            {selectedItems.length === 0 ? (
+              <p className="muted" style={{ fontSize: 12.5, margin: "3px 0 0" }}>
+                Nothing on this day.
+              </p>
+            ) : (
+              <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 3 }}>
+                {selectedItems.slice(0, 4).map((it, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      background: it.color,
+                      color: "#fff",
+                      borderRadius: 7,
+                      padding: "4px 7px",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      lineHeight: 1.3,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {it.icon} {it.text}
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        ) : null;
+        );
       })()}
 
       <p className="hint" style={{ marginTop: 8, marginBottom: 0 }}>
