@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { daycareAmount, gbp, today } from "@/lib/domain";
 import { withAmazonAffiliateTag } from "@/lib/amazon";
 import ThingsToDoCard from "@/components/ThingsToDoCard";
+import NewsCard from "@/components/NewsCard";
 import MiniCalendarCard from "@/components/MiniCalendarCard";
 import TodaysEntriesCard from "@/components/TodaysEntriesCard";
 import CaptureTrainingCard from "@/components/CaptureTrainingCard";
@@ -1059,6 +1060,7 @@ export default function CaptureScreen() {
       )}
 
       <div className="dashboard-grid">
+        <NewsCard />
         <ThingsToDoCard />
         <TodaysEntriesCard />
         <CaptureTrainingCard />
