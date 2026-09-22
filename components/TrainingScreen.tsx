@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { trainingStatus } from "@/lib/domain";
 import { withAmazonAffiliateTag } from "@/lib/amazon";
@@ -175,11 +176,14 @@ function RatingWidget({
 
 export default function TrainingScreen() {
   const supabase = createClient();
+  const searchParams = useSearchParams();
   const [courses, setCourses] = useState<Course[]>([]);
   const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [progress, setProgress] = useState<Record<string, string>>({});
   const [personal, setPersonal] = useState<Record<string, PersonalSuggestion>>({});
-  const [search, setSearch] = useState("");
+  // A search result elsewhere in the app can link straight in with a term
+  // already typed, e.g. a course title, rather than landing on a blank box.
+  const [search, setSearch] = useState(() => searchParams.get("q") || "");
   const [mediaFilter, setMediaFilter] = useState("");
   const [lengthFilter, setLengthFilter] = useState("");
   const [feedback, setFeedback] = useState<Feedback[]>([]);
