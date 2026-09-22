@@ -276,6 +276,17 @@ export function reminderCategoryLabel(cat: string): string {
   return REMINDER_CATEGORIES.find(([k]) => k === cat)?.[1] ?? "📌 Other";
 }
 
+// Split out of the combined "🎓 Training" label so a day's list of items can
+// show one consistent icon + text hierarchy per row instead of repeating the
+// emoji inline with the label text.
+export function reminderCategoryIcon(cat: string): string {
+  return reminderCategoryLabel(cat).split(" ")[0];
+}
+
+export function reminderCategoryText(cat: string): string {
+  return reminderCategoryLabel(cat).split(" ").slice(1).join(" ");
+}
+
 export type FormRefItem = { name: string; note: string; url?: string };
 export type FormRefCategory = { key: string; label: string; items: FormRefItem[] };
 
