@@ -105,24 +105,37 @@ function parseDescription(html: string): string {
   return desc;
 }
 
-/** Provider name (podcast show, YouTube channel) via the platform's own oEmbed endpoint. No API key needed for these. */
-async function fetchProvider(url: string, host: string): Promise<string> {
+/**
+ * Provider name (podcast show, YouTube channel) AND title, via the
+ * platform's own oEmbed endpoint -- no API key needed for these. YouTube in
+ * particular often serves a generic cookie-consent interstitial to a plain
+ * server-side fetch of the watch page itself (real content only renders
+ * after consent, which a script can't click through), which silently
+ * replaced the actual video's title/description with YouTube's own
+ * site-wide tagline. oEmbed is a JSON API built for exactly this embedding
+ * use case and isn't gated behind that wall, so its title is trusted over
+ * whatever the HTML scrape below finds for these platforms.
+ */
+async function fetchOembed(url: string, host: string): Promise<{ title: string; provider: string }> {
   let oembedUrl = "";
   if (host === "open.spotify.com") oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`;
   else if (host === "youtube.com" || host === "youtu.be" || host === "www.youtube.com")
     oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
   else if (host === "vimeo.com") oembedUrl = `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}`;
-  else return "";
+  else return { title: "", provider: "" };
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
     const res = await fetch(oembedUrl, { signal: controller.signal });
     clearTimeout(timeout);
-    if (!res.ok) return "";
+    if (!res.ok) return { title: "", provider: "" };
     const data = await res.json();
-    return data?.author_name ? decodeHtmlEntities(String(data.author_name)) : "";
+    return {
+      title: data?.title ? decodeHtmlEntities(String(data.title)) : "",
+      provider: data?.author_name ? decodeHtmlEntities(String(data.author_name)) : "",
+    };
   } catch {
-    return "";
+    return { title: "", provider: "" };
   }
 }
 
@@ -134,9 +147,15 @@ async function fetchTitle(url: string): Promise<{ title: string; length: string;
   } catch {
     // fall through with an empty host; fetchProvider/guessMedium already handle this
   }
-  let provider = await fetchProvider(url, host);
+  const oembed = await fetchOembed(url, host);
+  let provider = oembed.provider;
+  let title = oembed.title;
+  // YouTube/Vimeo watch pages are exactly where a plain fetch hits the
+  // consent interstitial described above -- a scraped description from
+  // that response is the site's own generic tagline, not the video's, so
+  // it's worse than no description at all rather than just incomplete.
+  const skipScrapedDescription = !!oembed.title;
 
-  let title = "";
   let description = "";
   let seconds: number | null = null;
   try {
@@ -150,17 +169,19 @@ async function fetchTitle(url: string): Promise<{ title: string; length: string;
     if (res.ok) {
       const html = await res.text();
       seconds = parseDurationSeconds(html);
-      description = parseDescription(html);
+      if (!skipScrapedDescription) description = parseDescription(html);
       if (host === "open.spotify.com") {
         const spotifyMeta = parseSpotifyMeta(html);
         if (!seconds && spotifyMeta.seconds) seconds = spotifyMeta.seconds;
         if (!provider && spotifyMeta.show) provider = spotifyMeta.show;
       }
-      const og = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']*)["']/i);
-      if (og?.[1]) title = decodeHtmlEntities(og[1]);
-      else {
-        const t = html.match(/<title[^>]*>([^<]*)<\/title>/i);
-        if (t?.[1]) title = decodeHtmlEntities(t[1]);
+      if (!title) {
+        const og = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']*)["']/i);
+        if (og?.[1]) title = decodeHtmlEntities(og[1]);
+        else {
+          const t = html.match(/<title[^>]*>([^<]*)<\/title>/i);
+          if (t?.[1]) title = decodeHtmlEntities(t[1]);
+        }
       }
     }
   } catch {
