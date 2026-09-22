@@ -10,6 +10,7 @@ type NewsItem = {
   body: string;
   category: "training" | "announcement" | "general";
   expires_on: string | null;
+  url: string;
   linked_course_id: string | null;
   created_at: string;
 };
@@ -19,7 +20,7 @@ type PendingNews = {
   body: string;
   category: "training" | "announcement" | "general";
   expiresOn: string | null;
-  trainingUrl: string;
+  url: string;
   trainingProvider: string;
   trainingCost: string;
   addToTraining: boolean;
@@ -73,7 +74,7 @@ export default function NewsAdmin({ showToast }: { showToast: (msg: string) => v
           body: string;
           category: NewsItem["category"];
           expiresOn: string | null;
-          trainingUrl: string;
+          url: string;
           trainingProvider: string;
           trainingCost: string;
         }) => ({
@@ -81,7 +82,7 @@ export default function NewsAdmin({ showToast }: { showToast: (msg: string) => v
           body: it.body,
           category: it.category,
           expiresOn: it.expiresOn,
-          trainingUrl: it.trainingUrl,
+          url: it.url,
           trainingProvider: it.trainingProvider,
           trainingCost: it.trainingCost,
           addToTraining: it.category === "training",
@@ -124,7 +125,7 @@ export default function NewsAdmin({ showToast }: { showToast: (msg: string) => v
           group_key: "next",
           group_label: "Next steps (suggested)",
           title: p.title,
-          url: p.trainingUrl,
+          url: p.url,
           how: p.trainingProvider,
           description,
           sort_order: 999,
@@ -143,6 +144,7 @@ export default function NewsAdmin({ showToast }: { showToast: (msg: string) => v
       body: p.body,
       category: p.category,
       expires_on: p.expiresOn,
+      url: p.url,
       linked_course_id: linkedCourseId,
       source_text: newsText,
       created_by: user?.id ?? null,
@@ -211,6 +213,12 @@ export default function NewsAdmin({ showToast }: { showToast: (msg: string) => v
             </select>
           </div>
           <textarea value={p.body} onChange={(e) => updatePending(i, { body: e.target.value })} style={{ marginTop: 6 }} />
+          <input
+            placeholder="Link (optional) — booking page, more info, a form, a portal…"
+            value={p.url}
+            onChange={(e) => updatePending(i, { url: e.target.value })}
+            style={{ marginTop: 6 }}
+          />
           <div className="row" style={{ marginTop: 6, alignItems: "center" }}>
             <label className="hint" style={{ flex: "0 0 auto" }}>
               Stops showing after
@@ -238,11 +246,6 @@ export default function NewsAdmin({ showToast }: { showToast: (msg: string) => v
               </label>
               {p.addToTraining && (
                 <div className="row" style={{ marginTop: 6, flexWrap: "wrap" }}>
-                  <input
-                    placeholder="Booking link (optional)"
-                    value={p.trainingUrl}
-                    onChange={(e) => updatePending(i, { trainingUrl: e.target.value })}
-                  />
                   <input
                     placeholder="Who's running it (optional)"
                     value={p.trainingProvider}
@@ -290,7 +293,10 @@ export default function NewsAdmin({ showToast }: { showToast: (msg: string) => v
                 <br />
                 <small className="muted">
                   {n.body.length > 100 ? n.body.slice(0, 100) + "…" : n.body}
-                  {n.expires_on ? ` · until ${n.expires_on}` : ""}
+                  {" · added "}
+                  {new Date(n.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                  {n.expires_on ? ` · deadline ${n.expires_on}` : ""}
+                  {n.url ? " · 🔗 has a link" : ""}
                 </small>
               </span>
               <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => deleteNews(n.id)}>

@@ -467,6 +467,12 @@ export default function TrainingScreen() {
 
   return (
     <div>
+      {linkedCourse &&
+        renderGroupCard(
+          { key: "linked", label: "🔗 From your search", rows: [linkedCourse] },
+          undefined,
+          { border: "2px solid var(--accent)" },
+        )}
       <div className="card">
         <h3>Training &amp; Resources</h3>
         <p className="note">
@@ -511,12 +517,6 @@ export default function TrainingScreen() {
       <div className="card">
         <FormsReference />
       </div>
-      {linkedCourse &&
-        renderGroupCard(
-          { key: "linked", label: "🔗 From your search", rows: [linkedCourse] },
-          undefined,
-          { border: "2px solid var(--accent)" },
-        )}
       {(() => {
         const compulsory = mandatoryGroups.map((g) => renderGroupCard(g));
         if (personalEntries.length === 0) return compulsory;

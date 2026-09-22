@@ -19,7 +19,7 @@ const NewsItemSchema = z.object({
   expiresOn: z.iso.date().nullable().describe(
     "The date this stops being relevant (a session date, an application deadline, an event date) as YYYY-MM-DD, resolved against today's date given below. Null if the item isn't time-limited or no date is given.",
   ),
-  trainingUrl: z.string().describe("A booking link/website for the training, if given, else empty string"),
+  url: z.string().describe("A link relevant to this item (booking page, more information, a form to fill in, a portal), if the text gives one, else empty string -- for any category, not just training"),
   trainingProvider: z.string().describe("Who is running the training (organisation and/or named person), if given, else empty string"),
   trainingCost: z.string().describe("What the training costs, if given, else empty string"),
 });
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 
   const sys = `You read a pasted email, WhatsApp message, or announcement (from Surrey, a fostering agency, or anywhere else a foster carer gets this kind of thing) and turn it into shareable news items for every carer in the household to see. Today's date is ${today()} -- resolve any relative date ("this Friday", "by the 15th") against that, in the correct year.
 Split into one item per distinct thing being announced. Write "title" and "body" in plain English, tidied up for a shared notice board -- not the raw wording of a subject line or forwarded message. Never invent information that isn't in the text.
-Only set category "training" when the text is actually offering a specific training session, course or workshop a carer could attend or book -- fill in trainingUrl/trainingProvider/trainingCost whenever the text gives them. Otherwise leave those three empty and use "announcement" or "general".
+Set "url" to any link the text actually gives for that item, whatever the category -- a booking page for training, a portal or form for an announcement, more information for anything else. Only set category "training" when the text is actually offering a specific training session, course or workshop a carer could attend or book -- fill in trainingProvider/trainingCost whenever the text gives them for that case; leave those two empty for "announcement" or "general".
 If nothing in the text is actually worth sharing as a notice, return an empty items array.`;
 
   try {
