@@ -925,7 +925,7 @@ export default function CaptureScreen() {
                         <select
                           value={p.club.weekday}
                           onChange={(e) => updatePending(i, { club: { ...p.club!, weekday: e.target.value } })}
-                          style={{ flex: "0 0 auto" }}
+                          style={{ flex: "0 0 auto", width: "auto" }}
                         >
                           {WEEKDAYS.map((d) => (
                             <option key={d} value={d}>

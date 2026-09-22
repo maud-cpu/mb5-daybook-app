@@ -490,7 +490,7 @@ export default function TrainingScreen() {
             onChange={(e) => setSearch(e.target.value)}
             style={{ flex: "1 1 180px" }}
           />
-          <select value={mediaFilter} onChange={(e) => setMediaFilter(e.target.value)} style={{ flex: "0 0 auto" }}>
+          <select value={mediaFilter} onChange={(e) => setMediaFilter(e.target.value)} style={{ flex: "0 0 auto", width: "auto" }}>
             <option value="">All media</option>
             {mediaOptions.map((m) => (
               <option key={m} value={m}>
@@ -498,7 +498,7 @@ export default function TrainingScreen() {
               </option>
             ))}
           </select>
-          <select value={lengthFilter} onChange={(e) => setLengthFilter(e.target.value)} style={{ flex: "0 0 auto" }}>
+          <select value={lengthFilter} onChange={(e) => setLengthFilter(e.target.value)} style={{ flex: "0 0 auto", width: "auto" }}>
             <option value="">Any length</option>
             {LENGTH_BUCKETS.map((b) => (
               <option key={b} value={b}>
@@ -646,7 +646,7 @@ export default function TrainingScreen() {
             <select
               value={nextSort}
               onChange={(e) => setNextSort(e.target.value as (typeof NEXT_SORTS)[number][0])}
-              style={{ flex: "0 0 auto" }}
+              style={{ flex: "0 0 auto", width: "auto" }}
             >
               {NEXT_SORTS.map(([k, l]) => (
                 <option key={k} value={k}>
