@@ -39,6 +39,7 @@ export default function NewsAdmin({ showToast }: { showToast: (msg: string) => v
   const [pending, setPending] = useState<PendingNews[]>([]);
   const [items, setItems] = useState<NewsItem[]>([]);
   const [showExpired, setShowExpired] = useState(false);
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
 
   async function load() {
     const { data } = await supabase.from("shared_news").select("*").order("created_at", { ascending: false });
@@ -162,8 +163,10 @@ export default function NewsAdmin({ showToast }: { showToast: (msg: string) => v
   }
 
   const t = today();
-  const activeItems = items.filter((n) => !n.expires_on || n.expires_on >= t);
-  const expiredItems = items.filter((n) => n.expires_on && n.expires_on < t);
+  const byDateAdded = (a: NewsItem, b: NewsItem) =>
+    sortOrder === "newest" ? b.created_at.localeCompare(a.created_at) : a.created_at.localeCompare(b.created_at);
+  const activeItems = items.filter((n) => !n.expires_on || n.expires_on >= t).sort(byDateAdded);
+  const expiredItems = items.filter((n) => n.expires_on && n.expires_on < t).sort(byDateAdded);
 
   return (
     <div className="card">
@@ -267,7 +270,17 @@ export default function NewsAdmin({ showToast }: { showToast: (msg: string) => v
 
       {activeItems.length > 0 && (
         <div style={{ marginTop: 14 }}>
-          <b style={{ fontSize: 14 }}>Currently showing ({activeItems.length})</b>
+          <div className="row" style={{ alignItems: "center", justifyContent: "space-between", margin: "0 0 6px" }}>
+            <b style={{ fontSize: 14 }}>Currently showing ({activeItems.length})</b>
+            <select
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value as "newest" | "oldest")}
+              style={{ flex: "0 0 auto", width: "auto" }}
+            >
+              <option value="newest">Newest added first</option>
+              <option value="oldest">Oldest added first</option>
+            </select>
+          </div>
           {activeItems.map((n) => (
             <div key={n.id} className="rec" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
               <span style={{ flex: 1 }}>
