@@ -312,6 +312,10 @@ export default function AboutScreen() {
   const [visitors, setVisitors] = useState<Visitor[]>([]);
   const [newVisitor, setNewVisitor] = useState({ name: "", phone: "", email: "", role: VISITOR_ROLES[0], gender: "" });
   const [newVisitingChild, setNewVisitingChild] = useState({ name: "", born: "", category: VISITS_CATS[0][0] as string, gender: "" });
+  const [importText, setImportText] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [pendingImportBasics, setPendingImportBasics] = useState<Record<string, string> | null>(null);
   const [openSchoolAdmin, setOpenSchoolAdmin] = useState<string | null>(null);
   const [openClubs, setOpenClubs] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState("");
@@ -490,16 +494,59 @@ export default function AboutScreen() {
 
   async function addVisitingChild() {
     if (!newVisitingChild.name.trim()) return;
-    await supabase.from("children").insert({
-      name: newVisitingChild.name.trim(),
-      born: newVisitingChild.born || null,
-      category: newVisitingChild.category,
-      lives_here: false,
-      gender: newVisitingChild.gender,
-    });
+    const { data, error } = await supabase
+      .from("children")
+      .insert({
+        name: newVisitingChild.name.trim(),
+        born: newVisitingChild.born || null,
+        category: newVisitingChild.category,
+        lives_here: false,
+        gender: newVisitingChild.gender,
+      })
+      .select("id")
+      .single();
+    // Anything pulled from a pasted handover document goes straight into
+    // this new child's basics -- otherwise it'd only ever have lived in the
+    // now-cleared textarea, undoing the whole point of extracting it.
+    if (!error && data && pendingImportBasics) {
+      await supabase.from("children").update({ basics: pendingImportBasics }).eq("id", data.id);
+    }
     setNewVisitingChild({ name: "", born: "", category: VISITS_CATS[0][0], gender: "" });
+    setImportText("");
+    setPendingImportBasics(null);
     setSelected(null);
     await load();
+  }
+
+  // A full handover/sleepover document is a completely different shape of
+  // input to a quick Capture note -- pasting one into Capture either
+  // produced a pile of odd diary items or, if long enough, hit the
+  // sort-note's token limit and got dropped entirely. This reads it with a
+  // dedicated extraction instead and prefills the add-child form plus a
+  // basics payload applied once the child is actually created.
+  async function importFromDocument() {
+    if (!importText.trim() || importing) return;
+    setImporting(true);
+    setImportError("");
+    try {
+      const res = await fetch("/api/import-child", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: importText }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Couldn't read that document");
+      const p = data.profile as Record<string, string>;
+      setNewVisitingChild((prev) => ({ ...prev, name: p.name || prev.name, born: p.born || prev.born }));
+      const basics: Record<string, string> = {};
+      (["gp", "nhs", "allergies", "school", "csw", "food_likes", "food_dislikes", "notes"] as const).forEach((k) => {
+        if (p[k]) basics[k] = p[k];
+      });
+      setPendingImportBasics(basics);
+    } catch (e) {
+      setImportError(e instanceof Error ? e.message : "Couldn't read that document");
+    }
+    setImporting(false);
   }
 
   const livingChildren = children.filter((c) => livesHereOf(c) !== false);
@@ -700,6 +747,27 @@ export default function AboutScreen() {
         <div className="card">
           <h3>Add a visiting child</h3>
           <p className="hint">Respite, daycare or sleepover — a child who visits but doesn&apos;t live here.</p>
+          <p className="note">
+            📋 Got a handover/sleepover document from their main carer? Paste it below and Extract will fill in the
+            name, date of birth and as much of their profile as it can find — check it over, then Add below.
+          </p>
+          <textarea
+            rows={5}
+            placeholder="Paste the whole handover document here…"
+            value={importText}
+            onChange={(e) => setImportText(e.target.value)}
+          />
+          <button className="chip" disabled={importing || !importText.trim()} onClick={importFromDocument}>
+            {importing ? "Reading…" : "Extract"}
+          </button>
+          {importError && <p style={{ color: "var(--danger)", fontSize: 14, marginTop: 6 }}>{importError}</p>}
+          {pendingImportBasics && Object.keys(pendingImportBasics).length > 0 && (
+            <p className="hint" style={{ marginTop: 6 }}>
+              ✓ Found details for {Object.keys(pendingImportBasics).length} field
+              {Object.keys(pendingImportBasics).length > 1 ? "s" : ""} — these will be saved to their profile once you
+              add them below.
+            </p>
+          )}
           <div className="row">
             <input
               placeholder="Name"
