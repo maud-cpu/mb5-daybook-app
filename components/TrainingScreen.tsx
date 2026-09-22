@@ -62,6 +62,15 @@ function isMandatory(c: Course): boolean {
   return c.group_key !== "next";
 }
 
+// A book's full title/subtitle/author/bestseller blurb can run to 150+
+// characters, which reads fine as an Amazon listing but turns a training-
+// list row into a wall of text next to every plain course name. Cut at the
+// last whole word so it doesn't end mid-letter; the full text is still
+// there on hover via the title attribute.
+function shortTitle(title: string, max = 90): string {
+  return title.length > max ? title.slice(0, max).replace(/\s+\S*$/, "") + "…" : title;
+}
+
 const NEXT_SORTS = [
   ["random", "Shuffle"],
   ["newest", "Newest added"],
@@ -181,9 +190,14 @@ export default function TrainingScreen() {
   const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [progress, setProgress] = useState<Record<string, string>>({});
   const [personal, setPersonal] = useState<Record<string, PersonalSuggestion>>({});
-  // A search result elsewhere in the app can link straight in with a term
-  // already typed, e.g. a course title, rather than landing on a blank box.
-  const [search, setSearch] = useState(() => searchParams.get("q") || "");
+  const [search, setSearch] = useState("");
+  // A search result elsewhere in the app links straight in with the exact
+  // course title it matched -- captured once at mount (not tied to the live
+  // search box) so it can pin that one course at the top of the page
+  // instead of just quietly filtering whatever section it happens to
+  // belong to, which used to bury it under an unrelated heading further
+  // down the page.
+  const [linkedTitle] = useState(() => searchParams.get("q") || "");
   const [mediaFilter, setMediaFilter] = useState("");
   const [lengthFilter, setLengthFilter] = useState("");
   const [feedback, setFeedback] = useState<Feedback[]>([]);
@@ -191,11 +205,13 @@ export default function TrainingScreen() {
   const [sessionDates, setSessionDates] = useState<Record<string, string>>({});
   const [dismissed, setDismissed] = useState<{ title: string; dismissed_at: string }[]>([]);
   const [showDismissed, setShowDismissed] = useState(false);
+  const [savedTitles, setSavedTitles] = useState<Record<string, string>>({});
+  const [showSaved, setShowSaved] = useState(false);
   const [nextSort, setNextSort] = useState<(typeof NEXT_SORTS)[number][0]>("random");
   const [randomSeed] = useState(() => Math.random());
 
   async function load() {
-    const [{ data: c }, { data: pl }, { data: pr }, { data: notes }, { data: fb }, { data: userData }, { data: dis }] =
+    const [{ data: c }, { data: pl }, { data: pr }, { data: notes }, { data: fb }, { data: userData }, { data: dis }, { data: saved }] =
       await Promise.all([
         supabase.from("shared_training_catalog").select("*").eq("archived", false).order("sort_order"),
         supabase.from("shared_training_platforms").select("*"),
@@ -204,8 +220,12 @@ export default function TrainingScreen() {
         supabase.from("training_feedback").select("course_id, user_id, rating, comment"),
         supabase.auth.getUser(),
         supabase.from("dismissed_training_suggestions").select("title, dismissed_at").order("dismissed_at", { ascending: false }),
+        supabase.from("training_saved").select("title, saved_at").order("saved_at", { ascending: false }),
       ]);
     setDismissed((dis as { title: string; dismissed_at: string }[]) ?? []);
+    const savedMap: Record<string, string> = {};
+    ((saved as { title: string; saved_at: string }[] | null) ?? []).forEach((s) => (savedMap[s.title] = s.saved_at));
+    setSavedTitles(savedMap);
     setCourses(
       ((c as Course[]) ?? []).map((row) => ({
         ...row,
@@ -302,7 +322,35 @@ export default function TrainingScreen() {
     await supabase.from("dismissed_training_suggestions").delete().eq("title", title);
   }
 
+  async function toggleSaved(title: string) {
+    if (savedTitles[title]) {
+      setSavedTitles((prev) => {
+        const next = { ...prev };
+        delete next[title];
+        return next;
+      });
+      await supabase.from("training_saved").delete().eq("title", title);
+    } else {
+      const savedAt = new Date().toISOString();
+      setSavedTitles((prev) => ({ ...prev, [title]: savedAt }));
+      await supabase.from("training_saved").upsert({ title, saved_at: savedAt });
+    }
+  }
+
   const platformUrl = (name: string) => platforms.find((p) => p.name === name)?.url || "";
+
+  const linkedCourse = linkedTitle
+    ? courses.find((c) => c.title.trim().toLowerCase() === linkedTitle.trim().toLowerCase())
+    : undefined;
+
+  function saveButton(title: string) {
+    const isSaved = !!savedTitles[title];
+    return (
+      <button className={`chip${isSaved ? " on" : ""}`} style={{ flex: "0 0 auto" }} onClick={() => toggleSaved(title)}>
+        {isSaved ? "🔖 Saved" : "🔖 Save for later"}
+      </button>
+    );
+  }
 
   const mediaOptions = Array.from(new Set(courses.map((c) => mediumOf(c)).filter(Boolean))).sort();
   const dismissedTitles = new Set(dismissed.map((d) => d.title.trim().toLowerCase()));
@@ -321,7 +369,11 @@ export default function TrainingScreen() {
 
   const groups = GROUP_ORDER.map((key) => {
     const rows = courses.filter(
-      (c) => c.group_key === key && !personalTitles.has(c.title.trim().toLowerCase()) && matchesFilters(c),
+      (c) =>
+        c.group_key === key &&
+        !personalTitles.has(c.title.trim().toLowerCase()) &&
+        c.id !== linkedCourse?.id &&
+        matchesFilters(c),
     );
     // "next" (the non-mandatory, suggested-to-consider group) defaults to a
     // shuffled order rather than always showing the same courses first --
@@ -339,14 +391,19 @@ export default function TrainingScreen() {
   const nextGroup = groups.find((g) => g.key === "next");
   const personalEntries = Object.entries(personal).filter(([title]) => {
     if (dismissedTitles.has(title.trim().toLowerCase())) return false;
+    if (linkedCourse && title.trim().toLowerCase() === linkedCourse.title.trim().toLowerCase()) return false;
     const course = courses.find((c) => c.title.trim().toLowerCase() === title.trim().toLowerCase());
     return course ? matchesFilters(course) : title.toLowerCase().includes(search.trim().toLowerCase());
   });
   const filtersActive = search.trim() || mediaFilter || lengthFilter;
 
-  function renderGroupCard(g: { key: string; label: string; rows: Course[] }, extra?: React.ReactNode) {
+  function renderGroupCard(
+    g: { key: string; label: string; rows: Course[] },
+    extra?: React.ReactNode,
+    style?: React.CSSProperties,
+  ) {
     return (
-      <div className="card" key={g.key}>
+      <div className="card" key={g.key} style={style}>
         <h3>{g.label}</h3>
         {extra}
         {g.rows.map((c) => {
@@ -356,9 +413,9 @@ export default function TrainingScreen() {
           return (
             <div key={c.id} className="row" style={{ alignItems: "center", borderBottom: "1px solid #eee", padding: "6px 0" }}>
               <div style={{ flex: 1 }}>
-                <b>
+                <b title={c.title}>
                   {isMandatory(c) && "⭐ "}
-                  {c.title}
+                  {shortTitle(c.title)}
                 </b>
                 <br />
                 <small className="muted">{[c.how, c.platform, c.length].filter(Boolean).join(" · ")}</small>
@@ -390,6 +447,7 @@ export default function TrainingScreen() {
                   Open ↗
                 </a>
               )}
+              {saveButton(c.title)}
               <input
                 type="date"
                 style={{ flex: "0 0 150px" }}
@@ -449,6 +507,12 @@ export default function TrainingScreen() {
       <div className="card">
         <FormsReference />
       </div>
+      {linkedCourse &&
+        renderGroupCard(
+          { key: "linked", label: "🔗 From your search", rows: [linkedCourse] },
+          undefined,
+          { border: "2px solid var(--accent)" },
+        )}
       {(() => {
         const compulsory = mandatoryGroups.map((g) => renderGroupCard(g));
         if (personalEntries.length === 0) return compulsory;
@@ -469,9 +533,9 @@ export default function TrainingScreen() {
                 style={{ alignItems: "flex-start", borderBottom: "1px solid #eee", padding: "6px 0" }}
               >
                 <div style={{ flex: 1 }}>
-                  <b>
+                  <b title={title}>
                     {course && isMandatory(course) && "⭐ "}
-                    {title}
+                    {shortTitle(title)}
                   </b>
                   {course?.length && (
                     <>
@@ -497,6 +561,7 @@ export default function TrainingScreen() {
                     Open ↗
                   </a>
                 )}
+                {saveButton(title)}
                 <input
                   type="date"
                   style={{ flex: "0 0 150px" }}
@@ -514,6 +579,39 @@ export default function TrainingScreen() {
           </div>
         );
       })()}
+      {Object.keys(savedTitles).length > 0 && (
+        <div className="card">
+          <p className="hint" style={{ cursor: "pointer" }} onClick={() => setShowSaved(!showSaved)}>
+            {showSaved ? "▾" : "▸"} Saved for later ({Object.keys(savedTitles).length}) — tap to {showSaved ? "hide" : "show"}
+          </p>
+          {showSaved &&
+            Object.entries(savedTitles)
+              .sort((a, b) => b[1].localeCompare(a[1]))
+              .map(([title, savedAt]) => {
+                const course = courses.find((c) => c.title.trim().toLowerCase() === title.trim().toLowerCase());
+                const url = course ? withAmazonAffiliateTag(course.url || platformUrl(course.platform)) : "";
+                return (
+                  <div key={title} className="rec" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                    <span style={{ flex: 1 }}>
+                      <b title={title}>{shortTitle(title)}</b>
+                      <br />
+                      <small className="muted">
+                        saved {new Date(savedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                      </small>
+                    </span>
+                    {url && (
+                      <a className="chip" style={{ flex: "0 0 auto" }} href={url} target="_blank" rel="noopener noreferrer">
+                        Open ↗
+                      </a>
+                    )}
+                    <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => toggleSaved(title)}>
+                      Unsave
+                    </button>
+                  </div>
+                );
+              })}
+        </div>
+      )}
       {dismissed.length > 0 && (
         <div className="card">
           <p className="hint" style={{ cursor: "pointer" }} onClick={() => setShowDismissed(!showDismissed)}>
