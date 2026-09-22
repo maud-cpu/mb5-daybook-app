@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
 import { REMINDER_CATEGORIES, REPEAT_OPTIONS, Reminder, reminderCategoryLabel } from "@/lib/types";
@@ -93,13 +94,18 @@ type ExtractedItem = {
 
 export default function CalendarScreen() {
   const supabase = createClient();
+  const searchParams = useSearchParams();
   const t = today();
-  const now = new Date(t + "T12:00");
+  // A search result or other deep link can point at any date, not just
+  // today -- land on that date's month and have it already selected.
+  const dateParam = searchParams.get("date");
+  const linkedDate = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : null;
+  const now = new Date((linkedDate || t) + "T12:00");
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [personOptions, setPersonOptions] = useState<PersonOption[]>([]);
-  const [selected, setSelected] = useState<string | null>(t);
+  const [selected, setSelected] = useState<string | null>(linkedDate || t);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState<Draft>(emptyDraft(t));
   const [repeat, setRepeat] = useState("none");

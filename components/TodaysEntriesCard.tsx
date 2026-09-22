@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
 import { BUCKETS, Bucket } from "@/lib/types";
@@ -35,6 +36,7 @@ function fmtTime(iso: string): string {
 // to check. This is a quiet recap, not another list to action.
 export default function TodaysEntriesCard() {
   const supabase = createClient();
+  const router = useRouter();
   const [entries, setEntries] = useState<TodayEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -63,7 +65,7 @@ export default function TodaysEntriesCard() {
         <p className="muted">Nothing captured yet today.</p>
       ) : (
         entries.map((e) => (
-          <div key={e.id} className="rec" style={{ cursor: "default" }}>
+          <div key={e.id} className="rec" onClick={() => router.push(`/dashboard/entries?edit=${e.id}`)}>
             <span className="muted" style={{ fontSize: 12 }}>
               {fmtTime(e.created_at)} · {BUCKET_ICON[e.bucket]} {BUCKETS[e.bucket]}
               {e.kids.length ? ` · ${e.kids.join(", ")}` : ""}
