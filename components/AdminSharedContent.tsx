@@ -177,6 +177,7 @@ export default function AdminSharedContent() {
   const [bulkStatus, setBulkStatus] = useState("");
   const [courseTab, setCourseTab] = useState<"active" | "archived">("active");
   const [courseSearch, setCourseSearch] = useState("");
+  const [fetchingUrlFor, setFetchingUrlFor] = useState<Set<string>>(new Set());
 
   async function load() {
     const [{ data: r }, { data: rt }, { data: c }, { data: p }] = await Promise.all([
@@ -234,6 +235,35 @@ export default function AdminSharedContent() {
     setCourses((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
     await supabase.from("shared_training_catalog").update(patch).eq("id", id);
     showToast("Training catalogue updated — everyone sees this now");
+  }
+
+  // Pasting a bare link here (the single "+ course" flow) previously left
+  // title/length/description blank forever unless someone later ran the
+  // bulk "Update medium/length/description…" pass across the whole
+  // catalogue -- this fetches that same metadata right away, for just this
+  // one link, the moment it's added or changed. Only fills fields the carer
+  // hasn't already typed something into, so it never overwrites a manual edit.
+  async function updateCourseUrl(c: Course, url: string) {
+    if (url === c.url) return;
+    const patch: Partial<Course> = { url };
+    if (url && /^https?:\/\//i.test(url)) {
+      setFetchingUrlFor((prev) => new Set(prev).add(c.id));
+      try {
+        const fetched = (await fetchTitlesFor([url]))[url];
+        if (fetched) {
+          if (!c.title.trim() && fetched.title) patch.title = fetched.title;
+          if (!c.length.trim() && fetched.length) patch.length = fetched.length;
+          if (!c.description.trim() && fetched.description) patch.description = fetched.description;
+        }
+      } finally {
+        setFetchingUrlFor((prev) => {
+          const next = new Set(prev);
+          next.delete(c.id);
+          return next;
+        });
+      }
+    }
+    updateCourse(c.id, patch);
   }
 
   async function addCourse(groupKey: string) {
@@ -744,9 +774,10 @@ export default function AdminSharedContent() {
                       style={{ flex: 1 }}
                       defaultValue={c.url}
                       placeholder="or paste a direct link (YouTube, TED talk, podcast…)"
-                      onBlur={(e) => updateCourse(c.id, { url: e.target.value })}
+                      onBlur={(e) => updateCourseUrl(c, e.target.value)}
                     />
                   )}
+                  {fetchingUrlFor.has(c.id) && <small className="muted">fetching details…</small>}
                   <input
                     style={{ flex: "0 0 130px" }}
                     defaultValue={c.length}
