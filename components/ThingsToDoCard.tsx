@@ -65,6 +65,10 @@ export default function ThingsToDoCard() {
   const [firstSeen, setFirstSeen] = useState<Record<string, string>>({});
   const [openId, setOpenId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  // So a health-flagged follow-up ("book a GP appointment") can show the
+  // child's actual GP contact right there, instead of sending the carer off
+  // to go find it on About us separately.
+  const [gpByChildName, setGpByChildName] = useState<Record<string, string>>({});
 
   async function load() {
     const [
@@ -123,6 +127,11 @@ export default function ThingsToDoCard() {
     const dismissedKeys = new Set(dismissedList.map((d) => d.key));
 
     const allChildren = [...(children ?? []), ...(householdChildren ?? [])];
+    const gpMap: Record<string, string> = {};
+    allChildren.forEach((c) => {
+      if (c.basics?.gp) gpMap[c.name] = c.basics.gp;
+    });
+    setGpByChildName(gpMap);
     const dueList = [
       ...unreportedIncidentItems(incidents ?? []),
       ...invoiceMonthItems(settings?.invoice_day ?? 1, settings?.pay_day ?? 28, !!unpaidClaimed?.length),
@@ -249,6 +258,15 @@ export default function ThingsToDoCard() {
 
   const anyUrgent = due.some((x) => x.urgent) || followUps.some((f) => FLAGS[f.flag as keyof typeof FLAGS]?.urgent);
 
+  // A "medical" reminder (a GP/dentist/hospital appointment to book) is the
+  // exact moment the child's GP contact from About us is actually useful --
+  // keyed by the same "rem-<id>" key dueReminders() uses, so it can be
+  // looked up per due item without changing DueItem's shape.
+  const medicalGpForKey: Record<string, string> = {};
+  allReminders
+    .filter((r) => r.category === "medical" && r.people[0] && gpByChildName[r.people[0]])
+    .forEach((r) => (medicalGpForKey["rem-" + r.id] = gpByChildName[r.people[0]]));
+
   // Missing CSW/GP/duty-line details and a missing EDT number are safeguarding
   // basics that only ever leave this list once the field is actually filled
   // in -- so they used to sit permanently at the top, "new" or not, and that
@@ -290,20 +308,29 @@ export default function ThingsToDoCard() {
   }
 
   function renderDue(x: DueItem) {
+    const gp = medicalGpForKey[x.key];
     return (
       <div
         key={x.key}
         className="rec"
-        style={{ display: "flex", alignItems: "center", gap: 8, ...(x.urgent ? { color: "var(--danger)" } : {}) }}
+        style={{ display: "flex", alignItems: "flex-start", gap: 8, ...(x.urgent ? { color: "var(--danger)" } : {}) }}
       >
         <input
           type="checkbox"
-          style={{ width: "auto", flex: "0 0 auto" }}
+          style={{ width: "auto", flex: "0 0 auto", marginTop: 3 }}
           checked={false}
           onChange={() => dismissDue(x)}
           title={x.key.startsWith("rem-") ? "Mark done" : "Dismiss"}
         />
-        <span style={{ flex: 1 }}>{x.text}</span>
+        <span style={{ flex: 1 }}>
+          {x.text}
+          {gp && (
+            <>
+              <br />
+              <small className="muted">📞 GP: {gp}</small>
+            </>
+          )}
+        </span>
       </div>
     );
   }
@@ -336,6 +363,9 @@ export default function ThingsToDoCard() {
               {f.text}
             </div>
             {followUpGuidance(f) && <div className="note">{followUpGuidance(f)}</div>}
+            {f.flag === "health" && f.child && gpByChildName[f.child] && (
+              <div className="note">📞 {f.child}&apos;s GP: {gpByChildName[f.child]}</div>
+            )}
             {f.training_note && f.flag !== "training" && <div className="note">💡 {f.training_note}</div>}
             {relatedForm && (
               <div className="note">

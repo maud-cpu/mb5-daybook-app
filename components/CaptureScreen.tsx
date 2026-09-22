@@ -303,6 +303,9 @@ export default function CaptureScreen() {
         time_from: club.timeFrom,
         time_to: club.timeTo,
         contact_name: club.provider,
+        cost: club.cost,
+        website: club.website,
+        notes: club.notes,
       })),
     );
     if (error) {
@@ -316,6 +319,90 @@ export default function CaptureScreen() {
     });
     updatePending(i, { club: null });
     showToast(`Saved to ${childNames.join(" & ")}'s Clubs`);
+  }
+
+  // Appends anything not already there, comma-separated, in the same
+  // free-text Likes/Dislikes fields shown on About us -- not a merge-by-name
+  // list like teacher contacts, since a food note has no natural key beyond
+  // the food word itself, and a plain "already contains this word" check is
+  // enough to stop the same dislike being added twice.
+  async function saveFoodNote(i: number, childNames: string[]) {
+    const note = pending[i].food_note;
+    if (!note) return;
+    const targets = childNames.map((n) => children.find((c) => c.name === n)).filter((c): c is Child => !!c);
+    if (!targets.length) return;
+    for (const c of targets) {
+      const basics = basicsByChildId[c.id] || {};
+      const append = (existing: string, addition: string) => {
+        if (!addition) return existing;
+        const items = existing.split(",").map((s) => s.trim()).filter(Boolean);
+        addition
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .forEach((food) => {
+            if (!items.some((it) => it.toLowerCase() === food.toLowerCase())) items.push(food);
+          });
+        return items.join(", ");
+      };
+      const nextBasics = {
+        ...basics,
+        food_likes: append(basics.food_likes || "", note.likes),
+        food_dislikes: append(basics.food_dislikes || "", note.dislikes),
+      };
+      const { error } = await supabase
+        .from(childTable[c.id] || "children")
+        .update({ basics: nextBasics })
+        .eq("id", c.id);
+      if (error) {
+        showToast("Couldn't save: " + error.message);
+        return;
+      }
+      setBasicsByChildId((prev) => ({ ...prev, [c.id]: nextBasics }));
+    }
+    updatePending(i, { food_note: null });
+    showToast(`Saved to ${childNames.join(" & ")}'s Food box`);
+  }
+
+  // Whether a tagged child still needs this suggestion applied -- shared
+  // between the review screen (deciding what to show) and Save all (which
+  // now applies every suggestion still showing, so a school contact/club/
+  // food note can never be silently lost just because a second, separate
+  // "Save" button wasn't noticed and clicked).
+  function schoolContactNeeds(p: PendingItem): string[] {
+    if (!p.school_contact) return [];
+    return p.kids.filter((k) => {
+      const c = children.find((ch) => ch.name === k);
+      if (!c) return false;
+      const contacts = parseTeacherContacts(basicsByChildId[c.id]?.teacher || "");
+      return !contacts.some((ct) => (ct.name || "").trim().toLowerCase() === p.school_contact!.name.trim().toLowerCase());
+    });
+  }
+  function clubNeeds(p: PendingItem): string[] {
+    if (!p.club) return [];
+    return p.kids.filter((k) => {
+      const c = children.find((ch) => ch.name === k);
+      if (!c) return false;
+      return !(clubsByChildId[c.id] || []).some((cl) => cl.club_name.trim().toLowerCase() === p.club!.name.trim().toLowerCase());
+    });
+  }
+  function foodNoteNeeds(p: PendingItem): string[] {
+    if (!p.food_note) return [];
+    const hasFood = (list: string, food: string) =>
+      list
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .includes(food.trim().toLowerCase());
+    return p.kids.filter((k) => {
+      const c = children.find((ch) => ch.name === k);
+      if (!c) return false;
+      const basics = basicsByChildId[c.id] || {};
+      const likes = p.food_note!.likes.split(",").map((s) => s.trim()).filter(Boolean);
+      const dislikes = p.food_note!.dislikes.split(",").map((s) => s.trim()).filter(Boolean);
+      return (
+        likes.some((f) => !hasFood(basics.food_likes || "", f)) || dislikes.some((f) => !hasFood(basics.food_dislikes || "", f))
+      );
+    });
   }
 
   async function saveAll() {
@@ -359,10 +446,29 @@ export default function CaptureScreen() {
       .map((p) => ({
         text: p.flag_note || p.text,
         date: p.reminder_date || today(),
-        category: "personal",
+        category: p.reminder_category || "personal",
         people: p.kids,
       }));
     if (reminderRows.length) await supabase.from("reminders").insert(reminderRows);
+    // A school contact / club / food note shown as a suggestion is applied
+    // automatically here -- not just on its own separate "Save" click --
+    // because a click on a small secondary button, easy to miss under the
+    // main "Save all", was exactly how a teacher's name got silently
+    // dropped even though the diary entry itself saved fine. Editing or
+    // dismissing a suggestion before hitting Save all still works as
+    // before; this only fills the gap where neither was done.
+    await Promise.all(
+      pending.flatMap((p, idx) => {
+        const jobs: Promise<void>[] = [];
+        const scNeeds = schoolContactNeeds(p);
+        if (scNeeds.length) jobs.push(saveSchoolContact(idx, scNeeds));
+        const clNeeds = clubNeeds(p);
+        if (clNeeds.length) jobs.push(saveClub(idx, clNeeds));
+        const fnNeeds = foodNoteNeeds(p);
+        if (fnNeeds.length) jobs.push(saveFoodNote(idx, fnNeeds));
+        return jobs;
+      }),
+    );
     showToast(`Saved ${rows.length} item${rows.length > 1 ? "s" : ""}`);
     const queue: { child: string; entryId: string }[] = [];
     pending.forEach((p, idx) => {
@@ -734,19 +840,14 @@ export default function CaptureScreen() {
                 })}
               {p.school_contact &&
                 (() => {
-                  // Only kids who don't already have this exact teacher on
-                  // file -- so it never asks again for something it's
-                  // already been told, only what's actually new or changed.
-                  const needsUpdate = p.kids.filter((k) => {
-                    const c = children.find((ch) => ch.name === k);
-                    if (!c) return false;
-                    const contacts = parseTeacherContacts(basicsByChildId[c.id]?.teacher || "");
-                    return !contacts.some((ct) => (ct.name || "").trim().toLowerCase() === p.school_contact!.name.trim().toLowerCase());
-                  });
+                  const needsUpdate = schoolContactNeeds(p);
                   if (!needsUpdate.length) return null;
                   return (
                     <div className="note">
-                      <div style={{ marginBottom: 6 }}>📇 New school contact for {needsUpdate.join(" & ")} — check it&apos;s right, then save:</div>
+                      <div style={{ marginBottom: 6 }}>
+                        📇 New school contact for {needsUpdate.join(" & ")} — check it&apos;s right (this saves automatically with
+                        Save all):
+                      </div>
                       <div className="row" style={{ margin: "0 0 6px" }}>
                         <input
                           placeholder="Name"
@@ -760,7 +861,7 @@ export default function CaptureScreen() {
                         />
                       </div>
                       <button className="chip" onClick={() => saveSchoolContact(i, needsUpdate)}>
-                        Save as {needsUpdate.join(" & ")}&apos;s teacher
+                        Save now as {needsUpdate.join(" & ")}&apos;s teacher
                       </button>{" "}
                       <button className="chip" onClick={() => updatePending(i, { school_contact: null })}>
                         Don&apos;t save
@@ -770,21 +871,12 @@ export default function CaptureScreen() {
                 })()}
               {p.club &&
                 (() => {
-                  // Only kids who don't already have a club by this name on
-                  // file -- so mentioning "acro dance" again another week
-                  // doesn't offer to add a duplicate.
-                  const needsClub = p.kids.filter((k) => {
-                    const c = children.find((ch) => ch.name === k);
-                    if (!c) return false;
-                    return !(clubsByChildId[c.id] || []).some(
-                      (cl) => cl.club_name.trim().toLowerCase() === p.club!.name.trim().toLowerCase(),
-                    );
-                  });
+                  const needsClub = clubNeeds(p);
                   if (!needsClub.length) return null;
                   return (
                     <div className="note">
                       <div style={{ marginBottom: 6 }}>
-                        🧩 New club for {needsClub.join(" & ")} — check it&apos;s right, then save:
+                        🧩 New club for {needsClub.join(" & ")} — check it&apos;s right (this saves automatically with Save all):
                       </div>
                       <div className="row" style={{ margin: "0 0 6px" }}>
                         <input
@@ -823,10 +915,59 @@ export default function CaptureScreen() {
                           onChange={(e) => updatePending(i, { club: { ...p.club!, provider: e.target.value } })}
                         />
                       </div>
+                      <div className="row" style={{ margin: "0 0 6px" }}>
+                        <input
+                          placeholder="Cost (optional)"
+                          value={p.club.cost}
+                          onChange={(e) => updatePending(i, { club: { ...p.club!, cost: e.target.value } })}
+                        />
+                        <input
+                          placeholder="Website (optional)"
+                          value={p.club.website}
+                          onChange={(e) => updatePending(i, { club: { ...p.club!, website: e.target.value } })}
+                        />
+                      </div>
+                      <textarea
+                        placeholder="Notes (optional) — what to bring, term dates, etc"
+                        value={p.club.notes}
+                        onChange={(e) => updatePending(i, { club: { ...p.club!, notes: e.target.value } })}
+                        style={{ marginBottom: 6 }}
+                      />
                       <button className="chip" onClick={() => saveClub(i, needsClub)}>
-                        Save as {needsClub.join(" & ")}&apos;s club
+                        Save now as {needsClub.join(" & ")}&apos;s club
                       </button>{" "}
                       <button className="chip" onClick={() => updatePending(i, { club: null })}>
+                        Don&apos;t save
+                      </button>
+                    </div>
+                  );
+                })()}
+              {p.food_note &&
+                (() => {
+                  const needsFood = foodNoteNeeds(p);
+                  if (!needsFood.length) return null;
+                  return (
+                    <div className="note">
+                      <div style={{ marginBottom: 6 }}>
+                        🍽 New food note for {needsFood.join(" & ")} — check it&apos;s right (this saves automatically with Save
+                        all):
+                      </div>
+                      <div className="row" style={{ margin: "0 0 6px" }}>
+                        <input
+                          placeholder="Likes (optional)"
+                          value={p.food_note.likes}
+                          onChange={(e) => updatePending(i, { food_note: { ...p.food_note!, likes: e.target.value } })}
+                        />
+                        <input
+                          placeholder="Dislikes (optional)"
+                          value={p.food_note.dislikes}
+                          onChange={(e) => updatePending(i, { food_note: { ...p.food_note!, dislikes: e.target.value } })}
+                        />
+                      </div>
+                      <button className="chip" onClick={() => saveFoodNote(i, needsFood)}>
+                        Save now to {needsFood.join(" & ")}&apos;s Food box
+                      </button>{" "}
+                      <button className="chip" onClick={() => updatePending(i, { food_note: null })}>
                         Don&apos;t save
                       </button>
                     </div>
