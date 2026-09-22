@@ -178,6 +178,7 @@ export default function AdminSharedContent() {
   const [courseTab, setCourseTab] = useState<"active" | "archived">("active");
   const [courseSearch, setCourseSearch] = useState("");
   const [fetchingUrlFor, setFetchingUrlFor] = useState<Set<string>>(new Set());
+  const [newCourseTitle, setNewCourseTitle] = useState<Record<string, string>>({});
 
   async function load() {
     const [{ data: r }, { data: rt }, { data: c }, { data: p }] = await Promise.all([
@@ -266,14 +267,24 @@ export default function AdminSharedContent() {
     updateCourse(c.id, patch);
   }
 
+  // window.prompt() used to drive this -- silently returns null with no
+  // dialog shown at all in a standalone/home-screen-installed PWA on iOS,
+  // which is exactly how this app tends to get used day to day. Tapping
+  // "+ course" there looked like nothing happened, and in fact nothing
+  // had -- no row, no error, no way to tell why. An inline input can't
+  // fail that way.
   async function addCourse(groupKey: string) {
-    const title = prompt("Course title?");
+    const title = (newCourseTitle[groupKey] || "").trim();
     if (!title) return;
     const { error } = await supabase
       .from("shared_training_catalog")
       .insert({ group_key: groupKey, group_label: GROUP_LABELS[groupKey], title, sort_order: 999 });
-    if (error) showToast("Couldn't add: " + error.message);
-    else load();
+    if (error) {
+      showToast("Couldn't add: " + error.message);
+      return;
+    }
+    setNewCourseTitle((prev) => ({ ...prev, [groupKey]: "" }));
+    load();
   }
 
   function fallbackTitleFromUrl(url: string): string {
@@ -834,9 +845,19 @@ export default function AdminSharedContent() {
               </div>
             ))}
           {courseTab === "active" && (
-            <button className="chip add" onClick={() => addCourse(g)}>
-              + course
-            </button>
+            <div className="row" style={{ marginTop: 6 }}>
+              <input
+                placeholder="New course/resource title"
+                value={newCourseTitle[g] || ""}
+                onChange={(e) => setNewCourseTitle((prev) => ({ ...prev, [g]: e.target.value }))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") addCourse(g);
+                }}
+              />
+              <button className="chip add" style={{ flex: "0 0 auto" }} onClick={() => addCourse(g)}>
+                + Add
+              </button>
+            </div>
           )}
         </div>
       ))}
