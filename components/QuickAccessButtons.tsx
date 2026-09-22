@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { extractEmail, extractPhone, today } from "@/lib/domain";
-import { clubText, mondayStartWeekday } from "@/lib/calendarHelpers";
+import { clubText, groupClubsByOccurrence, mondayStartWeekday } from "@/lib/calendarHelpers";
 import { Reminder, reminderCategoryLabel } from "@/lib/types";
 
 type Item = { label: string; name: string; value: string };
@@ -139,10 +139,9 @@ export default function QuickAccessButtons() {
     ((kids as { id: string; name: string }[] | null) ?? []).forEach((c) => (childNameById[c.id] = c.name));
     ((hhKids as { id: string; name: string }[] | null) ?? []).forEach((c) => (childNameById[c.id] = c.name));
     const todayWeekday = mondayStartWeekday(today());
-    const clubItems: Reminder[] = (
-      (clubs as { id: string; child_id: string; club_name: string; weekday: number; time_from: string; time_to: string }[] | null) ?? []
-    )
-      .filter((c) => c.weekday === todayWeekday && c.club_name && childNameById[c.child_id])
+    const clubRows = (clubs as { id: string; child_id: string; club_name: string; weekday: number; time_from: string; time_to: string }[] | null) ?? [];
+    const clubItems: Reminder[] = groupClubsByOccurrence(clubRows, childNameById)
+      .filter((c) => c.weekday === todayWeekday)
       .map((c) => ({
         id: `club:${c.id}`,
         text: clubText(c.club_name, c.time_from, c.time_to),
@@ -151,7 +150,7 @@ export default function QuickAccessButtons() {
         done_at: null,
         category: "club",
         child: "",
-        people: [childNameById[c.child_id]],
+        people: c.childNames,
         amount: null,
         series_id: null,
         source_text: "",

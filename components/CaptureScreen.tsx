@@ -303,6 +303,7 @@ export default function CaptureScreen() {
         time_from: club.timeFrom,
         time_to: club.timeTo,
         contact_name: club.provider,
+        contact_info: club.contactInfo,
         cost: club.cost,
         website: club.website,
         notes: club.notes,
@@ -913,6 +914,13 @@ export default function CaptureScreen() {
                           placeholder="Provider (optional)"
                           value={p.club.provider}
                           onChange={(e) => updatePending(i, { club: { ...p.club!, provider: e.target.value } })}
+                        />
+                      </div>
+                      <div className="row" style={{ margin: "0 0 6px" }}>
+                        <input
+                          placeholder="Contact phone/email (optional)"
+                          value={p.club.contactInfo}
+                          onChange={(e) => updatePending(i, { club: { ...p.club!, contactInfo: e.target.value } })}
                         />
                       </div>
                       <div className="row" style={{ margin: "0 0 6px" }}>
