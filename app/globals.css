@@ -522,8 +522,14 @@ nav.tabbar a.on {
   margin-bottom: 16px;
 }
 
-.training-top-grid > .card {
+.training-top-grid .card {
   margin-bottom: 0;
+}
+
+.training-top-grid-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 @media (min-width: 720px) {
