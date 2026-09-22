@@ -383,6 +383,7 @@ export default function CalendarScreen() {
         )}
       </div>
 
+      <div className="calendar-top-grid">
       {selected && (
         <div className="card">
           <h3>
@@ -550,77 +551,11 @@ export default function CalendarScreen() {
                 setAdding(true);
               }}
             >
-              + add to this day
+              + Add an entry
             </button>
           )}
         </div>
       )}
-
-      <div className="card">
-        <div className="row" style={{ alignItems: "center", justifyContent: "space-between" }}>
-          <button className="chip" onClick={() => changeMonth(-1)}>
-            ‹
-          </button>
-          <h3 style={{ margin: 0 }}>{monthLabel(year, month)}</h3>
-          <button className="chip" onClick={() => changeMonth(1)}>
-            ›
-          </button>
-        </div>
-        <button className="chip" style={{ marginTop: 6 }} onClick={goToday}>
-          Today
-        </button>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginTop: 10 }}>
-          {WEEKDAYS.map((w) => (
-            <div key={w} className="muted" style={{ textAlign: "center", fontSize: 12 }}>
-              {w}
-            </div>
-          ))}
-          {cells.map((day, i) => {
-            if (day === null) return <div key={i} />;
-            const iso = isoOf(year, month, day);
-            const items = byDate[iso] ?? [];
-            const isToday = iso === t;
-            const isSelected = iso === selected;
-            return (
-              <div
-                key={i}
-                onClick={() => setSelected(iso)}
-                style={{
-                  minHeight: 52,
-                  padding: 4,
-                  borderRadius: 6,
-                  cursor: "pointer",
-                  border: isSelected ? "2px solid var(--marker)" : isToday ? "1px solid var(--marker)" : "1px solid #eee",
-                  background: isSelected ? "var(--marker-bg, #fff7e6)" : undefined,
-                }}
-              >
-                <div style={{ fontSize: 12, fontWeight: isToday ? 700 : 400 }}>{day}</div>
-                <div style={{ fontSize: 14, lineHeight: 1.1 }}>
-                  {items.slice(0, 3).map((it) => (
-                    <div key={it.id} style={{ opacity: it.done ? 0.4 : 1, display: "flex", alignItems: "center", gap: 3 }}>
-                      {it.people[0] && (
-                        <span
-                          style={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: "50%",
-                            background: personColor(it.people[0]),
-                            display: "inline-block",
-                            flex: "0 0 auto",
-                          }}
-                        />
-                      )}
-                      {reminderCategoryLabel(it.category).slice(0, 2)}
-                    </div>
-                  ))}
-                  {items.length > 3 && <small className="muted">+{items.length - 3}</small>}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
 
       <div className="card">
         <h3>📧 Paste an email</h3>
@@ -694,6 +629,73 @@ export default function CalendarScreen() {
             ))}
           </div>
         )}
+      </div>
+      </div>
+
+      <div className="card">
+        <div className="row" style={{ alignItems: "center", justifyContent: "space-between" }}>
+          <button className="chip" onClick={() => changeMonth(-1)}>
+            ‹
+          </button>
+          <h3 style={{ margin: 0 }}>{monthLabel(year, month)}</h3>
+          <button className="chip" onClick={() => changeMonth(1)}>
+            ›
+          </button>
+        </div>
+        <button className="chip" style={{ marginTop: 6 }} onClick={goToday}>
+          Today
+        </button>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginTop: 10 }}>
+          {WEEKDAYS.map((w) => (
+            <div key={w} className="muted" style={{ textAlign: "center", fontSize: 12 }}>
+              {w}
+            </div>
+          ))}
+          {cells.map((day, i) => {
+            if (day === null) return <div key={i} />;
+            const iso = isoOf(year, month, day);
+            const items = byDate[iso] ?? [];
+            const isToday = iso === t;
+            const isSelected = iso === selected;
+            return (
+              <div
+                key={i}
+                onClick={() => setSelected(iso)}
+                style={{
+                  minHeight: 52,
+                  padding: 4,
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  border: isSelected ? "2px solid var(--marker)" : isToday ? "1px solid var(--marker)" : "1px solid #eee",
+                  background: isSelected ? "var(--marker-bg, #fff7e6)" : undefined,
+                }}
+              >
+                <div style={{ fontSize: 12, fontWeight: isToday ? 700 : 400 }}>{day}</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginTop: 3 }}>
+                  {items.slice(0, 6).map((it) => (
+                    <span
+                      key={it.id}
+                      style={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: "50%",
+                        display: "inline-block",
+                        background: it.people[0] ? personColor(it.people[0]) : "var(--marker)",
+                        opacity: it.done ? 0.35 : 1,
+                      }}
+                    />
+                  ))}
+                  {items.length > 6 && (
+                    <small className="muted" style={{ fontSize: 10 }}>
+                      +{items.length - 6}
+                    </small>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
