@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { describeExpense, describeMeds, expenseTotals, gbp, today } from "@/lib/domain";
 import { BUCKETS, Bucket, Child, EntryRecord, Rates } from "@/lib/types";
@@ -129,6 +130,9 @@ export default function PaperworkScreen() {
                 {unclaimed.map((r) => (
                   <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}>
                     <span style={{ flex: 1 }}>{describeExpense(rates, children, r)}</span>
+                    <Link className="chip" style={{ flex: "0 0 auto" }} href={`/dashboard/entries?edit=${r.id}`}>
+                      ✏️ Edit
+                    </Link>
                     <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => setClaimed(r.id, true)}>
                       ✓ Claimed
                     </button>
@@ -154,6 +158,9 @@ export default function PaperworkScreen() {
                             {r.paid ? " · Paid" : ""}
                           </span>
                           <span style={{ flex: "0 0 auto", whiteSpace: "nowrap" }}>
+                            <Link className="chip" href={`/dashboard/entries?edit=${r.id}`}>
+                              ✏️ Edit
+                            </Link>{" "}
                             {r.paid ? (
                               <button className="chip" onClick={() => setPaid(r.id, false)}>
                                 Undo paid
