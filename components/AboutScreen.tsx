@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { today } from "@/lib/domain";
 import { BASICS_SECTIONS, RepeatableSubfield } from "@/lib/basics";
 import { Child, GENDER_OPTIONS, LIVES_CATS, livesHereOf, MB_OPTIONS, VISITS_CATS } from "@/lib/types";
 import { personColor } from "@/lib/calendarHelpers";
@@ -326,7 +327,7 @@ export default function AboutScreen() {
       supabase
         .from("children")
         .select(
-          "id, name, born, family, basics, category, lives_here, mockingbird, hub_carer_name, hub_carer_phone, hub_carer_email, surrey_contact, gender",
+          "id, name, born, family, basics, category, lives_here, mockingbird, hub_carer_name, hub_carer_phone, hub_carer_email, surrey_contact, gender, placement_end_date",
         )
         .order("created_at"),
       supabase.from("household").select("*").maybeSingle(),
@@ -578,6 +579,34 @@ export default function AboutScreen() {
       <button className="chip" style={{ marginTop: 10 }} onClick={() => setSelected(null)}>
         ← Back to everyone
       </button>
+    );
+  }
+
+  // Once a placement ends, this carer's own diary/expenses/meds records for
+  // that child aren't meant to sit around indefinitely -- they should go to
+  // the supervising social worker or be removed, per the fostering
+  // provider's retention policy. The red warning here is the same signal
+  // Things To Do surfaces once the date arrives; it repeats here too since
+  // this is the page someone would come to check "when did this end?".
+  function placementEndField(c: Child) {
+    const ended = !!c.placement_end_date && c.placement_end_date <= today();
+    return (
+      <div style={{ marginTop: 10 }}>
+        <label className="hint">Placement end date</label>
+        <input
+          type="date"
+          value={c.placement_end_date || ""}
+          onChange={(e) => saveChild(c.id, { placement_end_date: e.target.value || null })}
+        />
+        {ended && (
+          <p className="note" style={{ color: "var(--danger)", marginTop: 6 }}>
+            ⚠ This placement ended {c.placement_end_date} — remove or pass on {c.name}&apos;s records now. Check with
+            your supervising social worker or fostering provider for the exact retention period (Surrey&apos;s is set
+            out in their Children&apos;s Social Care retention schedule — ask your SSW if you&apos;re not sure it
+            applies here).
+          </p>
+        )}
+      </div>
     );
   }
 
@@ -961,6 +990,7 @@ export default function AboutScreen() {
             </select>
             <GenderSelect value={c.gender} onChange={(v) => saveChild(c.id, { gender: v })} />
           </div>
+          {placementEndField(c)}
           <div style={{ marginTop: 10 }}>
             <ChildBasicsPanel
               showMockingbird={true}
@@ -1004,6 +1034,7 @@ export default function AboutScreen() {
           <div className="row" style={{ marginTop: 6 }}>
             <GenderSelect value={c.gender} onChange={(v) => saveChild(c.id, { gender: v })} />
           </div>
+          {placementEndField(c)}
           <div className="chips" style={{ marginTop: 6 }}>
             <button className="chip" onClick={() => setOpenSchoolAdmin(open ? null : c.id)}>
               🏫 School admin

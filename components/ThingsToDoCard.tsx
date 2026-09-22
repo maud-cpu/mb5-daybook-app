@@ -11,6 +11,7 @@ import {
   edtMissingItem,
   invoiceMonthItems,
   missingNumbersItems,
+  placementEndItems,
   unreportedIncidentItems,
 } from "@/lib/thingsToDo";
 import { FLAGS, Reminder, relatedFormFor } from "@/lib/types";
@@ -85,7 +86,7 @@ export default function ThingsToDoCard() {
       { data: dismissed },
     ] = await Promise.all([
       supabase.from("records").select("id, text, created_at, reported").eq("bucket", "incident"),
-      supabase.from("children").select("id, name, born, family, basics"),
+      supabase.from("children").select("id, name, born, family, basics, placement_end_date"),
       // A child in "Children in your household" can be an actual foster
       // placement too, not just the carer's own/adopted/kinship child --
       // they need the same missing-CSW/GP/duty-line nudges as any other.
@@ -138,6 +139,7 @@ export default function ThingsToDoCard() {
       ...bandChangeItems(allChildren),
       ...trainingItems,
       ...missingNumbersItems(allChildren),
+      ...placementEndItems(children ?? []),
       ...edtMissingItem(household?.edt ?? ""),
       ...dueReminders(remindersList),
     ].filter((x) => !dismissedKeys.has(dismissKeyFor(x.key)));

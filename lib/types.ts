@@ -113,6 +113,7 @@ export type Child = {
   hub_carer_email: string;
   surrey_contact: string;
   gender: string;
+  placement_end_date: string | null;
 };
 
 // Used so generated documents (Handover, diary drafts) can use the right

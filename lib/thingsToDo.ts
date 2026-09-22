@@ -77,6 +77,39 @@ export function edtMissingItem(edt: string): DueItem[] {
   return (edt || "").trim() ? [] : [{ key: "edt", urgent: false, text: "Add the Emergency Duty Team (out-of-hours) number — About us" }];
 }
 
+// Once a placement ends, the carer's diary/expenses/meds records for that
+// child stop being needed day-to-day and should go to the supervising social
+// worker or be removed, per the fostering provider's retention policy --
+// this is the one nudge that must not just quietly disappear once overdue.
+export function placementEndItems(children: Pick<Child, "id" | "name" | "placement_end_date">[]): DueItem[] {
+  const t = today();
+  const WARN_DAYS = 14;
+  const warnFrom = new Date();
+  warnFrom.setDate(warnFrom.getDate() + WARN_DAYS);
+  const warnFromStr = warnFrom.toISOString().slice(0, 10);
+  return children
+    .filter((c) => c.placement_end_date)
+    .map((c) => {
+      const end = c.placement_end_date as string;
+      if (end <= t) {
+        return {
+          key: "placement-end-" + c.id,
+          urgent: true,
+          text: `${c.name}'s placement ended ${end} — remove or pass on ${c.name}'s records now (check your supervising social worker / fostering provider for the exact retention period).`,
+        };
+      }
+      if (end <= warnFromStr) {
+        return {
+          key: "placement-soon-" + c.id,
+          urgent: false,
+          text: `${c.name}'s placement ends ${end} — start preparing to remove or pass on ${c.name}'s records.`,
+        };
+      }
+      return null;
+    })
+    .filter((x): x is DueItem => x !== null);
+}
+
 export function dueReminders(reminders: Reminder[]): DueItem[] {
   const t = today();
   return reminders
