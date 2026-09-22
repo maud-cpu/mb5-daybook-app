@@ -442,14 +442,31 @@ export default function CaptureScreen() {
     // seen again -- nothing ever turned it into an actual calendar/Today
     // entry. It now also creates a real reminder for the date the carer
     // meant (or today, if they didn't give one).
-    const reminderRows = pending
+    // A single one-off event affecting several children (e.g. "Ruby and
+    // Rubynn's art class moved to Saturday") sometimes comes back from the
+    // AI as one pending item per child rather than one item naming both --
+    // merging same date+category+text items here before insert stops that
+    // becoming two duplicate calendar entries instead of one with both names.
+    const reminderGroups = new Map<string, { text: string; date: string; category: string; people: string[] }>();
+    const reminderOrder: string[] = [];
+    pending
       .filter((p) => p.flag === "reminder")
-      .map((p) => ({
-        text: p.flag_note || p.text,
-        date: p.reminder_date || today(),
-        category: p.reminder_category || "personal",
-        people: p.kids,
-      }));
+      .forEach((p) => {
+        const text = p.flag_note || p.text;
+        const date = p.reminder_date || today();
+        const category = p.reminder_category || "personal";
+        const key = [date, category, text.trim().toLowerCase()].join("|");
+        let group = reminderGroups.get(key);
+        if (!group) {
+          group = { text, date, category, people: [] };
+          reminderGroups.set(key, group);
+          reminderOrder.push(key);
+        }
+        p.kids.forEach((k) => {
+          if (k && !group!.people.includes(k)) group!.people.push(k);
+        });
+      });
+    const reminderRows = reminderOrder.map((k) => reminderGroups.get(k)!);
     if (reminderRows.length) await supabase.from("reminders").insert(reminderRows);
     // A school contact / club / food note shown as a suggestion is applied
     // automatically here -- not just on its own separate "Save" click --
