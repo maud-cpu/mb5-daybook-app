@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
@@ -20,6 +20,29 @@ const CATEGORY_ICON: Record<NewsItem["category"], string> = {
   general: "📌",
 };
 
+const BODY_PREVIEW_LENGTH = 90;
+const URL_RE = /(https?:\/\/[^\s]+)/g;
+
+// A pasted announcement often carries its own booking/info link inline in
+// the body text -- shown as plain text before, it wasn't tappable at all.
+// Splits on URLs and renders each as a real link, leaving everything else
+// as plain text either side of it.
+function linkify(text: string): ReactNode[] {
+  // String.split with a capturing group interleaves the matches back into
+  // the result at odd indices -- checked by position, not by re-testing the
+  // (global, stateful) regex against each piece.
+  const parts = text.split(URL_RE);
+  return parts.map((part, i) =>
+    i % 2 === 1 ? (
+      <a key={i} href={part} target="_blank" rel="noopener noreferrer">
+        {part}
+      </a>
+    ) : (
+      part
+    ),
+  );
+}
+
 // A notice from Surrey/the agency (a training opportunity, a policy
 // change, a deadline) used to only ever reach one carer, by whoever
 // happened to get the email or WhatsApp message -- this is that same
@@ -29,6 +52,7 @@ export default function NewsCard() {
   const supabase = createClient();
   const [items, setItems] = useState<NewsItem[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [loaded, setLoaded] = useState(false);
 
   async function load() {
@@ -60,6 +84,15 @@ export default function NewsCard() {
     if (user) await supabase.from("dismissed_news").upsert({ user_id: user.id, news_id: id });
   }
 
+  function toggleExpanded(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   const visible = items.filter((n) => !dismissed.has(n.id));
 
   if (!loaded || visible.length === 0) return null;
@@ -67,28 +100,38 @@ export default function NewsCard() {
   return (
     <div className="card">
       <h3>News &amp; Events</h3>
-      {visible.map((n) => (
-        <div key={n.id} className="rec" style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-          <span style={{ flex: 1 }}>
-            <b>
-              {CATEGORY_ICON[n.category]} {n.title}
-            </b>
-            <br />
-            <small className="muted">{n.body}</small>
-            {n.category === "training" && n.linked_course_id && (
-              <>
-                {" "}
-                <Link href={`/dashboard/training?q=${encodeURIComponent(n.title)}`} className="hint">
-                  See in Training & Resources ↗
-                </Link>
-              </>
-            )}
-          </span>
-          <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => dismiss(n.id)}>
-            Got it
-          </button>
-        </div>
-      ))}
+      {visible.map((n) => {
+        const isLong = n.body.length > BODY_PREVIEW_LENGTH;
+        const isExpanded = expanded.has(n.id);
+        const shown = isLong && !isExpanded ? n.body.slice(0, BODY_PREVIEW_LENGTH).trim() + "…" : n.body;
+        return (
+          <div key={n.id} className="rec" style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+            <span style={{ flex: 1 }}>
+              <b>
+                {CATEGORY_ICON[n.category]} {n.title}
+              </b>
+              <br />
+              <small className="muted">{linkify(shown)}</small>{" "}
+              {isLong && (
+                <small className="hint" style={{ cursor: "pointer" }} onClick={() => toggleExpanded(n.id)}>
+                  {isExpanded ? "less" : "more"}
+                </small>
+              )}
+              {n.category === "training" && n.linked_course_id && (
+                <>
+                  {" "}
+                  <Link href={`/dashboard/training?q=${encodeURIComponent(n.title)}`} className="hint">
+                    See in Training & Resources ↗
+                  </Link>
+                </>
+              )}
+            </span>
+            <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => dismiss(n.id)}>
+              Got it
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -605,7 +605,10 @@ export default function CaptureScreen() {
           </p>
           {addFor === "top" && addChildForm()}
         </div>
-        <MiniCalendarCard />
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <MiniCalendarCard />
+          <NewsCard />
+        </div>
       </div>
 
       {warning && <div className="note">{warning}</div>}
@@ -1060,7 +1063,6 @@ export default function CaptureScreen() {
       )}
 
       <div className="dashboard-grid">
-        <NewsCard />
         <ThingsToDoCard />
         <TodaysEntriesCard />
         <CaptureTrainingCard />
