@@ -224,7 +224,7 @@ function MonthReport({
   const text = (() => {
     let out = `Everyone — ${monthLabel}\n`;
     (Object.keys(BUCKETS) as Bucket[]).forEach((k) => {
-      const rs = records.filter((r) => r.bucket === k || r.also_in.includes(k)).sort((a, b) => a.created_at.localeCompare(b.created_at));
+      const rs = records.filter((r) => r.bucket === k || r.also_in.includes(k)).sort((a, b) => b.created_at.localeCompare(a.created_at));
       if (!rs.length) return;
       out += `\n${BUCKETS[k].toUpperCase()}\n`;
       if (k === "expenses") {
