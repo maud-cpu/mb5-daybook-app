@@ -112,7 +112,25 @@ export type Child = {
   hub_carer_phone: string;
   hub_carer_email: string;
   surrey_contact: string;
+  gender: string;
 };
+
+// Used so generated documents (Handover, diary drafts) can use the right
+// pronoun instead of guessing one from a name -- a name alone isn't a
+// reliable signal, and guessing wrong got a child misgendered.
+export const GENDER_OPTIONS = [
+  ["male", "Male"],
+  ["female", "Female"],
+  ["non_binary", "Non-binary"],
+  ["prefer_not_to_say", "Prefer not to say"],
+] as const;
+
+export function pronounsFor(gender: string): { subject: string; object: string; possessive: string } | null {
+  if (gender === "male") return { subject: "he", object: "him", possessive: "his" };
+  if (gender === "female") return { subject: "she", object: "her", possessive: "her" };
+  if (gender === "non_binary") return { subject: "they", object: "them", possessive: "their" };
+  return null;
+}
 
 export const LIVES_CATS = [
   ["la_long", "Looked after (long term)"],
