@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { BASICS_SECTIONS, RepeatableSubfield } from "@/lib/basics";
 import { Child, GENDER_OPTIONS, LIVES_CATS, livesHereOf, MB_OPTIONS, VISITS_CATS } from "@/lib/types";
@@ -300,6 +301,7 @@ const CENTER_NODE = "center";
 
 export default function AboutScreen() {
   const supabase = createClient();
+  const searchParams = useSearchParams();
   const [children, setChildren] = useState<Child[]>([]);
   const [basics, setBasics] = useState<Record<string, Record<string, string>>>({});
   const [household, setHousehold] = useState<Household>(emptyHousehold);
@@ -344,6 +346,26 @@ export default function AboutScreen() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // A club entry on the Calendar page linked straight here rather than to
+  // the general page, naming who it's for -- jump to that person's circle
+  // (and their Clubs panel, if that's what was asked for) once the people
+  // have actually loaded, instead of leaving her to find them by hand.
+  useEffect(() => {
+    const person = searchParams.get("person");
+    if (!person || (!children.length && !householdChildren.length)) return;
+    const child = children.find((c) => c.name === person);
+    const hhChild = householdChildren.find((c) => c.name === person);
+    const target = child ? `${livesHereOf(child) === false ? "visit" : "child"}:${child.id}` : hhChild ? `hh:${hhChild.id}` : null;
+    if (!target) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- applying a one-off deep link once data is ready
+    setSelected(target);
+    if (searchParams.get("open") === "clubs") {
+      const id = child?.id || hhChild?.id;
+      if (id) setOpenClubs(id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [children, householdChildren]);
 
   async function saveHousehold(patch: Partial<Household>) {
     const next = { ...household, ...patch };

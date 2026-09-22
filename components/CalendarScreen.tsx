@@ -445,7 +445,7 @@ export default function CalendarScreen() {
               </div>
             ) : r.id.startsWith(CLUB_PREFIX) ? (
               <div key={r.id} className="rec">
-                <Link href="/dashboard/about">
+                <Link href={`/dashboard/about?person=${encodeURIComponent(r.people[0] || "")}&open=clubs`}>
                   {reminderCategoryLabel(r.category)} {r.text}
                 </Link>
                 <PersonTags people={r.people} />
