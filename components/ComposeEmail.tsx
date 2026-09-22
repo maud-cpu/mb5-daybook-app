@@ -11,10 +11,12 @@ export default function ComposeEmail({
   onClose,
   presetChildName,
   presetEntryId,
+  presetHub,
 }: {
   onClose: () => void;
   presetChildName?: string;
   presetEntryId?: string;
+  presetHub?: boolean;
 }) {
   const supabase = createClient();
   const [recipientOptions, setRecipientOptions] = useState<Recipient[]>([]);
@@ -39,7 +41,10 @@ export default function ComposeEmail({
     async function load() {
       const [{ data: contacts }, { data: household }, { data: kids }, { data: hhKids }, { data: recs }] = await Promise.all([
         supabase.from("contacts").select("id, label, name, phone, email"),
-        supabase.from("household").select("ssw_name, ssw_email, ssw_manager_name, ssw_manager_email").maybeSingle(),
+        supabase
+          .from("household")
+          .select("ssw_name, ssw_email, ssw_manager_name, ssw_manager_email, is_mockingbird, hub_leader_name, hub_leader_email")
+          .maybeSingle(),
         supabase.from("children").select("name, basics, hub_carer_name, hub_carer_email"),
         // A child in "Children in your household" can be an actual foster
         // placement too, not just the carer's own/adopted/kinship child --
@@ -57,6 +62,8 @@ export default function ComposeEmail({
       if (household?.ssw_name) opts.push({ key: "h:ssw", label: "SSW", name: household.ssw_name, email: household.ssw_email || "" });
       if (household?.ssw_manager_name)
         opts.push({ key: "h:sswm", label: "SSW's manager", name: household.ssw_manager_name, email: household.ssw_manager_email || "" });
+      if (household?.is_mockingbird && household.hub_leader_name)
+        opts.push({ key: "h:hub", label: "Your hub carer", name: household.hub_leader_name, email: household.hub_leader_email || "" });
       const kidRows = allKids as { name: string; basics: Record<string, string>; hub_carer_name: string; hub_carer_email: string }[];
       kidRows.forEach((c) => {
         const csw = c.basics?.csw?.trim();
@@ -69,6 +76,7 @@ export default function ComposeEmail({
         const hubKey = kidRows.find((c) => c.name === presetChildName && c.hub_carer_name);
         if (hubKey) setSelectedRecipients(["hub:" + presetChildName]);
       }
+      if (presetHub && household?.is_mockingbird && household.hub_leader_name) setSelectedRecipients(["h:hub"]);
       if (presetEntryId) setSelectedEntries([presetEntryId]);
       setChildNames(allKids.map((k) => k.name as string));
       setRecords((recs as EntryRecord[]) ?? []);
