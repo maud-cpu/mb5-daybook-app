@@ -514,8 +514,21 @@ export type PendingItem = Partial<EntryRecord> & {
   send_hub?: string[];
   /** When flag is "reminder": the date it should actually appear on the calendar/Today. */
   reminder_date?: string | null;
+  /** When flag is "reminder": which REMINDER_CATEGORIES this is, e.g. "medical" for a GP/dentist appointment. */
+  reminder_category?: string;
   /** A school contact (e.g. class teacher) the AI spotted in the text, offered as a one-click save to the tagged child's School admin. */
   school_contact?: { name: string; contact: string } | null;
   /** A recurring club/activity the AI spotted in the text, offered as a one-click save to the tagged child's Clubs list. */
-  club?: { name: string; weekday: string; timeFrom: string; timeTo: string; provider: string } | null;
+  club?: {
+    name: string;
+    weekday: string;
+    timeFrom: string;
+    timeTo: string;
+    provider: string;
+    cost: string;
+    website: string;
+    notes: string;
+  } | null;
+  /** A food like/dislike the AI spotted in the text, offered as a one-click save to the tagged child's Food box. */
+  food_note?: { likes: string; dislikes: string } | null;
 };
