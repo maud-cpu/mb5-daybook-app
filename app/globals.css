@@ -288,8 +288,10 @@ nav.tabbar a.on {
   }
 
   .dashboard-view {
-    margin: 0 0 0 224px;
-    padding: 24px 24px 40px;
+    margin: 0;
+    margin-left: 224px;
+    max-width: 1180px;
+    padding: 24px 28px 40px;
   }
 
   nav.tabbar {
@@ -388,10 +390,27 @@ nav.tabbar a.on {
   background: #fbfaf6;
 }
 
-/* Capture page dashboard: the calendar sits full-width above this (a
-   week strip needs the room), and these three boxes sit in one balanced
-   row on wider screens -- one column on a phone, the natural place this
-   app is mostly used. */
+/* Capture page: the input box and calendar sit side by side on a screen
+   with room for it, and these three boxes sit in one balanced row below
+   -- one column on a phone, the natural place this app is mostly used. */
+.capture-top-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 16px;
+}
+
+.capture-top-grid .card {
+  margin-bottom: 0;
+}
+
+@media (min-width: 720px) {
+  .capture-top-grid {
+    grid-template-columns: 3fr 2fr;
+  }
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
