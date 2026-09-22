@@ -568,23 +568,26 @@ export default function CaptureScreen() {
 
   return (
     <div>
-      <div className="card">
-        <h3>Tell me anything</h3>
-        <textarea
-          placeholder="A note, or a command — 'diary', 'supervision', 'expenses', 'social worker', 'incident', 'just record', or 'add parents evening to the calendar on the 12th'. Mileage and hours of day care get costed automatically."
-          value={cap}
-          onChange={(e) => setCap(e.target.value)}
-        />
-        <button className="btn" disabled={busy || !cap.trim()} onClick={sortIt}>
-          {busy ? "Sorting…" : "Sort it"}
-        </button>
-        <p className="hint">
-          Children: {names.join(", ") || "none yet"}{" "}
-          <button className="chip add" onClick={() => (addFor === "top" ? setAddFor(null) : openAddChild("top"))}>
-            + child
+      <div className="capture-top-grid">
+        <div className="card">
+          <h3>Tell me anything</h3>
+          <textarea
+            placeholder="A note, or a command — 'diary', 'supervision', 'expenses', 'social worker', 'incident', 'just record', or 'add parents evening to the calendar on the 12th'. Mileage and hours of day care get costed automatically."
+            value={cap}
+            onChange={(e) => setCap(e.target.value)}
+          />
+          <button className="btn" disabled={busy || !cap.trim()} onClick={sortIt}>
+            {busy ? "Sorting…" : "Sort it"}
           </button>
-        </p>
-        {addFor === "top" && addChildForm()}
+          <p className="hint">
+            Children: {names.join(", ") || "none yet"}{" "}
+            <button className="chip add" onClick={() => (addFor === "top" ? setAddFor(null) : openAddChild("top"))}>
+              + child
+            </button>
+          </p>
+          {addFor === "top" && addChildForm()}
+        </div>
+        <MiniCalendarCard />
       </div>
 
       {warning && <div className="note">{warning}</div>}
@@ -1034,8 +1037,6 @@ export default function CaptureScreen() {
           </button>
         </div>
       )}
-
-      <MiniCalendarCard />
 
       <div className="dashboard-grid">
         <ThingsToDoCard />
