@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { trainingStatus } from "@/lib/domain";
 import { withAmazonAffiliateTag } from "@/lib/amazon";
 import FormsReference from "@/components/FormsReference";
+import RatingWidget, { Feedback } from "@/components/TrainingRating";
 
 type Course = {
   id: string;
@@ -26,8 +27,6 @@ type Course = {
 };
 
 type Platform = { name: string; url: string };
-
-type Feedback = { course_id: string; user_id: string; rating: number; comment: string };
 
 const LENGTH_BUCKETS = ["Under 15 min", "15–30 min", "30–60 min", "Over 1 hour", "Not timed"] as const;
 
@@ -95,93 +94,6 @@ function statusFor(course: Course, completedOn: string | undefined) {
 }
 
 type PersonalSuggestion = { reasons: string[]; dates: string[] };
-
-function StarPicker({ value, onPick }: { value: number; onPick: (n: number) => void }) {
-  return (
-    <span>
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button
-          key={n}
-          onClick={() => onPick(n)}
-          title={`${n} star${n > 1 ? "s" : ""}`}
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            fontSize: 20,
-            padding: "0 1px",
-            color: n <= value ? "var(--marker)" : "#ccc",
-          }}
-        >
-          ★
-        </button>
-      ))}
-    </span>
-  );
-}
-
-function RatingWidget({
-  course,
-  feedback,
-  myUserId,
-  onRate,
-}: {
-  course: Course;
-  feedback: Feedback[];
-  myUserId: string;
-  onRate: (courseId: string, rating: number, comment: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const mine = feedback.find((f) => f.course_id === course.id && f.user_id === myUserId);
-  const [comment, setComment] = useState(mine?.comment || "");
-  const householdRatings = feedback.filter((f) => f.course_id === course.id);
-  const householdAvg = householdRatings.length
-    ? householdRatings.reduce((s, f) => s + f.rating, 0) / householdRatings.length
-    : null;
-
-  const summary = [
-    course.external_rating
-      ? `⭐ ${course.external_rating.toFixed(1)}${course.external_rating_note ? ` (${course.external_rating_note})` : ""}`
-      : "",
-    householdAvg !== null
-      ? `👪 ${householdAvg.toFixed(1)} from ${householdRatings.length} carer${householdRatings.length > 1 ? "s" : ""}`
-      : "",
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
-  return (
-    <div style={{ marginTop: 4 }}>
-      {summary && (
-        <small className="muted" style={{ display: "block" }}>
-          {summary}
-        </small>
-      )}
-      <button className="chip" onClick={() => setOpen(!open)}>
-        {mine ? "Update your rating" : "Rate this"}
-      </button>
-      {open && (
-        <div style={{ marginTop: 6 }}>
-          <StarPicker value={mine?.rating || 0} onPick={(n) => onRate(course.id, n, comment)} />
-          <input
-            placeholder="Optional comment for other carers"
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            onBlur={() => mine && onRate(course.id, mine.rating, comment)}
-            style={{ marginTop: 4 }}
-          />
-          {householdRatings
-            .filter((f) => f.comment.trim())
-            .map((f, i) => (
-              <p key={i} className="note" style={{ marginTop: 4 }}>
-                {"★".repeat(f.rating)} {f.comment}
-              </p>
-            ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function TrainingScreen() {
   const supabase = createClient();
