@@ -325,6 +325,12 @@ Split into one item per separate thing, under "items".`;
     return NextResponse.json({ items: deduped });
   } catch (e) {
     const backstop = backstopFlag(text);
+    const message = e instanceof Error ? e.message : "unknown error";
+    // A raw JSON billing error is easy to miss/misread as "some AI glitch"
+    // rather than what it actually is -- surfaced this exact way to a real
+    // note that then also went unflagged as a calendar reminder, with no
+    // obvious link between the two until the raw error text was read closely.
+    const isCreditIssue = /credit balance is too low|insufficient_quota/i.test(message);
     return NextResponse.json({
       items: [
         {
@@ -338,7 +344,9 @@ Split into one item per separate thing, under "items".`;
           flag_note: backstop.flagNote,
         },
       ],
-      warning: `Couldn't sort automatically (${e instanceof Error ? e.message : "unknown error"}) — saved as "Just record" so nothing is lost.`,
+      warning: isCreditIssue
+        ? `Your Anthropic account has run out of credit, so nothing can be auto-sorted right now — saved as "Just record" so nothing is lost. Top up at console.anthropic.com (Plans & Billing), then come back and manually add anything this affected (like a calendar entry) since it can't be automatically re-sorted after the fact.`
+        : `Couldn't sort automatically (${message}) — saved as "Just record" so nothing is lost.`,
     });
   }
 }
