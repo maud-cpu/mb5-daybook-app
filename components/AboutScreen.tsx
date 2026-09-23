@@ -412,6 +412,18 @@ export default function AboutScreen() {
     flashSaved();
   }
 
+  // Every child marked "Your Mockingbird (MB5)" shares the exact same hub
+  // carer as this household itself -- there's nothing child-specific about
+  // it, so it shouldn't need retyping per child once it's set once here.
+  function mockingbirdHubPatch(mockingbird: string) {
+    if (mockingbird !== "mb5") return {};
+    return {
+      hub_carer_name: household.hub_leader_name,
+      hub_carer_phone: household.hub_leader_phone,
+      hub_carer_email: household.hub_leader_email,
+    };
+  }
+
   async function saveChild(childId: string, patch: Partial<Child>) {
     setChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, ...patch } : c)));
     await supabase.from("children").update(patch).eq("id", childId);
@@ -939,7 +951,7 @@ export default function AboutScreen() {
               <ChildBasicsPanel
                 showMockingbird={false}
                 mockingbird={c.mockingbird}
-                onMockingbird={(v) => updateHouseholdChild(c.id, { mockingbird: v })}
+                onMockingbird={(v) => updateHouseholdChild(c.id, { mockingbird: v, ...mockingbirdHubPatch(v) })}
                 hubCarerName={c.hub_carer_name}
                 hubCarerPhone={c.hub_carer_phone}
                 hubCarerEmail={c.hub_carer_email}
@@ -995,7 +1007,7 @@ export default function AboutScreen() {
             <ChildBasicsPanel
               showMockingbird={true}
               mockingbird={c.mockingbird}
-              onMockingbird={(v) => saveChild(c.id, { mockingbird: v })}
+              onMockingbird={(v) => saveChild(c.id, { mockingbird: v, ...mockingbirdHubPatch(v) })}
               hubCarerName={c.hub_carer_name}
               hubCarerPhone={c.hub_carer_phone}
               hubCarerEmail={c.hub_carer_email}
@@ -1085,7 +1097,7 @@ export default function AboutScreen() {
                 // for "not set yet" since we don't know their living arrangement yet.
                 showMockingbird={c.lives_here !== true}
                 mockingbird={c.mockingbird}
-                onMockingbird={(v) => saveChild(c.id, { mockingbird: v })}
+                onMockingbird={(v) => saveChild(c.id, { mockingbird: v, ...mockingbirdHubPatch(v) })}
                 hubCarerName={c.hub_carer_name}
                 hubCarerPhone={c.hub_carer_phone}
                 hubCarerEmail={c.hub_carer_email}
