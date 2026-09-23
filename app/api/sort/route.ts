@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { backstopFlag, FLAG_TRAINING, namesInText } from "@/lib/keywordFlags";
 import { today } from "@/lib/domain";
 import { BUCKETS, DAYCARE_REASONS, FlagKey, PendingItem, REMINDER_CATEGORIES } from "@/lib/types";
+import { aiErrorMessage } from "@/lib/aiErrors";
 
 const REMINDER_CATEGORY_KEYS = REMINDER_CATEGORIES.map(([k]) => k);
 
@@ -359,7 +360,7 @@ Split into one item per separate thing, under "items".`;
     return NextResponse.json({ items: deduped });
   } catch (e) {
     const backstop = backstopFlag(text);
-    const message = e instanceof Error ? e.message : "unknown error";
+    const message = aiErrorMessage(e, "That note was too long to sort in one go");
     // A raw JSON billing error is easy to miss/misread as "some AI glitch"
     // rather than what it actually is -- surfaced this exact way to a real
     // note that then also went unflagged as a calendar reminder, with no

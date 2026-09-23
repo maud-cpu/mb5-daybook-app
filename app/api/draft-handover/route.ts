@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { PROFILE_FIELDS, ProfileFieldKey } from "@/lib/handover";
 import { pronounsFor } from "@/lib/types";
+import { aiErrorMessage } from "@/lib/aiErrors";
 
 // Structured outputs instead of hand-rolling "grab the {...} between the
 // first and last brace" -- see /api/draft-diary for why that broke.
@@ -69,6 +70,9 @@ export async function POST(req: NextRequest) {
     if (!msg.parsed_output) throw new Error("Could not read the draft");
     return NextResponse.json({ sections: msg.parsed_output });
   } catch (e) {
-    return NextResponse.json({ error: `Couldn't draft: ${e instanceof Error ? e.message : "unknown error"}` }, { status: 500 });
+    return NextResponse.json(
+      { error: `Couldn't draft: ${aiErrorMessage(e, "That was too long to draft in one go")}` },
+      { status: 500 },
+    );
   }
 }
