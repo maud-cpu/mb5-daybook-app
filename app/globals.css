@@ -510,38 +510,6 @@ nav.tabbar a.on {
   gap: 28px;
 }
 
-/* Training & Resources: "Suggested from your notes" next to the compulsory
-   courses instead of both being full-width stacked cards -- the right side
-   can hold more than one card (pre-placement/once-only/3-yearly), so only
-   the left card's own margin is reset, not cards nested on the right. */
-.training-top-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 16px;
-  align-items: start;
-  margin-bottom: 16px;
-}
-
-.training-top-grid .card {
-  margin-bottom: 0;
-}
-
-.training-top-grid-col {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-/* Raised from 720px -- at that width each column was only ~330px after the
-   card's own padding, not enough room for either card's own title (or the
-   sort-picker hint next to it) to sit on one line, making both boxes wrap
-   over several lines and look far taller than they should. */
-@media (min-width: 860px) {
-  .training-top-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
