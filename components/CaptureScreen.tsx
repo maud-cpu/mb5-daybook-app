@@ -31,6 +31,13 @@ const CURRENT_YEAR = new Date().getFullYear();
 const BIRTH_YEARS = Array.from({ length: 26 }, (_, i) => String(CURRENT_YEAR - i));
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
+
 function openLabel(length: string): string {
   const medium = (length.split(/,|—/)[0] || "").trim().toLowerCase();
   if (medium === "book") return "Open book ↗";
@@ -82,6 +89,7 @@ export default function CaptureScreen() {
   const [basicsByChildId, setBasicsByChildId] = useState<Record<string, Record<string, string>>>({});
   const [childTable, setChildTable] = useState<Record<string, "children" | "household_children">>({});
   const [clubsByChildId, setClubsByChildId] = useState<Record<string, { club_name: string }[]>>({});
+  const [firstName, setFirstName] = useState("");
 
   async function loadClubs() {
     const { data } = await supabase.from("child_clubs").select("child_id, club_name");
@@ -139,6 +147,15 @@ export default function CaptureScreen() {
       .select("*")
       .single()
       .then(({ data }) => setRates(data as Rates));
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("id", user.id)
+        .single()
+        .then(({ data }) => setFirstName((data?.display_name || "").trim().split(/\s+/)[0] || ""));
+    });
     supabase
       .from("household")
       .select("is_mockingbird, hub_leader_name, hub_leader_email")
@@ -651,6 +668,10 @@ export default function CaptureScreen() {
 
   return (
     <div>
+      <h2 style={{ margin: "0 0 12px" }}>
+        {greeting()}
+        {firstName ? `, ${firstName}` : ""}
+      </h2>
       <div className="capture-top-grid">
         <div className="card" style={{ display: "flex", flexDirection: "column" }}>
           <h3>Tell me anything</h3>
