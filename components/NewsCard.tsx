@@ -67,6 +67,7 @@ export default function NewsCard() {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [loaded, setLoaded] = useState(false);
+  const [showDismissed, setShowDismissed] = useState(false);
 
   async function load() {
     const t = today();
@@ -97,6 +98,18 @@ export default function NewsCard() {
     if (user) await supabase.from("dismissed_news").upsert({ user_id: user.id, news_id: id });
   }
 
+  async function undismiss(id: string) {
+    setDismissed((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) await supabase.from("dismissed_news").delete().eq("user_id", user.id).eq("news_id", id);
+  }
+
   function toggleExpanded(id: string) {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -107,12 +120,19 @@ export default function NewsCard() {
   }
 
   const visible = items.filter((n) => !dismissed.has(n.id));
+  const previouslyDismissed = items.filter((n) => dismissed.has(n.id));
 
-  if (!loaded || visible.length === 0) return null;
+  // Only hide the whole card when there's genuinely never been anything to
+  // show -- a household that's never had a news item posted shouldn't carry
+  // a permanently empty card. Once something HAS existed, though, dismissing
+  // every item shouldn't make the card (and the way back to them) disappear.
+  if (!loaded || items.length === 0) return null;
 
   return (
     <div className="card">
       <h3>News &amp; Events</h3>
+      {visible.length === 0 && <p className="empty">Nothing new right now — you&apos;re all caught up.</p>}
+      {visible.length > 0 && (
       <div style={{ maxHeight: 260, overflowY: "auto" }}>
       {visible.map((n) => {
         const isLong = n.body.length > BODY_PREVIEW_LENGTH;
@@ -160,6 +180,29 @@ export default function NewsCard() {
         );
       })}
       </div>
+      )}
+      {previouslyDismissed.length > 0 && (
+        <>
+          <p className="hint" style={{ cursor: "pointer", marginTop: 8 }} onClick={() => setShowDismissed(!showDismissed)}>
+            {showDismissed ? "▾" : "▸"} Previously dismissed ({previouslyDismissed.length}) — tap to {showDismissed ? "hide" : "show"}
+          </p>
+          {showDismissed &&
+            previouslyDismissed.map((n) => (
+              <div key={n.id} className="rec" style={{ opacity: 0.7, display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
+                <span style={{ flex: 1 }}>
+                  <b>
+                    {CATEGORY_ICON[n.category]} {n.title}
+                  </b>
+                  <br />
+                  <small className="muted">{linkify(n.body)}</small>
+                </span>
+                <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => undismiss(n.id)}>
+                  Show again
+                </button>
+              </div>
+            ))}
+        </>
+      )}
     </div>
   );
 }
