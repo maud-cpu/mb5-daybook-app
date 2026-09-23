@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/auth";
+import AutoLock from "@/components/AutoLock";
 import NavBar from "@/components/NavBar";
 import QuickAccessButtons from "@/components/QuickAccessButtons";
 import RouteRemount from "@/components/RouteRemount";
@@ -8,7 +9,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   await requireUser();
 
   return (
-    <>
+    <AutoLock>
       <header className="topbar">
         <h1>MB5 Day Book</h1>
         <SignOutButton />
@@ -18,6 +19,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <RouteRemount>{children}</RouteRemount>
       </div>
       <NavBar />
-    </>
+    </AutoLock>
   );
 }
