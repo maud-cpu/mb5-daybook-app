@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { extractEmail, extractPhone, today } from "@/lib/domain";
-import { clubText, groupClubsByOccurrence, mondayStartWeekday } from "@/lib/calendarHelpers";
+import { clubText, fmtClubTime, groupClubsByOccurrence, mondayStartWeekday } from "@/lib/calendarHelpers";
 import { Reminder, reminderCategoryLabel } from "@/lib/types";
 import { SearchData, SearchResult, filterSearchData, loadSearchData } from "@/lib/searchData";
 
@@ -57,8 +57,9 @@ export default function QuickAccessButtons() {
 
   async function load(kind: "phone" | "email") {
     setLoading(true);
-    const [{ data: rota }, { data: household }, { data: children }, { data: householdChildren }, { data: contacts }] = await Promise.all([
+    const [{ data: rota }, { data: rotaHours }, { data: household }, { data: children }, { data: householdChildren }, { data: contacts }] = await Promise.all([
       kind === "phone" ? supabase.from("shared_rota").select("name, phone").eq("date", today()).maybeSingle() : Promise.resolve({ data: null }),
+      kind === "phone" ? supabase.from("shared_rota_hours").select("hours_from, hours_to").maybeSingle() : Promise.resolve({ data: null }),
       supabase
         .from("household")
         .select(
@@ -76,7 +77,10 @@ export default function QuickAccessButtons() {
     ];
     const out: Item[] = [];
     if (kind === "phone") {
-      if (rota?.phone) out.push({ label: "Out of hours tonight", name: rota.name || "", value: rota.phone });
+      if (rota?.phone) {
+        const hours = fmtClubTime(rotaHours?.hours_from || "", rotaHours?.hours_to || "");
+        out.push({ label: hours ? `Out of hours tonight (${hours})` : "Out of hours tonight", name: rota.name || "", value: rota.phone });
+      }
       if (household?.ssw_phone) out.push({ label: "SSW", name: household.ssw_name || "", value: household.ssw_phone });
       if (household?.ssw_manager_phone) out.push({ label: "SSW's manager", name: household.ssw_manager_name || "", value: household.ssw_manager_phone });
       if (household?.hub_leader_phone) out.push({ label: "Mockingbird hub leader", name: household.hub_leader_name || "", value: household.hub_leader_phone });

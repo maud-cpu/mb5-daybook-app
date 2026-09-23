@@ -170,6 +170,7 @@ export default function AdminSharedContent() {
   const [rates, setRates] = useState<Rates | null>(null);
   const [rota, setRota] = useState<RotaRow[]>([]);
   const [rotaPaste, setRotaPaste] = useState("");
+  const [rotaHours, setRotaHours] = useState({ hours_from: "", hours_to: "" });
   const [courses, setCourses] = useState<Course[]>([]);
   const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [toast, setToast] = useState("");
@@ -184,16 +185,18 @@ export default function AdminSharedContent() {
   const [newCourseTitle, setNewCourseTitle] = useState<Record<string, string>>({});
 
   async function load() {
-    const [{ data: r }, { data: rt }, { data: c }, { data: p }] = await Promise.all([
+    const [{ data: r }, { data: rt }, { data: c }, { data: p }, { data: rh }] = await Promise.all([
       supabase.from("shared_rates").select("*").single(),
       supabase.from("shared_rota").select("date, name, phone").order("date"),
       supabase.from("shared_training_catalog").select("*").order("sort_order"),
       supabase.from("shared_training_platforms").select("*"),
+      supabase.from("shared_rota_hours").select("hours_from, hours_to").maybeSingle(),
     ]);
     setRates(r as Rates);
     setRota((rt as RotaRow[]) ?? []);
     setCourses((c as Course[]) ?? []);
     setPlatforms((p as Platform[]) ?? []);
+    if (rh) setRotaHours({ hours_from: rh.hours_from || "", hours_to: rh.hours_to || "" });
   }
 
   useEffect(() => {
@@ -218,6 +221,13 @@ export default function AdminSharedContent() {
   function setBandRate(field: "day_first" | "day_add" | "overnight", band: string, value: number) {
     if (!rates) return;
     saveRate({ [field]: { ...rates[field], [band]: value } } as Partial<Rates>);
+  }
+
+  async function saveRotaHours(patch: Partial<typeof rotaHours>) {
+    const next = { ...rotaHours, ...patch };
+    setRotaHours(next);
+    const { error } = await supabase.from("shared_rota_hours").upsert({ ...next }, { onConflict: "household_owner_id" });
+    if (error) showToast("Couldn't save: " + error.message);
   }
 
   async function importRota() {
@@ -641,7 +651,31 @@ export default function AdminSharedContent() {
 
       <div className="card">
         <h3>Out-of-hours rota</h3>
-        <p className="muted">
+        <p className="hint">
+          When the out-of-hours service actually runs, so it&apos;s clear from the phone quick-access whether
+          it&apos;s the right number to call right now.
+        </p>
+        <div className="row" style={{ alignItems: "center" }}>
+          <span className="muted" style={{ flex: "0 0 auto" }}>
+            Service runs from
+          </span>
+          <input
+            type="time"
+            style={{ flex: "0 0 130px" }}
+            value={rotaHours.hours_from}
+            onChange={(e) => saveRotaHours({ hours_from: e.target.value })}
+          />
+          <span className="muted" style={{ flex: "0 0 auto" }}>
+            to
+          </span>
+          <input
+            type="time"
+            style={{ flex: "0 0 130px" }}
+            value={rotaHours.hours_to}
+            onChange={(e) => saveRotaHours({ hours_to: e.target.value })}
+          />
+        </div>
+        <p className="muted" style={{ marginTop: 10 }}>
           {rota.length} days loaded {rota.length ? `(${rota[0].date} to ${rota[rota.length - 1].date})` : ""}
         </p>
         <textarea
