@@ -564,4 +564,6 @@ export type PendingItem = Partial<EntryRecord> & {
   } | null;
   /** A food like/dislike the AI spotted in the text, offered as a one-click save to the tagged child's Food box. */
   food_note?: { likes: string; dislikes: string } | null;
+  /** Training/CPD the carer said they themselves attended or completed, saved to their training record even when it isn't in the shared catalogue. */
+  completed_training?: { title: string; date: string } | null;
 };

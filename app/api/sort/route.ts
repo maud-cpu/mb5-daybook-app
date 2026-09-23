@@ -103,6 +103,15 @@ const SortItemSchema = z.object({
     })
     .nullable()
     .describe("A specific food/drink the text says a child likes or dislikes, so it can be offered as a save to their Food box"),
+  completedTraining: z
+    .object({
+      title: z.string().describe("A short, clear title for the training/course, tidied from the carer's own wording"),
+      date: z.iso.date().nullable().describe("The date they did it, resolved against today's date; null if not stated"),
+    })
+    .nullable()
+    .describe(
+      "Set ONLY when the text says the CARER THEMSELVES has attended, done, or completed a specific named training session or course -- something already done (or being done today), not a course suggested for later -- regardless of whether it matches anything in the courses list above. Otherwise null.",
+    ),
 });
 const SortResponseSchema = z.object({ items: z.array(SortItemSchema) });
 
@@ -203,6 +212,7 @@ Separately, consider whether any courses from this list could help (title, with 
 Also separately: if the text identifies someone as a specific child's class teacher, class rep, or school office contact (e.g. "meeting with Miss Framp, she is Ruby's teacher", "her teacher, Mrs Smith"), set "schoolContact" to {"name":"<their name>","contact":"<email/phone if given, else empty string>"} tied to whichever known children that item is about, so it can be offered as a save to their records -- a name alone is enough, an email/phone is a bonus, not required. Only when the text actually establishes that relationship, not just any name mentioned near a school topic. Otherwise null.
 Also separately: if the text describes a child doing a club or extracurricular activity as a standing/ongoing thing (e.g. "which she does every Monday from 5.40 to 6.20pm", "he goes swimming on Wednesdays after school", "after school club for Ruby is called Camp Glide", not a one-off outing), set "club" to {"name":"<club/activity name>","weekday":"<the REGULAR/standing day it's on, or \"Not specified\" if the text doesn't say which day>","timeFrom":"HH:MM or empty string","timeTo":"HH:MM or empty string","provider":"<who runs it and/or the venue, if given, else empty string>","contactInfo":"<a phone number and/or email given for the contact, if any, else empty string>","cost":"<what it costs, if given, else empty string>","website":"<a website/booking link, if given, else empty string>","notes":"<any other useful detail given -- what to bring, term dates, etc, else empty string>"} tied to whichever known children it's for, so it can be offered as a save to their standing clubs list -- fill in every one of those sub-fields the text actually gives, not just name/day/time, since this is meant to be a complete enough record for another carer to pick up from cold. Never guess or invent a weekday that wasn't actually said -- use "Not specified" rather than picking one, the carer can fill it in later. Otherwise null. A one-off event on a specific date, INCLUDING a one-off exception or change to a regular schedule (e.g. "just this week it's moved to Saturday instead"), is a "reminder" (with "reminderCategory" "club"), not a "club" -- set that reminder for the actual one-off date/time in addition to recording the regular "club" info, since the calendar needs to reflect the exception.
 Also separately: if the text says a specific named child likes or dislikes a particular food or drink (e.g. "Rubynn doesn't like carrots", "Ruby loves pasta"), set "foodNote" to {"likes":"<comma-separated foods, or empty string>","dislikes":"<comma-separated foods, or empty string>"} tied to whichever known children it's about, so it can be offered as a save to their Food box. Only for an actual named food/drink, not a vague statement like "fussy eater" with nothing specific said. Otherwise null.
+Also separately: if the text says the CARER THEMSELVES has attended, done, or completed a specific named training session or course (e.g. "did PDA training today", "completed the safer caring refresher", "PDA training at Arthur and Henry's school, 2-3pm") -- something already done or being done today, not a course being suggested for later -- set "completedTraining" to {"title":"<a short clear title, tidied from their own wording>","date":"<the date they did it, or today's date if not stated>"}, so it can be logged on their training record even when it isn't one of the courses listed above. Otherwise null.
 Reason for day care, if said, is one of: ${DAYCARE_REASONS.join("/")}.
 Split into one item per separate thing, under "items".`;
 
@@ -329,6 +339,16 @@ Split into one item per separate thing, under "items".`;
         food_note:
           p.foodNote && (p.foodNote.likes || p.foodNote.dislikes)
             ? { likes: p.foodNote.likes || "", dislikes: p.foodNote.dislikes || "" }
+            : null,
+        completed_training:
+          p.completedTraining && p.completedTraining.title
+            ? {
+                title: p.completedTraining.title,
+                date:
+                  typeof p.completedTraining.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(p.completedTraining.date)
+                    ? p.completedTraining.date
+                    : today(),
+              }
             : null,
       };
     });
