@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { today } from "@/lib/domain";
 import { REMINDER_CATEGORIES } from "@/lib/types";
+import { aiErrorMessage } from "@/lib/aiErrors";
 
 // Structured outputs instead of hand-rolling "grab the [...] between the
 // first and last bracket" -- see /api/draft-diary for why that broke. The
@@ -93,6 +94,9 @@ Never invent a date that isn't stated or clearly resolvable from context. If the
     }));
     return NextResponse.json({ items });
   } catch (e) {
-    return NextResponse.json({ error: `Couldn't read that: ${e instanceof Error ? e.message : "unknown error"}` }, { status: 500 });
+    return NextResponse.json(
+      { error: `Couldn't read that: ${aiErrorMessage(e, "That was too long to read in one go")}` },
+      { status: 500 },
+    );
   }
 }

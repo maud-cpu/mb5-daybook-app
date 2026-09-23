@@ -4,6 +4,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { today } from "@/lib/domain";
+import { aiErrorMessage } from "@/lib/aiErrors";
 
 // One pasted email/WhatsApp message from Surrey or the fostering agency
 // often bundles several distinct things -- a training session AND a
@@ -61,6 +62,9 @@ If nothing in the text is actually worth sharing as a notice, return an empty it
     const items = msg.parsed_output?.items ?? [];
     return NextResponse.json({ items });
   } catch (e) {
-    return NextResponse.json({ error: `Couldn't read that: ${e instanceof Error ? e.message : "unknown error"}` }, { status: 500 });
+    return NextResponse.json(
+      { error: `Couldn't read that: ${aiErrorMessage(e, "That was too long to read in one go")}` },
+      { status: 500 },
+    );
   }
 }

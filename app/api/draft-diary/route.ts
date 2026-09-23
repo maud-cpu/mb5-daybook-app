@@ -4,6 +4,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { DIARY_SECTIONS } from "@/lib/types";
+import { aiErrorMessage } from "@/lib/aiErrors";
 
 // Was a hand-rolled "grab the {...} between the first and last brace" --
 // the exact fragile pattern /api/sort and others moved away from earlier,
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest) {
     const anthropic = new Anthropic({ apiKey });
     const msg = await anthropic.messages.parse({
       model: "claude-sonnet-5",
-      max_tokens: 2500,
+      max_tokens: 8192,
       system: sys,
       messages: [{ role: "user", content: src }],
       output_config: { format: zodOutputFormat(DiaryDraftSchema) },
@@ -60,6 +61,9 @@ export async function POST(req: NextRequest) {
     if (!msg.parsed_output) throw new Error("Could not read the draft");
     return NextResponse.json({ sections: msg.parsed_output });
   } catch (e) {
-    return NextResponse.json({ error: `Couldn't draft: ${e instanceof Error ? e.message : "unknown error"}` }, { status: 500 });
+    return NextResponse.json(
+      { error: `Couldn't draft: ${aiErrorMessage(e, "That was too long to draft in one go — try a shorter date range")}` },
+      { status: 500 },
+    );
   }
 }

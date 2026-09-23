@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { aiErrorMessage } from "@/lib/aiErrors";
 
 // A pasted handover/sleepover document is a completely different shape of
 // input to a day-to-day Capture note -- a few hundred words of structured
@@ -65,6 +66,9 @@ export async function POST(req: NextRequest) {
     if (!p || !p.name.trim()) throw new Error("Couldn't find a child's name in that document");
     return NextResponse.json({ profile: p });
   } catch (e) {
-    return NextResponse.json({ error: `Couldn't read that document: ${e instanceof Error ? e.message : "unknown error"}` }, { status: 500 });
+    return NextResponse.json(
+      { error: `Couldn't read that document: ${aiErrorMessage(e, "That document was too long to read in one go")}` },
+      { status: 500 },
+    );
   }
 }
