@@ -122,6 +122,8 @@ export default function TrainingScreen() {
   const [courseSort, setCourseSort] = useState<(typeof COURSE_SORTS)[number][0]>("random");
   const [randomSeed] = useState(() => Math.random());
   const [mandatoryOnly, setMandatoryOnly] = useState(false);
+  const [manualTitle, setManualTitle] = useState("");
+  const [manualDate, setManualDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   async function load() {
     const [{ data: c }, { data: pl }, { data: pr }, { data: notes }, { data: fb }, { data: userData }, { data: dis }, { data: saved }] =
@@ -550,11 +552,39 @@ export default function TrainingScreen() {
       {(() => {
         const catalogTitles = new Set(courses.map((c) => c.title.trim().toLowerCase()));
         const otherTraining = Object.entries(progress).filter(([title]) => !catalogTitles.has(title.trim().toLowerCase()));
-        if (!otherTraining.length) return null;
         return (
           <div className="card">
             <h3>Other training you&apos;ve logged</h3>
-            <p className="hint">Attended or completed via a Capture note, not one of the courses above.</p>
+            <p className="hint">
+              Attended or completed via a Capture note, or add one here directly — for anything not in the courses
+              above.
+            </p>
+            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+              <input
+                type="text"
+                placeholder="What training did you do?"
+                value={manualTitle}
+                onChange={(e) => setManualTitle(e.target.value)}
+                style={{ flex: "1 1 200px" }}
+              />
+              <input
+                type="date"
+                value={manualDate}
+                onChange={(e) => setManualDate(e.target.value)}
+                style={{ flex: "0 0 150px" }}
+              />
+              <button
+                className="chip"
+                style={{ flex: "0 0 auto" }}
+                disabled={!manualTitle.trim()}
+                onClick={() => {
+                  setCompleted(manualTitle.trim(), manualDate);
+                  setManualTitle("");
+                }}
+              >
+                Log it
+              </button>
+            </div>
             {otherTraining
               .sort((a, b) => b[1].localeCompare(a[1]))
               .map(([title, completedOn]) => (
