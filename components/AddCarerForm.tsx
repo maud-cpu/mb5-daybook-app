@@ -35,6 +35,17 @@ export default function AddCarerForm() {
         <div style={{ height: 8 }} />
         <label>Their email</label>
         <input name="email" type="email" required placeholder="jane@example.com" />
+        <div style={{ height: 8 }} />
+        <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <input name="independentHousehold" type="checkbox" style={{ width: "auto" }} />
+          This person runs their own separate household on this app
+        </label>
+        <p className="hint" style={{ marginTop: 2 }}>
+          Leave unticked for a co-carer in your own household. Tick this for someone unrelated —
+          e.g. another Mockingbird hub carer — who should have their own independent rates,
+          training catalogue and carers, not share yours. They can still connect with you
+          afterwards under Circle.
+        </p>
         {error && <p style={{ color: "var(--danger)", fontSize: 14, marginTop: 8 }}>{error}</p>}
         <button className="btn" type="submit" disabled={busy}>
           {busy ? "Creating…" : "Create login"}
