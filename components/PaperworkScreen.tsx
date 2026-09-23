@@ -4,11 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { describeExpense, describeMeds, expenseTotals, gbp, today } from "@/lib/domain";
-import { BUCKETS, Bucket, Child, EntryRecord, Rates } from "@/lib/types";
+import { addDays } from "@/lib/calendarHelpers";
+import { unreportedIncidentItems } from "@/lib/thingsToDo";
+import { BUCKETS, Bucket, Child, EntryRecord, FLAGS, FlagKey, Rates } from "@/lib/types";
 import DiaryTab from "@/components/DiaryTab";
 import HandoverTab from "@/components/HandoverTab";
 
-type Tab = "month" | "expenses" | "meds" | "diary" | "handover";
+type Tab = "month" | "supervision" | "expenses" | "meds" | "diary" | "handover";
+type TrainingCompletion = { title: string; completedOn: string };
 
 function fmtDate(iso: string): string {
   return new Date(iso + "T12:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
@@ -26,6 +29,7 @@ export default function PaperworkScreen() {
   const [rates, setRates] = useState<Rates | null>(null);
   const [claimedOpen, setClaimedOpen] = useState(false);
   const [childFilter, setChildFilter] = useState<string[]>([]);
+  const [trainingDone, setTrainingDone] = useState<TrainingCompletion[]>([]);
 
   function toggleChildFilter(name: string) {
     setChildFilter((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
@@ -49,7 +53,7 @@ export default function PaperworkScreen() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: recs }, { data: kids }, { data: hhKids }, { data: r }] = await Promise.all([
+      const [{ data: recs }, { data: kids }, { data: hhKids }, { data: r }, { data: training }] = await Promise.all([
         supabase.from("records").select("*").order("date", { ascending: false }),
         supabase.from("children").select("id, name, born, family"),
         // A child in "Children in your household" can be an actual foster
@@ -57,6 +61,7 @@ export default function PaperworkScreen() {
         // include them so month reports and expense filters cover them too.
         supabase.from("household_children").select("id, name, born"),
         supabase.from("shared_rates").select("*").single(),
+        supabase.from("training_progress").select("course_title, completed_on").not("completed_on", "is", null),
       ]);
       setRecords((recs as EntryRecord[]) ?? []);
       setChildren([
@@ -64,6 +69,12 @@ export default function PaperworkScreen() {
         ...(((hhKids as Pick<Child, "id" | "name" | "born">[]) ?? []).map((h) => ({ ...h, family: "" }) as Child)),
       ]);
       setRates(r as Rates);
+      setTrainingDone(
+        ((training as { course_title: string; completed_on: string }[] | null) ?? []).map((t) => ({
+          title: t.course_title,
+          completedOn: t.completed_on,
+        })),
+      );
     }
     load();
     function onVisible() {
@@ -83,18 +94,32 @@ export default function PaperworkScreen() {
   const monthRecs = childFilter.length
     ? allMonthRecs.filter((r) => r.kids.some((k) => childFilter.includes(k)))
     : allMonthRecs;
+  // Supervision isn't scoped to the calendar month -- an open follow-up
+  // stays relevant across a month boundary until it's actually resolved --
+  // so this filters by child only, across every record.
+  const supervisionRecs = childFilter.length ? records.filter((r) => r.kids.some((k) => childFilter.includes(k))) : records;
 
   return (
     <div>
       <div className="tabs">
-        {(["month", "expenses", "meds", "diary", "handover"] as Tab[]).map((t) => (
+        {(["month", "supervision", "expenses", "meds", "diary", "handover"] as Tab[]).map((t) => (
           <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
-            {t === "month" ? "Month" : t === "expenses" ? "Expenses" : t === "meds" ? "Medication" : t === "diary" ? "Diary for SW" : "Handover"}
+            {t === "month"
+              ? "Month"
+              : t === "supervision"
+                ? "Supervision"
+                : t === "expenses"
+                  ? "Expenses"
+                  : t === "meds"
+                    ? "Medication"
+                    : t === "diary"
+                      ? "Diary for SW"
+                      : "Handover"}
           </button>
         ))}
       </div>
 
-      {["month", "expenses", "meds"].includes(tab) && children.length > 0 && (
+      {["month", "supervision", "expenses", "meds"].includes(tab) && children.length > 0 && (
         <div className="chips" style={{ marginTop: 10 }}>
           {children.map((c) => (
             <button
@@ -116,6 +141,8 @@ export default function PaperworkScreen() {
       {tab === "diary" && <DiaryTab />}
 
       {tab === "month" && rates && <MonthReport records={monthRecs} kids={children} rates={rates} thisMonth={thisMonth} />}
+
+      {tab === "supervision" && <SupervisionReport records={supervisionRecs} training={trainingDone} />}
 
       {tab === "expenses" && rates && (
         <div className="card">
@@ -267,6 +294,83 @@ function MonthReport({
       ) : (
         <p className="empty">Nothing recorded this month.</p>
       )}
+    </div>
+  );
+}
+
+function SupervisionReport({ records, training }: { records: EntryRecord[]; training: TrainingCompletion[] }) {
+  const [sinceDate, setSinceDate] = useState(addDays(today(), -30));
+  const [copyMsg, setCopyMsg] = useState("");
+
+  // An open follow-up or an unreported incident stays relevant across a
+  // month boundary until it's actually dealt with, so those two ignore
+  // "since" entirely -- only the explicit "to raise" notes and training
+  // completions are date-scoped.
+  const openFollowUps = [...records]
+    .filter((r) => r.flag && !r.flag_done)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const unreported = unreportedIncidentItems(
+    records.filter((r) => r.bucket === "incident").map((r) => ({ id: r.id, text: r.text, created_at: r.created_at, reported: r.reported })),
+  );
+  const toRaise = records
+    .filter((r) => (r.bucket === "supervision" || r.also_in.includes("supervision")) && r.date >= sinceDate)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const trainingDone = [...training].filter((t) => t.completedOn >= sinceDate).sort((a, b) => b.completedOn.localeCompare(a.completedOn));
+
+  const text = (() => {
+    let out = `Supervision — items since ${fmtDate(sinceDate)}\n`;
+    if (openFollowUps.length) {
+      out += `\nSTILL OPEN -- FOLLOW UP\n`;
+      openFollowUps.forEach((r) => {
+        const label = FLAGS[r.flag as FlagKey]?.label || r.flag;
+        out += `  ${fmtDate(r.date)}${r.child ? ` (${r.child})` : ""}: ${label}${r.flag_note ? ` -- ${r.flag_note}` : ""}\n`;
+      });
+    }
+    if (unreported.length) {
+      out += `\nINCIDENTS NOT YET REPORTED\n`;
+      unreported.forEach((u) => (out += `  ${u.text}\n`));
+    }
+    out += `\nTO RAISE\n`;
+    if (!toRaise.length) out += `  Nothing logged under Supervision in this period.\n`;
+    toRaise.forEach((r) => (out += `  ${fmtDate(r.date)}${r.child ? ` (${r.child})` : ""}: ${r.text}\n`));
+    if (trainingDone.length) {
+      out += `\nTRAINING COMPLETED\n`;
+      trainingDone.forEach((t) => (out += `  ${fmtDate(t.completedOn)}: ${t.title}\n`));
+    }
+    return out;
+  })();
+
+  function copy() {
+    navigator.clipboard.writeText(text).then(
+      () => setCopyMsg("Copied"),
+      () => setCopyMsg("Couldn't copy"),
+    );
+    setTimeout(() => setCopyMsg(""), 2000);
+  }
+
+  return (
+    <div className="card">
+      <h3>Supervision</h3>
+      <p className="note">
+        Everything worth mentioning at your next supervision, pulled together automatically — open follow-ups you
+        haven&apos;t resolved yet, anything you&apos;ve logged to raise, unreported incidents, and training
+        you&apos;ve completed.
+      </p>
+      <div className="row" style={{ alignItems: "center", marginTop: 6 }}>
+        <label className="hint" style={{ flex: "0 0 auto" }}>
+          Show since
+        </label>
+        <input type="date" style={{ flex: "0 0 170px" }} value={sinceDate} onChange={(e) => setSinceDate(e.target.value)} />
+      </div>
+      <p style={{ marginTop: 10 }}>
+        {openFollowUps.length} still open · {unreported.length} unreported incident{unreported.length === 1 ? "" : "s"} · {toRaise.length}{" "}
+        logged to raise · {trainingDone.length} training completed
+      </p>
+      <pre id="rep">{text}</pre>
+      <button className="btn" onClick={copy}>
+        Copy report
+      </button>
+      {copyMsg && <span className="hint"> {copyMsg}</span>}
     </div>
   );
 }
