@@ -324,10 +324,14 @@ export default function TrainingScreen() {
                   {isMandatory(c) && "⭐ "}
                   {shortTitle(c.title)}
                 </b>
+                {isMandatory(c) && (
+                  <>
+                    <br />
+                    <small className="muted">{c.group_label}</small>
+                  </>
+                )}
                 <br />
-                <small className="muted">
-                  {[isMandatory(c) ? c.group_label : "", c.how, c.platform, c.length].filter(Boolean).join(" · ")}
-                </small>
+                <small className="muted">{[c.how, c.platform, c.length].filter(Boolean).join(" · ")}</small>
                 {status.label && (
                   <>
                     <br />
@@ -445,7 +449,7 @@ export default function TrainingScreen() {
             </select>
           </div>
         );
-        const allCard = renderGroupCard({ key: "all", label: "Training & Resources", rows: allRows }, sortPicker);
+        const allCard = renderGroupCard({ key: "all", label: "🎓 What will you learn today?", rows: allRows }, sortPicker);
         if (personalEntries.length === 0) return allCard;
         return (
           <div className="training-top-grid">
