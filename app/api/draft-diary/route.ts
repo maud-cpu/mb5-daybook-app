@@ -35,9 +35,16 @@ export async function POST(req: NextRequest) {
   if (dateTo) query = query.lte("date", dateTo);
   const { data: allRecords } = await query;
 
-  const records = (allRecords ?? []).filter(
-    (r) => !childNames?.length || !r.child || childNames.includes(r.child) || (r.kids || []).some((k: string) => childNames.includes(k)),
-  );
+  const records = (allRecords ?? []).filter((r) => {
+    const namesThisChild = (childNames?.length && childNames.includes(r.child)) || (r.kids || []).some((k: string) => childNames?.includes(k));
+    if (namesThisChild) return true;
+    // A supervision note with no child named is about the CARER (her own
+    // training, CPD, wellbeing to raise with her SSW) -- never diary content
+    // for a child, so unlike the other buckets it should never fall through
+    // just because no specific child happened to be tagged on it.
+    if (r.bucket === "supervision") return false;
+    return !childNames?.length || !r.child;
+  });
 
   if (!records.length) return NextResponse.json({ error: "No entries in that range" }, { status: 400 });
 
@@ -45,7 +52,7 @@ export async function POST(req: NextRequest) {
   const multiChild = (childNames || []).length > 1;
   const src = records.map((r) => `[${r.date}] [${r.bucket}]${r.child ? ` [${r.child}]` : ""} ${r.text}`).join("\n");
 
-  const sys = `You draft a UK foster carer's weekly/monthly electronic diary for ${childLabel}${multiChild ? " (siblings covered in one diary — name which child each point is about, as in \"Ruby - you…\", and write about them together where it happened together)" : ""}, written TO the child in the second person ("You came to us…", "You loved…"), warm, plain, honest and factual, in British English, from the carer's raw notes. Group by date where helpful. Use only what is in the notes — never invent events. Anything serious (incidents, disclosures, injuries) goes in "worries" and "health" and must keep the carer's factual wording. Use an empty string for a section with nothing relevant.`;
+  const sys = `You draft a UK foster carer's weekly/monthly electronic diary for ${childLabel}${multiChild ? " (siblings covered in one diary — name which child each point is about, as in \"Ruby - you…\", and write about them together where it happened together)" : ""}, written TO the child in the second person ("You came to us…", "You loved…"), warm, plain, honest and factual, in British English, from the carer's raw notes. Group by date where helpful. Use only what is in the notes — never invent events. Anything serious (incidents, disclosures, injuries) goes in "worries" and "health" and must keep the carer's factual wording. This diary is about ${childLabel} only -- skip any note that is really about the CARER herself (her own training, CPD, or wellbeing) rather than something that happened to or with ${childLabel}, even if it's in the notes given to you. Use an empty string for a section with nothing relevant.`;
 
   try {
     const anthropic = new Anthropic({ apiKey });
