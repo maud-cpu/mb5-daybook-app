@@ -1,8 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { today } from "@/lib/domain";
 import { REMINDER_CATEGORIES } from "@/lib/types";
+
+// Structured outputs instead of hand-rolling "grab the [...] between the
+// first and last bracket" -- see /api/draft-diary for why that broke. The
+// category list is duplicated as a literal tuple here (z.enum needs one)
+// rather than derived from REMINDER_CATEGORIES -- same as /api/sort's own
+// reminderCategory field.
+const EventItemSchema = z.object({
+  text: z.string(),
+  date: z.iso.date(),
+  category: z.enum(["school", "club", "training", "surrey", "medical", "family", "household", "personal"]),
+  people: z.array(z.string()),
+  amount: z.number().nullable(),
+  repeat: z.enum(["none", "weekly", "fortnightly", "monthly"]),
+  until: z.iso.date().nullable(),
+});
+const EventsResponseSchema = z.object({ items: z.array(EventItemSchema) });
 
 // Matches each name Claude returned against the household's actual people
 // (case-insensitive) so it lands on the exact stored spelling -- but keeps
@@ -51,36 +69,28 @@ Set "people" to a list of everyone the text says this specific item is actually 
 Set "category" to exactly one of: ${categoryKeys.join(", ")} -- "training" is for training/courses, "surrey" is fostering agency/social worker/local authority communications, "medical" is a health appointment, "family" is contact with birth family, "household" is general household/logistics, "personal" is anything else personal, "school" and "club" are self-explanatory.
 Set "amount" to a number (pounds) only if a specific amount to pay is actually stated, else null.
 Set "repeat" to "weekly", "fortnightly", or "monthly" ONLY if the text unambiguously describes an ongoing recurring thing (e.g. "swimming club runs every Tuesday"), and "until" to a sensible end date for it (e.g. end of term/year if mentioned, otherwise 3 months from the first date) in that case; otherwise "repeat" must be "none" and "until" null. Default to "none" whenever you're not sure -- a one-off mention of a date is not a recurring event.
-Never invent a date that isn't stated or clearly resolvable from context. If there is nothing calendar-worthy at all, return an empty array.
-Respond with ONLY a JSON array, no prose, no markdown: [{"text":"short description","date":"YYYY-MM-DD","category":"${categoryKeys.join("|")}","people":["name or empty list"],"amount":number|null,"repeat":"none|weekly|fortnightly|monthly","until":"YYYY-MM-DD or null"}]`;
+Never invent a date that isn't stated or clearly resolvable from context. If there is nothing calendar-worthy at all, return an empty items array.`;
 
   try {
     const anthropic = new Anthropic({ apiKey });
-    const msg = await anthropic.messages.create({
+    const msg = await anthropic.messages.parse({
       model: "claude-sonnet-5",
       max_tokens: 1500,
       system: sys,
       messages: [{ role: "user", content: text }],
+      output_config: { format: zodOutputFormat(EventsResponseSchema) },
     });
-    const out = msg.content
-      .map((c) => (c.type === "text" ? c.text : ""))
-      .join("")
-      .replace(/```json|```/g, "")
-      .trim();
-    const match = out.match(/\[[\s\S]*\]/);
-    if (!match) throw new Error("Could not read the extracted items");
-    const parsed = JSON.parse(match[0]);
-    const items = (Array.isArray(parsed) ? parsed : [])
-      .filter((it) => it && typeof it.text === "string" && typeof it.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(it.date))
-      .map((it) => ({
-        text: String(it.text).trim(),
-        date: it.date,
-        category: categoryKeys.includes(it.category) ? it.category : "personal",
-        people: matchNames(names, it.people),
-        amount: typeof it.amount === "number" ? it.amount : null,
-        repeat: ["weekly", "fortnightly", "monthly"].includes(it.repeat) ? it.repeat : "none",
-        until: typeof it.until === "string" && /^\d{4}-\d{2}-\d{2}$/.test(it.until) ? it.until : null,
-      }));
+    if (msg.stop_reason === "refusal") throw new Error("Couldn't read that");
+    if (msg.stop_reason === "max_tokens") throw new Error("That was too long to read in one go");
+    const items = (msg.parsed_output?.items ?? []).map((it) => ({
+      text: it.text.trim(),
+      date: it.date,
+      category: it.category,
+      people: matchNames(names, it.people),
+      amount: it.amount,
+      repeat: it.repeat,
+      until: it.until,
+    }));
     return NextResponse.json({ items });
   } catch (e) {
     return NextResponse.json({ error: `Couldn't read that: ${e instanceof Error ? e.message : "unknown error"}` }, { status: 500 });

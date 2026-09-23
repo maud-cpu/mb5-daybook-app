@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { PROFILE_FIELDS } from "@/lib/handover";
+import { PROFILE_FIELDS, ProfileFieldKey } from "@/lib/handover";
 import { pronounsFor } from "@/lib/types";
+
+// Structured outputs instead of hand-rolling "grab the {...} between the
+// first and last brace" -- see /api/draft-diary for why that broke.
+const HandoverDraftSchema = z.object(Object.fromEntries(PROFILE_FIELDS.map((f) => [f[0], z.string()])) as Record<ProfileFieldKey, z.ZodString>);
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -47,21 +53,21 @@ export async function POST(req: NextRequest) {
     ? ` Use ${pronouns.subject}/${pronouns.object}/${pronouns.possessive} pronouns for ${childName}.`
     : ` ${childName}'s gender isn't recorded -- avoid guessing a pronoun from the name; use ${childName}'s name again rather than he/she/they where a pronoun would otherwise be needed.`;
 
-  const sys = `You draft a "handover profile" for ${childName}, a child in foster care, from a UK foster carer's raw day-to-day notes -- this is a practical guide another carer would read before looking after ${childName} during a stay (a sleepover, holiday cover or similar), so it should be specific and useful at a glance, not vague.${pronounNote} Use only what is actually in the notes -- never invent a routine, preference or fact that isn't there. Write each section in plain British English, as short practical bullet points or sentences a carer could act on. Return ONLY JSON with these keys, one string each: ${PROFILE_FIELDS.map((f) => f[0]).join(", ")}. Use an empty string for any section the notes say nothing useful about -- do not pad it with generic advice.`;
+  const sys = `You draft a "handover profile" for ${childName}, a child in foster care, from a UK foster carer's raw day-to-day notes -- this is a practical guide another carer would read before looking after ${childName} during a stay (a sleepover, holiday cover or similar), so it should be specific and useful at a glance, not vague.${pronounNote} Use only what is actually in the notes -- never invent a routine, preference or fact that isn't there. Write each section in plain British English, as short practical bullet points or sentences a carer could act on. Use an empty string for any section the notes say nothing useful about -- do not pad it with generic advice.`;
 
   try {
     const anthropic = new Anthropic({ apiKey });
-    const msg = await anthropic.messages.create({
+    const msg = await anthropic.messages.parse({
       model: "claude-sonnet-5",
       max_tokens: 2000,
       system: sys,
       messages: [{ role: "user", content: src }],
+      output_config: { format: zodOutputFormat(HandoverDraftSchema) },
     });
-    const out = msg.content.map((c) => (c.type === "text" ? c.text : "")).join("");
-    const match = out.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("Could not read the draft");
-    const parsed = JSON.parse(match[0]);
-    return NextResponse.json({ sections: parsed });
+    if (msg.stop_reason === "refusal") throw new Error("Couldn't draft that");
+    if (msg.stop_reason === "max_tokens") throw new Error("That was too long to draft in one go");
+    if (!msg.parsed_output) throw new Error("Could not read the draft");
+    return NextResponse.json({ sections: msg.parsed_output });
   } catch (e) {
     return NextResponse.json({ error: `Couldn't draft: ${e instanceof Error ? e.message : "unknown error"}` }, { status: 500 });
   }
