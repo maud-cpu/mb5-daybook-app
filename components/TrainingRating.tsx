@@ -37,11 +37,17 @@ export default function RatingWidget({
   feedback,
   myUserId,
   onRate,
+  compact = false,
 }: {
   course: { id: string; external_rating: number | null; external_rating_note: string };
   feedback: Feedback[];
   myUserId: string;
   onRate: (courseId: string, rating: number, comment: string) => void;
+  /** Renders just a small trigger chip (meant to sit inline in a row of
+   * other buttons) plus the expanded panel as a sibling, instead of its
+   * own labelled block -- used where space is tight, e.g. Capture's
+   * training-suggestion card. */
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const mine = feedback.find((f) => f.course_id === course.id && f.user_id === myUserId);
@@ -62,6 +68,42 @@ export default function RatingWidget({
     .filter(Boolean)
     .join(" · ");
 
+  const panel = open && (
+    <div style={{ marginTop: 6, width: "100%" }}>
+      <StarPicker value={mine?.rating || 0} onPick={(n) => onRate(course.id, n, comment)} />
+      <input
+        placeholder="Optional comment for other carers"
+        value={comment}
+        onChange={(e) => setComment(e.target.value)}
+        onBlur={() => mine && onRate(course.id, mine.rating, comment)}
+        style={{ marginTop: 4 }}
+      />
+      {householdRatings
+        .filter((f) => f.comment.trim())
+        .map((f, i) => (
+          <p key={i} className="note" style={{ marginTop: 4 }}>
+            {"★".repeat(f.rating)} {f.comment}
+          </p>
+        ))}
+    </div>
+  );
+
+  if (compact) {
+    return (
+      <>
+        {summary && (
+          <small className="muted" style={{ display: "block", width: "100%" }}>
+            {summary}
+          </small>
+        )}
+        <button className="chip" style={{ fontSize: 13, padding: "5px 10px" }} onClick={() => setOpen(!open)}>
+          {mine ? "⭐ Update" : "⭐ Rate"}
+        </button>
+        {panel}
+      </>
+    );
+  }
+
   return (
     <div style={{ marginTop: 4 }}>
       {summary && (
@@ -72,25 +114,7 @@ export default function RatingWidget({
       <button className="chip" onClick={() => setOpen(!open)}>
         {mine ? "Update your rating" : "Rate this"}
       </button>
-      {open && (
-        <div style={{ marginTop: 6 }}>
-          <StarPicker value={mine?.rating || 0} onPick={(n) => onRate(course.id, n, comment)} />
-          <input
-            placeholder="Optional comment for other carers"
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            onBlur={() => mine && onRate(course.id, mine.rating, comment)}
-            style={{ marginTop: 4 }}
-          />
-          {householdRatings
-            .filter((f) => f.comment.trim())
-            .map((f, i) => (
-              <p key={i} className="note" style={{ marginTop: 4 }}>
-                {"★".repeat(f.rating)} {f.comment}
-              </p>
-            ))}
-        </div>
-      )}
+      {panel}
     </div>
   );
 }

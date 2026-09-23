@@ -30,7 +30,7 @@ function seededRandom(seed: number, id: string): number {
 // (records.training_note) and the same dismissed_training_suggestions /
 // training_saved / training_feedback tables, so saving, rating or
 // dismissing one place does the same thing everywhere.
-export default function CaptureTrainingCard() {
+export default function CaptureTrainingCard({ refreshKey }: { refreshKey?: number } = {}) {
   const supabase = createClient();
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [feedback, setFeedback] = useState<Feedback[]>([]);
@@ -122,10 +122,19 @@ export default function CaptureTrainingCard() {
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data load on mount
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data load on mount, and again whenever the caller bumps refreshKey (e.g. right after Capture saves something)
     load();
+    function onVisible() {
+      if (document.visibilityState === "visible") load();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [refreshKey]);
 
   async function dismiss(title: string) {
     setSuggestions((prev) => prev.filter((s) => s.title !== title));
@@ -174,24 +183,29 @@ export default function CaptureTrainingCard() {
                 {r}
               </small>
             ))}
-            {s.courseId && (
-              <RatingWidget
-                course={{ id: s.courseId, external_rating: s.externalRating, external_rating_note: s.externalRatingNote }}
-                feedback={feedback}
-                myUserId={myUserId}
-                onRate={rateCourse}
-              />
-            )}
-            <div className="row" style={{ marginTop: 6, flexWrap: "wrap" }}>
+            <div className="row" style={{ marginTop: 6, flexWrap: "wrap", gap: 6 }}>
+              {s.courseId && (
+                <RatingWidget
+                  course={{ id: s.courseId, external_rating: s.externalRating, external_rating_note: s.externalRatingNote }}
+                  feedback={feedback}
+                  myUserId={myUserId}
+                  onRate={rateCourse}
+                  compact
+                />
+              )}
               {s.url && (
-                <a className="chip" href={s.url} target="_blank" rel="noopener noreferrer">
+                <a className="chip" style={{ fontSize: 13, padding: "5px 10px" }} href={s.url} target="_blank" rel="noopener noreferrer">
                   Open ↗
                 </a>
               )}
-              <button className={`chip${savedTitles.has(s.title) ? " on" : ""}`} onClick={() => toggleSaved(s.title)}>
-                {savedTitles.has(s.title) ? "🔖 Saved" : "🔖 Save for later"}
+              <button
+                className={`chip${savedTitles.has(s.title) ? " on" : ""}`}
+                style={{ fontSize: 13, padding: "5px 10px" }}
+                onClick={() => toggleSaved(s.title)}
+              >
+                {savedTitles.has(s.title) ? "🔖 Saved" : "🔖 Save"}
               </button>
-              <button className="chip" onClick={() => dismiss(s.title)}>
+              <button className="chip" style={{ fontSize: 13, padding: "5px 10px" }} onClick={() => dismiss(s.title)}>
                 Dismiss
               </button>
             </div>

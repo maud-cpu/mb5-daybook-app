@@ -48,12 +48,20 @@ export default function CaptureScreen() {
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<PendingItem[]>([]);
   const [warning, setWarning] = useState("");
+  // Things To Do and the training-suggestion card each load once on mount
+  // and otherwise only refresh on a tab focus/visibility change -- while
+  // staying on this same Capture page for a whole session (which is the
+  // normal way this app gets used), a newly-flagged follow-up or a new
+  // training suggestion just saved never actually appeared until the page
+  // was reloaded. Bumping this after a successful save re-triggers both.
+  const [captureVersion, setCaptureVersion] = useState(0);
   const [toast, setToast] = useState("");
   const [addFor, setAddFor] = useState<number | "top" | null>(null);
   const [newChildName, setNewChildName] = useState("");
   const [newChildBornMonth, setNewChildBornMonth] = useState("");
   const [newChildBornYear, setNewChildBornYear] = useState("");
   const [newChildFamily, setNewChildFamily] = useState("");
+  const [newChildKind, setNewChildKind] = useState<"household" | "visiting" | "other">("household");
   // Every child actually living in this household -- long term, short term,
   // birth, kinship, whatever the placement type -- shares the SAME hub as
   // the carer herself, so there's no per-child hub carer to ask for there;
@@ -169,11 +177,41 @@ export default function CaptureScreen() {
     setNewChildBornMonth("");
     setNewChildBornYear("");
     setNewChildFamily("");
+    setNewChildKind("household");
+  }
+
+  function tagAddedName(addedName: string, rawName: string) {
+    if (typeof addFor === "number") {
+      setPending((prev) =>
+        prev.map((p, idx) => {
+          if (idx !== addFor) return p;
+          const kids = p.kids.includes(addedName) ? p.kids : [...p.kids, addedName];
+          const unmatched = (p.unmatched ?? []).filter((n) => n.toLowerCase() !== rawName.toLowerCase());
+          return { ...p, kids, unmatched, child: p.child || addedName };
+        }),
+      );
+    }
   }
 
   async function addChild() {
     const name = newChildName.trim();
     if (!name) return;
+
+    // "Other" doesn't belong in `children` at all -- that table is for
+    // someone this carer actually looks after, and a name just mentioned in
+    // passing (another carer's sibling, a friend) isn't that. This just
+    // tags the entry with the free-text name, same as typing anyone else's
+    // name into a calendar entry's people picker -- no permanent record.
+    if (newChildKind === "other") {
+      tagAddedName(name, name);
+      setNewChildName("");
+      setNewChildBornMonth("");
+      setNewChildBornYear("");
+      setNewChildFamily("");
+      setAddFor(null);
+      return;
+    }
+
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -184,7 +222,7 @@ export default function CaptureScreen() {
     const born = newChildBornMonth && newChildBornYear ? `${newChildBornYear}-${newChildBornMonth}-01` : null;
     const { data, error } = await supabase
       .from("children")
-      .insert({ user_id: user.id, name, born, family: newChildFamily.trim() })
+      .insert({ user_id: user.id, name, born, family: newChildFamily.trim(), lives_here: newChildKind === "household" })
       .select("id, name, born, family")
       .single();
     if (error) {
@@ -192,17 +230,7 @@ export default function CaptureScreen() {
       return;
     }
     await loadChildren();
-    if (typeof addFor === "number" && data) {
-      const addedName = (data as Child).name;
-      setPending((prev) =>
-        prev.map((p, idx) => {
-          if (idx !== addFor) return p;
-          const kids = p.kids.includes(addedName) ? p.kids : [...p.kids, addedName];
-          const unmatched = (p.unmatched ?? []).filter((n) => n.toLowerCase() !== name.toLowerCase());
-          return { ...p, kids, unmatched, child: p.child || addedName };
-        }),
-      );
-    }
+    if (data) tagAddedName((data as Child).name, name);
     setNewChildName("");
     setNewChildBornMonth("");
     setNewChildBornYear("");
@@ -501,6 +529,7 @@ export default function CaptureScreen() {
       }),
     );
     showToast(`Saved ${rows.length} item${rows.length > 1 ? "s" : ""}`);
+    setCaptureVersion((v) => v + 1);
     const d = today();
     const queue: { hubName: string; hubEmail: string; childName?: string; text: string; bucket: Bucket; date: string }[] = [];
     pending.forEach((p, idx) => {
@@ -543,38 +572,70 @@ export default function CaptureScreen() {
           value={newChildName}
           onChange={(e) => setNewChildName(e.target.value)}
         />
-        <div className="row" style={{ marginTop: 6 }}>
-          <span className="muted" style={{ alignSelf: "center", flex: "0 0 auto" }}>
-            Born
-          </span>
-          <select value={newChildBornMonth} onChange={(e) => setNewChildBornMonth(e.target.value)}>
-            <option value="">Month</option>
-            {MONTH_NAMES.map((m, i) => (
-              <option key={m} value={String(i + 1).padStart(2, "0")}>
-                {m}
-              </option>
-            ))}
-          </select>
-          <select value={newChildBornYear} onChange={(e) => setNewChildBornYear(e.target.value)}>
-            <option value="">Year</option>
-            {BIRTH_YEARS.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="row" style={{ marginTop: 6 }}>
-          <input
-            placeholder="Household / carer (e.g. Smiths)"
-            value={newChildFamily}
-            onChange={(e) => setNewChildFamily(e.target.value)}
-          />
-          <button className="chip" style={{ flex: "0 0 auto" }} onClick={addChild}>
-            Add
+        <div className="chips" style={{ marginTop: 6 }}>
+          <button
+            type="button"
+            className={`chip${newChildKind === "household" ? " on" : ""}`}
+            onClick={() => setNewChildKind("household")}
+          >
+            In your household
+          </button>
+          <button
+            type="button"
+            className={`chip${newChildKind === "visiting" ? " on" : ""}`}
+            onClick={() => setNewChildKind("visiting")}
+          >
+            Visiting regularly
+          </button>
+          <button type="button" className={`chip${newChildKind === "other" ? " on" : ""}`} onClick={() => setNewChildKind("other")}>
+            Other
           </button>
         </div>
-        <p className="note">Just month and year is enough — we only need this to work out age bands, not their exact birthday.</p>
+        {newChildKind === "other" ? (
+          <>
+            <p className="hint" style={{ marginTop: 4 }}>
+              Just tags this note with their name — doesn&apos;t add them as a child you look after.
+            </p>
+            <button className="chip" style={{ marginTop: 4 }} onClick={addChild}>
+              Add
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="row" style={{ marginTop: 6 }}>
+              <span className="muted" style={{ alignSelf: "center", flex: "0 0 auto" }}>
+                Born
+              </span>
+              <select value={newChildBornMonth} onChange={(e) => setNewChildBornMonth(e.target.value)}>
+                <option value="">Month</option>
+                {MONTH_NAMES.map((m, i) => (
+                  <option key={m} value={String(i + 1).padStart(2, "0")}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+              <select value={newChildBornYear} onChange={(e) => setNewChildBornYear(e.target.value)}>
+                <option value="">Year</option>
+                {BIRTH_YEARS.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="row" style={{ marginTop: 6 }}>
+              <input
+                placeholder="Household / carer (e.g. Smiths)"
+                value={newChildFamily}
+                onChange={(e) => setNewChildFamily(e.target.value)}
+              />
+              <button className="chip" style={{ flex: "0 0 auto" }} onClick={addChild}>
+                Add
+              </button>
+            </div>
+            <p className="note">Just month and year is enough — we only need this to work out age bands, not their exact birthday.</p>
+          </>
+        )}
       </div>
     );
   }
@@ -1067,9 +1128,9 @@ export default function CaptureScreen() {
       )}
 
       <div className="dashboard-grid">
-        <ThingsToDoCard />
+        <ThingsToDoCard refreshKey={captureVersion} />
         <TodaysEntriesCard />
-        <CaptureTrainingCard />
+        <CaptureTrainingCard refreshKey={captureVersion} />
       </div>
 
       {toast && <div id="toast" className="show">{toast}</div>}

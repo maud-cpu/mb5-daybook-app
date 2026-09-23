@@ -53,7 +53,7 @@ function followUpGuidance(f: FollowUp): string {
   return f.flag_note;
 }
 
-export default function ThingsToDoCard() {
+export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } = {}) {
   const supabase = createClient();
   const [due, setDue] = useState<DueItem[]>([]);
   const [allReminders, setAllReminders] = useState<Reminder[]>([]);
@@ -178,10 +178,19 @@ export default function ThingsToDoCard() {
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data load on mount
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data load on mount, and again whenever the caller bumps refreshKey (e.g. right after Capture saves something)
     load();
+    function onVisible() {
+      if (document.visibilityState === "visible") load();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [refreshKey]);
 
   async function dismissDue(item: DueItem) {
     if (item.key.startsWith("rem-")) {

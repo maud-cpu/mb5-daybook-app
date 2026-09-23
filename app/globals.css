@@ -532,7 +532,11 @@ nav.tabbar a.on {
   gap: 16px;
 }
 
-@media (min-width: 720px) {
+/* Raised from 720px -- at that width each column was only ~330px after the
+   card's own padding, not enough room for either card's own title (or the
+   sort-picker hint next to it) to sit on one line, making both boxes wrap
+   over several lines and look far taller than they should. */
+@media (min-width: 860px) {
   .training-top-grid {
     grid-template-columns: 1fr 1fr;
   }
