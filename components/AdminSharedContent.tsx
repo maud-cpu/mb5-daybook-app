@@ -170,7 +170,7 @@ export default function AdminSharedContent() {
   const [rates, setRates] = useState<Rates | null>(null);
   const [rota, setRota] = useState<RotaRow[]>([]);
   const [rotaPaste, setRotaPaste] = useState("");
-  const [rotaHours, setRotaHours] = useState({ hours_from: "", hours_to: "" });
+  const [rotaHours, setRotaHours] = useState({ description: "" });
   const [courses, setCourses] = useState<Course[]>([]);
   const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [toast, setToast] = useState("");
@@ -190,13 +190,13 @@ export default function AdminSharedContent() {
       supabase.from("shared_rota").select("date, name, phone").order("date"),
       supabase.from("shared_training_catalog").select("*").order("sort_order"),
       supabase.from("shared_training_platforms").select("*"),
-      supabase.from("shared_rota_hours").select("hours_from, hours_to").maybeSingle(),
+      supabase.from("shared_rota_hours").select("description").maybeSingle(),
     ]);
     setRates(r as Rates);
     setRota((rt as RotaRow[]) ?? []);
     setCourses((c as Course[]) ?? []);
     setPlatforms((p as Platform[]) ?? []);
-    if (rh) setRotaHours({ hours_from: rh.hours_from || "", hours_to: rh.hours_to || "" });
+    if (rh) setRotaHours({ description: rh.description || "" });
   }
 
   useEffect(() => {
@@ -652,29 +652,16 @@ export default function AdminSharedContent() {
       <div className="card">
         <h3>Out-of-hours rota</h3>
         <p className="hint">
-          When the out-of-hours service actually runs, so it&apos;s clear from the phone quick-access whether
-          it&apos;s the right number to call right now.
+          When the service actually runs, so it&apos;s clear from the phone quick-access whether it&apos;s the right
+          number to call right now — paste this straight from the rota document&apos;s own header (it&apos;s often a
+          different rule for weekends/bank holidays, so free text rather than a single time range).
         </p>
-        <div className="row" style={{ alignItems: "center" }}>
-          <span className="muted" style={{ flex: "0 0 auto" }}>
-            Service runs from
-          </span>
-          <input
-            type="time"
-            style={{ flex: "0 0 130px" }}
-            value={rotaHours.hours_from}
-            onChange={(e) => saveRotaHours({ hours_from: e.target.value })}
-          />
-          <span className="muted" style={{ flex: "0 0 auto" }}>
-            to
-          </span>
-          <input
-            type="time"
-            style={{ flex: "0 0 130px" }}
-            value={rotaHours.hours_to}
-            onChange={(e) => saveRotaHours({ hours_to: e.target.value })}
-          />
-        </div>
+        <input
+          placeholder="e.g. 6pm-11pm Mon-Fri, 10am-11pm Sat/Sun & Bank Holidays"
+          value={rotaHours.description}
+          onChange={(e) => setRotaHours({ description: e.target.value })}
+          onBlur={(e) => saveRotaHours({ description: e.target.value })}
+        />
         <p className="muted" style={{ marginTop: 10 }}>
           {rota.length} days loaded {rota.length ? `(${rota[0].date} to ${rota[rota.length - 1].date})` : ""}
         </p>
