@@ -454,7 +454,7 @@ export default function TrainingScreen() {
         const allCard = renderGroupCard({ key: "all", label: "🎓 Learn something new", rows: allRows }, sortPicker);
         if (personalEntries.length === 0) return allCard;
         return (
-          <div className="training-top-grid">
+          <>
             <div className="card" style={{ border: "2px solid var(--accent)" }}>
               <h3>Suggested from your notes</h3>
               <p className="note">These came up because of something you actually wrote, not just the general list below.</p>
@@ -512,8 +512,8 @@ export default function TrainingScreen() {
             );
               })}
             </div>
-            <div className="training-top-grid-col">{allCard}</div>
-          </div>
+            {allCard}
+          </>
         );
       })()}
       {Object.keys(savedTitles).length > 0 && (
