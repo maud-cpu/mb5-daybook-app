@@ -9,6 +9,7 @@ import { Child, GENDER_OPTIONS, LIVES_CATS, livesHereOf, MB_OPTIONS, VISITS_CATS
 import { personColor } from "@/lib/calendarHelpers";
 import ChildSchoolAdmin from "@/components/ChildSchoolAdmin";
 import ChildClubs from "@/components/ChildClubs";
+import ChildDocuments from "@/components/ChildDocuments";
 import RadialWheel, { WheelNode } from "@/components/RadialWheel";
 
 const ADULT_ROLES = ["Foster carer", "Adult child", "Live-in grandparent", "Other"];
@@ -334,6 +335,7 @@ export default function AboutScreen() {
   const [pendingImportBasics, setPendingImportBasics] = useState<Record<string, string> | null>(null);
   const [openSchoolAdmin, setOpenSchoolAdmin] = useState<string | null>(null);
   const [openClubs, setOpenClubs] = useState<string | null>(null);
+  const [openDocuments, setOpenDocuments] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -920,6 +922,7 @@ export default function AboutScreen() {
       if (!c) return null;
       const open = openSchoolAdmin === c.id;
       const clubsOpen = openClubs === c.id;
+      const docsOpen = openDocuments === c.id;
       return (
         <div className="card">
           <div className="row" style={{ alignItems: "center" }}>
@@ -958,9 +961,13 @@ export default function AboutScreen() {
             <button className="chip" onClick={() => setOpenClubs(clubsOpen ? null : c.id)}>
               🧩 Club admin
             </button>
+            <button className="chip" onClick={() => setOpenDocuments(docsOpen ? null : c.id)}>
+              📎 Documents
+            </button>
           </div>
           {open && <ChildSchoolAdmin childId={c.id} />}
           {clubsOpen && <ChildClubs childId={c.id} />}
+          {docsOpen && <ChildDocuments childId={c.id} />}
           {c.category !== "fosters" && (
             <div style={{ marginTop: 10 }}>
               <ChildBasicsPanel
@@ -989,6 +996,7 @@ export default function AboutScreen() {
       const c = children.find((x) => x.id === id);
       if (!c) return null;
       const cb = basics[c.id] || {};
+      const docsOpen = openDocuments === c.id;
       return (
         <div className="card">
           <div className="row" style={{ alignItems: "center" }}>
@@ -1018,6 +1026,12 @@ export default function AboutScreen() {
             <GenderSelect value={c.gender} onChange={(v) => saveChild(c.id, { gender: v })} />
           </div>
           {placementEndField(c)}
+          <div className="chips" style={{ marginTop: 6 }}>
+            <button className="chip" onClick={() => setOpenDocuments(docsOpen ? null : c.id)}>
+              📎 Documents
+            </button>
+          </div>
+          {docsOpen && <ChildDocuments childId={c.id} />}
           <div style={{ marginTop: 10 }}>
             <ChildBasicsPanel
               showMockingbird={true}
@@ -1046,6 +1060,7 @@ export default function AboutScreen() {
       const cb = basics[c.id] || {};
       const open = openSchoolAdmin === c.id;
       const clubsOpen = openClubs === c.id;
+      const docsOpen = openDocuments === c.id;
       return (
         <div className="card">
           <div className="row" style={{ alignItems: "center" }}>
@@ -1069,9 +1084,13 @@ export default function AboutScreen() {
             <button className="chip" onClick={() => setOpenClubs(clubsOpen ? null : c.id)}>
               🧩 Club admin
             </button>
+            <button className="chip" onClick={() => setOpenDocuments(docsOpen ? null : c.id)}>
+              📎 Documents
+            </button>
           </div>
           {open && <ChildSchoolAdmin childId={c.id} />}
           {clubsOpen && <ChildClubs childId={c.id} />}
+          {docsOpen && <ChildDocuments childId={c.id} />}
           <div style={{ marginTop: 10 }}>
             <b style={{ fontSize: 14 }}>Living arrangement</b>
             <select

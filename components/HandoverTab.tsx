@@ -16,6 +16,7 @@ type ChildRow = {
 type Profile = Record<string, string>;
 type AboutHousehold = { ssw_name: string; ssw_phone: string; ssw_email: string };
 type SchoolAdmin = Record<string, string>;
+type ChildDoc = { id: string; title: string; category: string; file_name: string };
 type Club = {
   id: string;
   club_name: string;
@@ -133,6 +134,7 @@ export default function HandoverTab() {
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [schoolAdmin, setSchoolAdmin] = useState<Record<string, SchoolAdmin>>({});
   const [clubsByChild, setClubsByChild] = useState<Record<string, Club[]>>({});
+  const [documentsByChild, setDocumentsByChild] = useState<Record<string, ChildDoc[]>>({});
   const [household, setHousehold] = useState<Profile>(blankHousehold());
   const [aboutHousehold, setAboutHousehold] = useState<AboutHousehold>({ ssw_name: "", ssw_phone: "", ssw_email: "" });
   const [dateFrom, setDateFrom] = useState(today());
@@ -145,7 +147,7 @@ export default function HandoverTab() {
   const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
 
   async function load() {
-    const [{ data: kids }, { data: hhKids }, { data: profileRows }, { data: hh }, { data: schoolAdminRows }, { data: clubRows }] =
+    const [{ data: kids }, { data: hhKids }, { data: profileRows }, { data: hh }, { data: schoolAdminRows }, { data: clubRows }, { data: docRows }] =
       await Promise.all([
         supabase.from("children").select("id, name, basics, hub_carer_name, hub_carer_phone").order("created_at"),
         supabase.from("household_children").select("id, name, basics, hub_carer_name, hub_carer_phone").order("created_at"),
@@ -156,6 +158,7 @@ export default function HandoverTab() {
           .maybeSingle(),
         supabase.from("child_school_admin").select("*"),
         supabase.from("child_clubs").select("*").order("weekday"),
+        supabase.from("child_documents").select("id, child_id, title, category, file_name").order("uploaded_at"),
       ]);
     const normalise = (rows: (ChildRow & { basics: Record<string, string> | null })[] | null) =>
       (rows ?? []).map((c) => ({ ...c, basics: c.basics || {} }));
@@ -174,6 +177,11 @@ export default function HandoverTab() {
       (byClubs[c.child_id] ||= []).push(c);
     });
     setClubsByChild(byClubs);
+    const byDocs: Record<string, ChildDoc[]> = {};
+    (docRows as (ChildDoc & { child_id: string })[] | null)?.forEach((d) => {
+      (byDocs[d.child_id] ||= []).push(d);
+    });
+    setDocumentsByChild(byDocs);
   }
 
   useEffect(() => {
@@ -327,6 +335,7 @@ ${sortedSelected
     const p = child ? profileOf(child.id) : blankProfile();
     const sa = child ? schoolAdmin[child.id] : undefined;
     const childClubs = child ? clubsByChild[child.id] || [] : [];
+    const childDocs = child ? documentsByChild[child.id] || [] : [];
     const schoolAdminTable = sa
       ? `<h3>2a. ${n} — school admin</h3><table>${SCHOOL_ADMIN_EXPORT_FIELDS.map(([k, label]) => row(label, sa[k] || "")).join("")}</table>`
       : "";
@@ -342,7 +351,16 @@ ${sortedSelected
           )
           .join("")}</table>`
       : "";
-    return `<h3>2. ${n} — needs & routines</h3><table>${PROFILE_FIELDS.map(([k, label, hint]) => row(label, p[k], hint)).join("")}</table>${schoolAdminTable}${clubsTable}`;
+    // The files themselves stay in this app's storage -- only naming what
+    // exists here, same reasoning as excluding the homework app login
+    // above: nothing that requires separate access travels inside the
+    // document itself.
+    const documentsTable = childDocs.length
+      ? `<h3>2c. ${n} — documents on file</h3><table>${childDocs
+          .map((d) => row(d.category || "Document", d.title || d.file_name))
+          .join("")}</table>`
+      : "";
+    return `<h3>2. ${n} — needs & routines</h3><table>${PROFILE_FIELDS.map(([k, label, hint]) => row(label, p[k], hint)).join("")}</table>${schoolAdminTable}${clubsTable}${documentsTable}`;
   })
   .join("")}
 <h3>3. Contacts, health & consents</h3><table>${HOUSEHOLD_FIELDS.map(([k, label, hint]) => row(label, householdOf()[k], hint)).join("")}</table>
@@ -479,6 +497,21 @@ ${sortedSelected
                 <p className="hint" style={{ marginTop: 6 }}>
                   Edit these in About us. The homework app login isn&apos;t included here or in the exported
                   document — hand that over separately.
+                </p>
+              </div>
+            )}
+            {(documentsByChild[child.id] ?? []).length > 0 && (
+              <div className="note">
+                <b>Documents on file (About us)</b>
+                {(documentsByChild[child.id] ?? []).map((d) => (
+                  <div key={d.id} style={{ marginTop: 4 }}>
+                    {d.title || d.file_name}
+                    {d.category ? ` (${d.category})` : ""}
+                  </div>
+                ))}
+                <p className="hint" style={{ marginTop: 6 }}>
+                  These stay in this app&apos;s storage, not in the exported document itself — the receiving carer
+                  needs their own access, or these forwarded separately.
                 </p>
               </div>
             )}
