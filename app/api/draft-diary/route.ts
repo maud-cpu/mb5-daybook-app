@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { DIARY_SECTIONS } from "@/lib/types";
+
+// Was a hand-rolled "grab the {...} between the first and last brace" --
+// the exact fragile pattern /api/sort and others moved away from earlier,
+// since a stray unescaped character (or the model wrapping its answer in a
+// sentence or a markdown fence) loses the whole draft with no way to tell
+// why. Structured outputs constrains the response to this exact schema
+// server-side instead, so it's always valid, parseable JSON.
+const DiaryDraftSchema = z.object(Object.fromEntries(DIARY_SECTIONS.map(([k]) => [k, z.string()])) as Record<(typeof DIARY_SECTIONS)[number][0], z.ZodString>);
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -34,21 +44,21 @@ export async function POST(req: NextRequest) {
   const multiChild = (childNames || []).length > 1;
   const src = records.map((r) => `[${r.date}] [${r.bucket}]${r.child ? ` [${r.child}]` : ""} ${r.text}`).join("\n");
 
-  const sys = `You draft a UK foster carer's weekly/monthly electronic diary for ${childLabel}${multiChild ? " (siblings covered in one diary — name which child each point is about, as in \"Ruby - you…\", and write about them together where it happened together)" : ""}, written TO the child in the second person ("You came to us…", "You loved…"), warm, plain, honest and factual, in British English, from the carer's raw notes. Group by date where helpful. Use only what is in the notes — never invent events. Anything serious (incidents, disclosures, injuries) goes in "worries" and "health" and must keep the carer's factual wording. Return ONLY JSON with keys: ${DIARY_SECTIONS.map((s) => s[0]).join(", ")}. Use an empty string for a section with nothing relevant.`;
+  const sys = `You draft a UK foster carer's weekly/monthly electronic diary for ${childLabel}${multiChild ? " (siblings covered in one diary — name which child each point is about, as in \"Ruby - you…\", and write about them together where it happened together)" : ""}, written TO the child in the second person ("You came to us…", "You loved…"), warm, plain, honest and factual, in British English, from the carer's raw notes. Group by date where helpful. Use only what is in the notes — never invent events. Anything serious (incidents, disclosures, injuries) goes in "worries" and "health" and must keep the carer's factual wording. Use an empty string for a section with nothing relevant.`;
 
   try {
     const anthropic = new Anthropic({ apiKey });
-    const msg = await anthropic.messages.create({
+    const msg = await anthropic.messages.parse({
       model: "claude-sonnet-5",
       max_tokens: 2500,
       system: sys,
       messages: [{ role: "user", content: src }],
+      output_config: { format: zodOutputFormat(DiaryDraftSchema) },
     });
-    const out = msg.content.map((c) => (c.type === "text" ? c.text : "")).join("");
-    const match = out.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("Could not read the draft");
-    const parsed = JSON.parse(match[0]);
-    return NextResponse.json({ sections: parsed });
+    if (msg.stop_reason === "refusal") throw new Error("Couldn't draft that");
+    if (msg.stop_reason === "max_tokens") throw new Error("That was too long to draft in one go");
+    if (!msg.parsed_output) throw new Error("Could not read the draft");
+    return NextResponse.json({ sections: msg.parsed_output });
   } catch (e) {
     return NextResponse.json({ error: `Couldn't draft: ${e instanceof Error ? e.message : "unknown error"}` }, { status: 500 });
   }
