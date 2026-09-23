@@ -72,15 +72,30 @@ function RepeatableField({
     <div style={{ marginTop: 6 }}>
       {items.map((it, i) => (
         <div className="row" key={it._k} style={{ marginTop: i ? 6 : 0 }}>
-          {subfields.map((sf) => (
-            <input
-              key={sf.key}
-              type={sf.type || "text"}
-              placeholder={sf.label}
-              defaultValue={it[sf.key] || ""}
-              onBlur={(e) => persist(items.map((x) => (x._k === it._k ? { ...x, [sf.key]: e.target.value } : x)))}
-            />
-          ))}
+          {subfields.map((sf) =>
+            sf.select ? (
+              <select
+                key={sf.key}
+                value={it[sf.key] || ""}
+                onChange={(e) => persist(items.map((x) => (x._k === it._k ? { ...x, [sf.key]: e.target.value } : x)))}
+              >
+                <option value="">{sf.label}…</option>
+                {sf.select.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                key={sf.key}
+                type={sf.type || "text"}
+                placeholder={sf.label}
+                defaultValue={it[sf.key] || ""}
+                onBlur={(e) => persist(items.map((x) => (x._k === it._k ? { ...x, [sf.key]: e.target.value } : x)))}
+              />
+            ),
+          )}
           <button className="x" onClick={() => persist(items.filter((x) => x._k !== it._k))}>
             ×
           </button>

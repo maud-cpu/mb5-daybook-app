@@ -1,4 +1,4 @@
-export type RepeatableSubfield = { key: string; label: string; type?: "tel" | "email" | "date" };
+export type RepeatableSubfield = { key: string; label: string; type?: "tel" | "email" | "date"; select?: string[] };
 export type BasicsField = {
   key: string;
   label: string;
@@ -77,8 +77,18 @@ export const BASICS_SECTIONS: BasicsSection[] = [
   {
     title: "Food",
     fields: [
+      { key: "food_preference", label: "Dietary preference", placeholder: "vegetarian, vegan, halal, kosher, etc — leave blank if none" },
       { key: "food_likes", label: "Likes", placeholder: "favourite meals, snacks" },
       { key: "food_dislikes", label: "Dislikes", placeholder: "won't eat, texture issues, etc" },
+      {
+        key: "food_allergies",
+        label: "Allergies & intolerances",
+        addLabel: "add another",
+        repeatableFields: [
+          { key: "item", label: "What (e.g. peanuts, dairy)" },
+          { key: "severity", label: "Type", select: ["Intolerance", "Allergy", "Severe allergy"] },
+        ],
+      },
     ],
   },
   {
