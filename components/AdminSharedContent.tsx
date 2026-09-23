@@ -170,6 +170,7 @@ export default function AdminSharedContent() {
   const [rates, setRates] = useState<Rates | null>(null);
   const [rota, setRota] = useState<RotaRow[]>([]);
   const [rotaPaste, setRotaPaste] = useState("");
+  const [importingRotaFile, setImportingRotaFile] = useState(false);
   const [rotaHours, setRotaHours] = useState({ weekday_hours: "", weekend_hours: "" });
   const [courses, setCourses] = useState<Course[]>([]);
   const [platforms, setPlatforms] = useState<Platform[]>([]);
@@ -242,6 +243,37 @@ export default function AdminSharedContent() {
       showToast(`Loaded ${rows.length} days`);
       setRotaPaste("");
       load();
+    }
+  }
+
+  // For when the rota document can't be copy-pasted at all (a read-only
+  // viewer, a locked file, a phone that won't let you select table text) --
+  // upload the .docx itself and let the server pull the same plain text out
+  // of it that the paste box already knows how to parse.
+  async function importRotaFile(file: File) {
+    setImportingRotaFile(true);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const res = await fetch("/api/import-rota", { method: "POST", body });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || "Couldn't read that file");
+        return;
+      }
+      const rows = parseRotaPaste(data.text);
+      if (!rows.length) {
+        showToast("Couldn't find the month/year and dates in that document");
+        return;
+      }
+      const { error } = await supabase.from("shared_rota").upsert(rows);
+      if (error) showToast("Couldn't save rota: " + error.message);
+      else {
+        showToast(`Loaded ${rows.length} days`);
+        load();
+      }
+    } finally {
+      setImportingRotaFile(false);
     }
   }
 
@@ -690,6 +722,20 @@ export default function AdminSharedContent() {
         <button className="btn" onClick={importRota}>
           Load rota
         </button>
+        <p className="hint" style={{ marginTop: 10 }}>
+          Can&apos;t copy the text out of it? Upload the .docx file directly instead.
+        </p>
+        <input
+          type="file"
+          accept=".docx"
+          disabled={importingRotaFile}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) importRotaFile(file);
+            e.target.value = "";
+          }}
+        />
+        {importingRotaFile && <p className="hint">Reading document…</p>}
       </div>
 
       <div className="card">
