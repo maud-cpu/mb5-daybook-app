@@ -588,13 +588,14 @@ export default function CaptureScreen() {
             Visiting regularly
           </button>
           <button type="button" className={`chip${newChildKind === "other" ? " on" : ""}`} onClick={() => setNewChildKind("other")}>
-            Other
+            Everyone else
           </button>
         </div>
         {newChildKind === "other" ? (
           <>
             <p className="hint" style={{ marginTop: 4 }}>
-              Just tags this note with their name — doesn&apos;t add them as a child you look after.
+              For a friend, sibling, or anyone else just mentioned in passing — just tags this note with their name,
+              doesn&apos;t add them as a child you look after.
             </p>
             <button className="chip" style={{ marginTop: 4 }} onClick={addChild}>
               Add
