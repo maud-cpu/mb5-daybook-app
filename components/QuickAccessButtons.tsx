@@ -59,7 +59,7 @@ export default function QuickAccessButtons() {
     setLoading(true);
     const [{ data: rota }, { data: rotaHours }, { data: household }, { data: children }, { data: householdChildren }, { data: contacts }] = await Promise.all([
       kind === "phone" ? supabase.from("shared_rota").select("name, phone").eq("date", today()).maybeSingle() : Promise.resolve({ data: null }),
-      kind === "phone" ? supabase.from("shared_rota_hours").select("description").maybeSingle() : Promise.resolve({ data: null }),
+      kind === "phone" ? supabase.from("shared_rota_hours").select("weekday_hours, weekend_hours").maybeSingle() : Promise.resolve({ data: null }),
       supabase
         .from("household")
         .select(
@@ -78,7 +78,8 @@ export default function QuickAccessButtons() {
     const out: Item[] = [];
     if (kind === "phone") {
       if (rota?.phone) {
-        const hours = rotaHours?.description?.trim();
+        const isWeekend = [0, 6].includes(new Date().getDay());
+        const hours = (isWeekend ? rotaHours?.weekend_hours : rotaHours?.weekday_hours)?.trim();
         out.push({ label: hours ? `Out of hours tonight (${hours})` : "Out of hours tonight", name: rota.name || "", value: rota.phone });
       }
       if (household?.ssw_phone) out.push({ label: "SSW", name: household.ssw_name || "", value: household.ssw_phone });

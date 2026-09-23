@@ -170,7 +170,7 @@ export default function AdminSharedContent() {
   const [rates, setRates] = useState<Rates | null>(null);
   const [rota, setRota] = useState<RotaRow[]>([]);
   const [rotaPaste, setRotaPaste] = useState("");
-  const [rotaHours, setRotaHours] = useState({ description: "" });
+  const [rotaHours, setRotaHours] = useState({ weekday_hours: "", weekend_hours: "" });
   const [courses, setCourses] = useState<Course[]>([]);
   const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [toast, setToast] = useState("");
@@ -190,13 +190,13 @@ export default function AdminSharedContent() {
       supabase.from("shared_rota").select("date, name, phone").order("date"),
       supabase.from("shared_training_catalog").select("*").order("sort_order"),
       supabase.from("shared_training_platforms").select("*"),
-      supabase.from("shared_rota_hours").select("description").maybeSingle(),
+      supabase.from("shared_rota_hours").select("weekday_hours, weekend_hours").maybeSingle(),
     ]);
     setRates(r as Rates);
     setRota((rt as RotaRow[]) ?? []);
     setCourses((c as Course[]) ?? []);
     setPlatforms((p as Platform[]) ?? []);
-    if (rh) setRotaHours({ description: rh.description || "" });
+    if (rh) setRotaHours({ weekday_hours: rh.weekday_hours || "", weekend_hours: rh.weekend_hours || "" });
   }
 
   useEffect(() => {
@@ -652,16 +652,32 @@ export default function AdminSharedContent() {
       <div className="card">
         <h3>Out-of-hours rota</h3>
         <p className="hint">
-          When the service actually runs, so it&apos;s clear from the phone quick-access whether it&apos;s the right
-          number to call right now — paste this straight from the rota document&apos;s own header (it&apos;s often a
-          different rule for weekends/bank holidays, so free text rather than a single time range).
+          When the service actually runs — shown on the phone quick-access as just today&apos;s actual window, e.g.
+          &quot;Out of hours tonight (6pm-11pm)&quot; on a weekday. Bank holidays aren&apos;t detected automatically —
+          treat a bank holiday weekday as a weekend day for this.
         </p>
-        <input
-          placeholder="e.g. 6pm-11pm Mon-Fri, 10am-11pm Sat/Sun & Bank Holidays"
-          value={rotaHours.description}
-          onChange={(e) => setRotaHours({ description: e.target.value })}
-          onBlur={(e) => saveRotaHours({ description: e.target.value })}
-        />
+        <div className="row" style={{ alignItems: "center" }}>
+          <span className="muted" style={{ flex: "0 0 130px" }}>
+            Weekdays (Mon-Fri)
+          </span>
+          <input
+            placeholder="e.g. 6pm-11pm"
+            value={rotaHours.weekday_hours}
+            onChange={(e) => setRotaHours({ ...rotaHours, weekday_hours: e.target.value })}
+            onBlur={(e) => saveRotaHours({ weekday_hours: e.target.value })}
+          />
+        </div>
+        <div className="row" style={{ alignItems: "center", marginTop: 6 }}>
+          <span className="muted" style={{ flex: "0 0 130px" }}>
+            Weekends (Sat-Sun)
+          </span>
+          <input
+            placeholder="e.g. 10am-11pm"
+            value={rotaHours.weekend_hours}
+            onChange={(e) => setRotaHours({ ...rotaHours, weekend_hours: e.target.value })}
+            onBlur={(e) => saveRotaHours({ weekend_hours: e.target.value })}
+          />
+        </div>
         <p className="muted" style={{ marginTop: 10 }}>
           {rota.length} days loaded {rota.length ? `(${rota[0].date} to ${rota[rota.length - 1].date})` : ""}
         </p>
