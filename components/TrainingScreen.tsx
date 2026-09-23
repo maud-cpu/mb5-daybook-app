@@ -29,7 +29,6 @@ type Platform = { name: string; url: string };
 
 type Feedback = { course_id: string; user_id: string; rating: number; comment: string };
 
-const GROUP_ORDER = ["next", "pre", "once", "3yr"] as const;
 const LENGTH_BUCKETS = ["Under 15 min", "15–30 min", "30–60 min", "Over 1 hour", "Not timed"] as const;
 
 function minutesOf(length: string): number | null {
@@ -72,7 +71,7 @@ function shortTitle(title: string, max = 90): string {
   return title.length > max ? title.slice(0, max).replace(/\s+\S*$/, "") + "…" : title;
 }
 
-const NEXT_SORTS = [
+const COURSE_SORTS = [
   ["random", "Shuffle"],
   ["newest", "Newest added"],
   ["length", "Length"],
@@ -208,8 +207,9 @@ export default function TrainingScreen() {
   const [showDismissed, setShowDismissed] = useState(false);
   const [savedTitles, setSavedTitles] = useState<Record<string, string>>({});
   const [showSaved, setShowSaved] = useState(false);
-  const [nextSort, setNextSort] = useState<(typeof NEXT_SORTS)[number][0]>("random");
+  const [courseSort, setCourseSort] = useState<(typeof COURSE_SORTS)[number][0]>("random");
   const [randomSeed] = useState(() => Math.random());
+  const [mandatoryOnly, setMandatoryOnly] = useState(false);
 
   async function load() {
     const [{ data: c }, { data: pl }, { data: pr }, { data: notes }, { data: fb }, { data: userData }, { data: dis }, { data: saved }] =
@@ -368,38 +368,29 @@ export default function TrainingScreen() {
     }
     if (mediaFilter && mediumOf(c) !== mediaFilter) return false;
     if (lengthFilter && lengthBucketOf(c) !== lengthFilter) return false;
+    if (mandatoryOnly && !isMandatory(c)) return false;
     return true;
   }
 
-  const groups = GROUP_ORDER.map((key) => {
-    const rows = courses.filter(
-      (c) =>
-        c.group_key === key &&
-        !personalTitles.has(c.title.trim().toLowerCase()) &&
-        c.id !== linkedCourse?.id &&
-        matchesFilters(c),
-    );
-    // "next" (the non-mandatory, suggested-to-consider group) defaults to a
-    // shuffled order rather than always showing the same courses first --
-    // a fixed sort_order made the ones further down easy to never notice.
-    if (key === "next") {
-      rows.sort((a, b) => {
-        if (nextSort === "newest") return b.updated_at.localeCompare(a.updated_at);
-        if (nextSort === "length") return (minutesOf(a.length) ?? 9999) - (minutesOf(b.length) ?? 9999);
-        return seededRandom(randomSeed, a.id) - seededRandom(randomSeed, b.id);
-      });
-    }
-    return { key, label: courses.find((c) => c.group_key === key)?.group_label || key, rows };
-  }).filter((g) => g.rows.length);
-  const mandatoryGroups = groups.filter((g) => g.key !== "next");
-  const nextGroup = groups.find((g) => g.key === "next");
+  // Mandatory and suggested courses used to live in separate boxes (one per
+  // approval stage, plus a separate "next steps" box) -- carer feedback was
+  // that this made mandatory ones harder to just find in among everything
+  // else, when a "Mandatory only" filter can do that job instead. One list,
+  // sorted the same way regardless of group.
+  const allRows = courses
+    .filter((c) => !personalTitles.has(c.title.trim().toLowerCase()) && c.id !== linkedCourse?.id && matchesFilters(c))
+    .sort((a, b) => {
+      if (courseSort === "newest") return b.updated_at.localeCompare(a.updated_at);
+      if (courseSort === "length") return (minutesOf(a.length) ?? 9999) - (minutesOf(b.length) ?? 9999);
+      return seededRandom(randomSeed, a.id) - seededRandom(randomSeed, b.id);
+    });
   const personalEntries = Object.entries(personal).filter(([title]) => {
     if (dismissedTitles.has(title.trim().toLowerCase())) return false;
     if (linkedCourse && title.trim().toLowerCase() === linkedCourse.title.trim().toLowerCase()) return false;
     const course = courses.find((c) => c.title.trim().toLowerCase() === title.trim().toLowerCase());
     return course ? matchesFilters(course) : title.toLowerCase().includes(search.trim().toLowerCase());
   });
-  const filtersActive = search.trim() || mediaFilter || lengthFilter;
+  const filtersActive = Boolean(search.trim() || mediaFilter || lengthFilter || mandatoryOnly);
 
   function renderGroupCard(
     g: { key: string; label: string; rows: Course[] },
@@ -422,7 +413,9 @@ export default function TrainingScreen() {
                   {shortTitle(c.title)}
                 </b>
                 <br />
-                <small className="muted">{[c.how, c.platform, c.length].filter(Boolean).join(" · ")}</small>
+                <small className="muted">
+                  {[isMandatory(c) ? c.group_label : "", c.how, c.platform, c.length].filter(Boolean).join(" · ")}
+                </small>
                 {status.label && (
                   <>
                     <br />
@@ -512,14 +505,36 @@ export default function TrainingScreen() {
               </option>
             ))}
           </select>
+          <label className="chip" style={{ flex: "0 0 auto", display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <input type="checkbox" style={{ width: "auto" }} checked={mandatoryOnly} onChange={(e) => setMandatoryOnly(e.target.checked)} />
+            ⭐ Mandatory only
+          </label>
         </div>
       </div>
       <div className="card">
         <FormsReference />
       </div>
       {(() => {
-        const compulsory = mandatoryGroups.map((g) => renderGroupCard(g));
-        if (personalEntries.length === 0) return compulsory;
+        const sortPicker = (
+          <div className="row" style={{ margin: "0 0 10px", alignItems: "center", justifyContent: "space-between" }}>
+            <p className="hint" style={{ margin: 0 }}>
+              Everything in one list — mandatory courses are marked ⭐, tick &quot;Mandatory only&quot; above to see just those.
+            </p>
+            <select
+              value={courseSort}
+              onChange={(e) => setCourseSort(e.target.value as (typeof COURSE_SORTS)[number][0])}
+              style={{ flex: "0 0 auto", width: "auto" }}
+            >
+              {COURSE_SORTS.map(([k, l]) => (
+                <option key={k} value={k}>
+                  {l}
+                </option>
+              ))}
+            </select>
+          </div>
+        );
+        const allCard = renderGroupCard({ key: "all", label: "Training & Resources", rows: allRows }, sortPicker);
+        if (personalEntries.length === 0) return allCard;
         return (
           <div className="training-top-grid">
             <div className="card" style={{ border: "2px solid var(--accent)" }}>
@@ -579,7 +594,7 @@ export default function TrainingScreen() {
             );
               })}
             </div>
-            <div className="training-top-grid-col">{compulsory}</div>
+            <div className="training-top-grid-col">{allCard}</div>
           </div>
         );
       })()}
@@ -638,25 +653,7 @@ export default function TrainingScreen() {
             ))}
         </div>
       )}
-      {nextGroup &&
-        renderGroupCard(
-          nextGroup,
-          <div className="row" style={{ margin: "0 0 10px", alignItems: "center", justifyContent: "space-between" }}>
-            <p className="hint" style={{ margin: 0 }}>Other courses worth considering, in no particular order.</p>
-            <select
-              value={nextSort}
-              onChange={(e) => setNextSort(e.target.value as (typeof NEXT_SORTS)[number][0])}
-              style={{ flex: "0 0 auto", width: "auto" }}
-            >
-              {NEXT_SORTS.map(([k, l]) => (
-                <option key={k} value={k}>
-                  {l}
-                </option>
-              ))}
-            </select>
-          </div>,
-        )}
-      {filtersActive && personalEntries.length === 0 && groups.length === 0 && (
+      {filtersActive && personalEntries.length === 0 && allRows.length === 0 && (
         <div className="card">
           <p className="empty">No training matches that search — try clearing the filters above.</p>
         </div>
