@@ -547,6 +547,31 @@ export default function TrainingScreen() {
               })}
         </div>
       )}
+      {(() => {
+        const catalogTitles = new Set(courses.map((c) => c.title.trim().toLowerCase()));
+        const otherTraining = Object.entries(progress).filter(([title]) => !catalogTitles.has(title.trim().toLowerCase()));
+        if (!otherTraining.length) return null;
+        return (
+          <div className="card">
+            <h3>Other training you&apos;ve logged</h3>
+            <p className="hint">Attended or completed via a Capture note, not one of the courses above.</p>
+            {otherTraining
+              .sort((a, b) => b[1].localeCompare(a[1]))
+              .map(([title, completedOn]) => (
+                <div key={title} className="rec" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                  <span style={{ flex: 1 }}>
+                    <b>{title}</b>
+                    <br />
+                    <small className="muted">{new Date(completedOn + "T12:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</small>
+                  </span>
+                  <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => setCompleted(title, "")}>
+                    Remove
+                  </button>
+                </div>
+              ))}
+          </div>
+        );
+      })()}
       {dismissed.length > 0 && (
         <div className="card">
           <p className="hint" style={{ cursor: "pointer" }} onClick={() => setShowDismissed(!showDismissed)}>

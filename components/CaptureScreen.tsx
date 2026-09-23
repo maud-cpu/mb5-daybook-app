@@ -526,6 +526,18 @@ export default function CaptureScreen() {
       });
     const reminderRows = reminderOrder.map((k) => reminderGroups.get(k)!);
     if (reminderRows.length) await supabase.from("reminders").insert(reminderRows);
+    // Training the carer says they themselves did goes straight onto their
+    // training record (Training & Resources / the Supervision report both
+    // read training_progress) -- even when it isn't one of the courses in
+    // the shared catalogue, same reasoning as reminders above: this is the
+    // one chance to save it, so it's automatic, not a separate click.
+    const completedTrainingRows = pending
+      .map((p) => p.completed_training)
+      .filter((t): t is { title: string; date: string } => !!t?.title)
+      .map((t) => ({ course_title: t.title, completed_on: t.date }));
+    if (completedTrainingRows.length) {
+      await supabase.from("training_progress").upsert(completedTrainingRows, { onConflict: "user_id,course_title" });
+    }
     // A school contact / club / food note shown as a suggestion is applied
     // automatically here -- not just on its own separate "Save" click --
     // because a click on a small secondary button, easy to miss under the
@@ -967,6 +979,22 @@ export default function CaptureScreen() {
                     </div>
                   );
                 })}
+              {p.completed_training && (
+                <div className="note" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ flex: 1 }}>
+                    🎓 Attended: {p.completed_training.title} ({p.completed_training.date}) — saves to your training
+                    record with this entry.
+                  </span>
+                  <button
+                    className="x"
+                    style={{ flex: "0 0 auto" }}
+                    title="Don't save this to my training record"
+                    onClick={() => updatePending(i, { completed_training: null })}
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
               {p.school_contact &&
                 (() => {
                   const needsUpdate = schoolContactNeeds(p);
