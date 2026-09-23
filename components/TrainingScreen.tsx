@@ -434,7 +434,7 @@ export default function TrainingScreen() {
         const sortPicker = (
           <div className="row" style={{ margin: "0 0 10px", alignItems: "center", justifyContent: "space-between" }}>
             <p className="hint" style={{ margin: 0 }}>
-              Everything in one list — mandatory courses are marked ⭐, tick &quot;Mandatory only&quot; above to see just those.
+              Mandatory courses are marked ⭐.
             </p>
             <select
               value={courseSort}
@@ -449,7 +449,7 @@ export default function TrainingScreen() {
             </select>
           </div>
         );
-        const allCard = renderGroupCard({ key: "all", label: "🎓 What will you learn today?", rows: allRows }, sortPicker);
+        const allCard = renderGroupCard({ key: "all", label: "🎓 Learn something new", rows: allRows }, sortPicker);
         if (personalEntries.length === 0) return allCard;
         return (
           <div className="training-top-grid">

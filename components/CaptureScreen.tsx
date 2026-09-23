@@ -48,6 +48,13 @@ export default function CaptureScreen() {
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<PendingItem[]>([]);
   const [warning, setWarning] = useState("");
+  // Things To Do and the training-suggestion card each load once on mount
+  // and otherwise only refresh on a tab focus/visibility change -- while
+  // staying on this same Capture page for a whole session (which is the
+  // normal way this app gets used), a newly-flagged follow-up or a new
+  // training suggestion just saved never actually appeared until the page
+  // was reloaded. Bumping this after a successful save re-triggers both.
+  const [captureVersion, setCaptureVersion] = useState(0);
   const [toast, setToast] = useState("");
   const [addFor, setAddFor] = useState<number | "top" | null>(null);
   const [newChildName, setNewChildName] = useState("");
@@ -501,6 +508,7 @@ export default function CaptureScreen() {
       }),
     );
     showToast(`Saved ${rows.length} item${rows.length > 1 ? "s" : ""}`);
+    setCaptureVersion((v) => v + 1);
     const d = today();
     const queue: { hubName: string; hubEmail: string; childName?: string; text: string; bucket: Bucket; date: string }[] = [];
     pending.forEach((p, idx) => {
@@ -1067,9 +1075,9 @@ export default function CaptureScreen() {
       )}
 
       <div className="dashboard-grid">
-        <ThingsToDoCard />
+        <ThingsToDoCard refreshKey={captureVersion} />
         <TodaysEntriesCard />
-        <CaptureTrainingCard />
+        <CaptureTrainingCard refreshKey={captureVersion} />
       </div>
 
       {toast && <div id="toast" className="show">{toast}</div>}
