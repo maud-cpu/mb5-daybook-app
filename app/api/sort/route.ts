@@ -30,7 +30,9 @@ const FLAG_KEYS = [
 // to this exact schema server-side, so it's always valid, parseable JSON.
 const SortItemSchema = z.object({
   bucket: z.string(),
-  child: z.string(),
+  child: z.string().describe(
+    "Exactly ONE name from \"kids\" below -- the main child this item is about -- or empty string if there's no single clear main one. Never more than one name, never comma-separated or joined with \"and\".",
+  ),
   text: z.string(),
   kind: z.enum(["purchase", "mileage", "daycare"]).nullable(),
   amount: z.number().nullable(),
@@ -193,7 +195,7 @@ export async function POST(req: NextRequest) {
   const sys = `You sort a UK foster carer's spoken notes into buckets. Buckets: diary (day-to-day observations about a child), supervision (things to raise with the supervising social worker at next supervision), expenses (money spent, miles driven, or day care / babysitting provided for other carers' children), meds (a specific dose of medication given to a child), sw (log of contact with a social worker: calls, visits, what was agreed), incident (serious events needing formal reporting: injury, unexplained bruise, allegation, restraint, going missing, police), scratch (anything the carer says to "just record" or that fits nowhere).
 Today's date is ${today()} -- resolve anything relative ("next Friday", "in two weeks", "the 3rd") against that, in the correct year.
 Children known: ${names.join(", ") || "unknown"}. Match spoken names to these where obvious. If the carer names where something goes, obey. Otherwise choose sensibly; use scratch when unsure. Split into separate items if there are several things. Keep the carer's words, tidied for a written record, British English. Never add facts.
-"kids" for each item must only be children the carer actually names or unambiguously refers to (e.g. "she"/"her" meaning the one child just named) in THAT item's own text — never add a child who isn't mentioned there, even if they're mentioned in a different item from the same note.
+"kids" for each item must only be children the carer actually names or unambiguously refers to (e.g. "she"/"her" meaning the one child just named) in THAT item's own text — never add a child who isn't mentioned there, even if they're mentioned in a different item from the same note. This includes a child named possessively to identify a place or person (e.g. "at Arthur and Henry's school", "Ruby's dentist", "collecting from Jamie's club") -- naming a child that way to say where/who something involves still means they're being referred to, so put them in "kids" too, even though the sentence isn't really "about" them the way a diary entry usually is. Never drop a named child just because they're only mentioned in passing like this -- an unfamiliar name in "kids" is exactly how this app offers to add a brand new child, so a name left out here never gets asked about at all.
 For expenses set "kind": "purchase" (amount in pounds), "mileage" (miles driven, one item per journey, round trip if they say so), or "daycare" (care given: from/to clock times if the carer says them, otherwise hours; kids = the child cared for, overnight true if they stayed the night). Daycare and overnight are always ONE ITEM PER CHILD, even when several children were cared for on the same occasion at the same time. Overnight is set INDIVIDUALLY per child based on what actually happened to THAT child.
 For meds, set "medName", "dose", "given" (HH:MM), and "givenBy". One item per child per medicine given.
 Also set "flag" on any item that needs a follow-up: one of ${FLAG_KEYS.join(", ")}, or empty string for none. Use "reminder" when the carer explicitly asks to be reminded, asks for something to be added/put on the calendar (e.g. "add parents evening to the calendar on the 12th", "put the dentist appointment in the diary for next Tuesday"), OR the item itself describes a specific future meeting, appointment or event with a date the carer would need to attend or act on (e.g. "meeting with teacher on Friday at 3pm", "dentist appointment next Tuesday", "review meeting on the 10th") — even when they didn't explicitly ask to be reminded. This also covers an existing meeting/appointment being RESCHEDULED to a new date/time (e.g. "the meeting planned for this morning has now been moved to Friday at 8.10am", "her dentist appointment has been pushed back to next Tuesday") -- set "reminderDate" (and the time, in "flagNote") to the NEW date/time it's been moved to, not the original one. Setting "reminder" here is IN ADDITION to whatever "bucket" the item belongs in (e.g. a health reason for the reschedule still makes it a "diary" item) -- never leave "reminder" off just because the item already has some other bucket. Don't use it for a date that's just mentioned in passing about something else (e.g. a birthday recalled from the past, a date something already happened), and don't use it for the REGULAR day/time of a recurring club/activity (see "club" below) -- that's handled separately and would be a duplicate. DO use "reminder" (with "reminderCategory" "club") for a one-off exception or change to that regular schedule (e.g. "just this week it's moved to Saturday instead") -- set it for the actual one-off date/time, since that's exactly the kind of specific dated change the calendar needs to reflect, in addition to recording the regular club info. Set "flagNote" to what the reminder/calendar entry should say, and "reminderDate" to the date it's for (resolve a relative date as above; if they gave no date at all, use today's date). A single one-off event or change that affects several named children together (e.g. a shared class moving to a different day, a joint appointment) is ONE reminder item with all of them in "kids" -- never split it into one item per child, unlike daycare/meds above; only give a child their own separate reminder item when the text actually describes something specific to just that child. Always set "reminderCategory" to one of school/club/training/surrey/medical/family/household/personal -- never leave it out or null, even when flag isn't "reminder": just use "personal" whenever it doesn't apply or nothing else fits. Use "medical" for a GP/dentist/hospital appointment. Never set "flag" to "training". Set a safeguarding flag both when the text describes something happening, AND when the carer is asking or wondering whether a behaviour or mark might be a sign of one of these things (e.g. "is this a sign of abuse?") — that question is itself exactly the kind of concern that needs the guidance and support surfaced, not just a literal account of abuse having occurred. Still be cautious about flagging things that are clearly unrelated.
@@ -225,10 +227,22 @@ Split into one item per separate thing, under "items".`;
     if (!arr || !arr.length) throw new Error("Nothing recognised");
 
     const items: PendingItem[] = arr.map((p) => {
-      const rawChild = p.child ? String(p.child).trim() : "";
-      const rawOthers: string[] = Array.isArray(p.kids)
-        ? p.kids.map((k: string) => String(k).trim()).filter(Boolean)
+      // Belt and braces: despite the schema saying exactly one name, the AI
+      // occasionally still crams more than one into "child" (e.g. "Arthur
+      // and Henry") -- split it apart here rather than treating the whole
+      // glob as one unmatched "name", which would show a garbled extra
+      // "add child" prompt alongside the two real ones already in "kids".
+      const rawChildParts = p.child
+        ? String(p.child)
+            .split(/\s*,\s*|\s+and\s+/i)
+            .map((s) => s.trim())
+            .filter(Boolean)
         : [];
+      const rawChild = rawChildParts[0] || "";
+      const rawOthers: string[] = [
+        ...rawChildParts.slice(1),
+        ...(Array.isArray(p.kids) ? p.kids.map((k: string) => String(k).trim()).filter(Boolean) : []),
+      ];
       const rawNames = [...new Set([rawChild, ...rawOthers].filter(Boolean))];
 
       const child = matchChild(names, rawChild);
