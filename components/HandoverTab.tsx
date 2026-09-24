@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
 import { HOUSEHOLD_FIELDS, PROFILE_FIELDS } from "@/lib/handover";
 import { clubText } from "@/lib/calendarHelpers";
+import { useHouseholdNames } from "@/lib/useHouseholdNames";
 
 type ChildRow = {
   id: string;
@@ -132,6 +133,9 @@ export default function HandoverTab() {
   const children = [...fosteredChildren, ...householdChildren];
   const [selected, setSelected] = useState<string[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
+  const [profileTouchedBy, setProfileTouchedBy] = useState<Record<string, string | null>>({});
+  const [planTouchedBy, setPlanTouchedBy] = useState<string | null>(null);
+  const { authorOf, myId } = useHouseholdNames();
   const [schoolAdmin, setSchoolAdmin] = useState<Record<string, SchoolAdmin>>({});
   const [clubsByChild, setClubsByChild] = useState<Record<string, Club[]>>({});
   const [documentsByChild, setDocumentsByChild] = useState<Record<string, ChildDoc[]>>({});
@@ -166,8 +170,13 @@ export default function HandoverTab() {
     setHouseholdChildren(normalise(hhKids as (ChildRow & { basics: Record<string, string> | null })[] | null));
     if (hh) setAboutHousehold({ ssw_name: hh.ssw_name || "", ssw_phone: hh.ssw_phone || "", ssw_email: hh.ssw_email || "" });
     const byChild: Record<string, Profile> = {};
-    (profileRows ?? []).forEach((p: Profile & { child_id: string }) => (byChild[p.child_id] = p));
+    const touchedByChild: Record<string, string | null> = {};
+    (profileRows ?? []).forEach((p: Profile & { child_id: string; user_id?: string; edited_by?: string | null }) => {
+      byChild[p.child_id] = p;
+      touchedByChild[p.child_id] = p.edited_by || p.user_id || null;
+    });
     setProfiles(byChild);
+    setProfileTouchedBy(touchedByChild);
     if (hh) setHousehold({ ...blankHousehold(), ...hh });
     const bySchoolAdmin: Record<string, SchoolAdmin> = {};
     (schoolAdminRows ?? []).forEach((r: SchoolAdmin & { child_id: string }) => (bySchoolAdmin[r.child_id] = r));
@@ -204,6 +213,7 @@ export default function HandoverTab() {
       setReceivingCarer(data?.receiving_carer ?? "");
       setThisStay(data?.this_stay ?? "");
       setReturnNotes(data?.return_notes ?? "");
+      setPlanTouchedBy(data?.edited_by || data?.user_id || null);
     }
     if (sortedSelected.length) {
        
@@ -232,9 +242,11 @@ export default function HandoverTab() {
         return_notes: returnNotes,
         ...patch,
         updated_at: new Date().toISOString(),
+        edited_by: myId,
       },
       { onConflict: "household_owner_id,child_names,date_from,date_to" },
     );
+    setPlanTouchedBy(myId);
     flashSaved();
   }
 
@@ -242,9 +254,10 @@ export default function HandoverTab() {
     const next = { ...(profiles[childId] || blankProfile()), [key]: value };
     setProfiles((prev) => ({ ...prev, [childId]: next }));
     await supabase.from("handover_child_profiles").upsert(
-      { child_id: childId, ...next },
+      { child_id: childId, ...next, edited_by: myId },
       { onConflict: "household_owner_id,child_id" },
     );
+    setProfileTouchedBy((prev) => ({ ...prev, [childId]: myId }));
     flashSaved();
   }
 
@@ -422,6 +435,7 @@ ${sortedSelected
           already there.
         </p>
         {savedAt && <p className="hint">Saved {savedAt}</p>}
+        {authorOf(planTouchedBy) && <span className="badge-author">last edited by {authorOf(planTouchedBy)}</span>}
       </div>
 
       {sortedSelected.map((n) => {
@@ -431,7 +445,12 @@ ${sortedSelected
         const suggested = suggestProfile(child);
         return (
           <div className="card" key={child.id}>
-            <h3>{n}</h3>
+            <h3>
+              {n}
+              {authorOf(profileTouchedBy[child.id]) && (
+                <span className="badge-author">last edited by {authorOf(profileTouchedBy[child.id])}</span>
+              )}
+            </h3>
             <button className="chip" onClick={() => draftFromNotes(child.id, n)} disabled={draftingFor === child.id}>
               {draftingFor === child.id ? "Drafting…" : "Draft from your notes"}
             </button>

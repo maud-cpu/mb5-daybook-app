@@ -238,6 +238,8 @@ export type Diary = {
   date_from: string | null;
   date_to: string | null;
   sw_name: string;
+  user_id?: string;
+  edited_by?: string | null;
 } & Record<DiarySectionKey, string>;
 
 export type Reminder = {
@@ -256,6 +258,10 @@ export type Reminder = {
   /** Set when this came from News & Events' "To-do" action rather than
    * "Calendar" -- belongs in Up next only, never on the calendar. */
   todo_only?: boolean;
+  /** Who created/last amended this -- absent on the synthetic club/face-
+   * to-face rows synthesised client-side, which aren't real database rows. */
+  user_id?: string;
+  edited_by?: string | null;
 };
 
 export const REPEAT_OPTIONS = [
