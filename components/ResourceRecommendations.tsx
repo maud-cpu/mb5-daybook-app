@@ -21,12 +21,15 @@ const KIND_ICON: Record<Recommendation["kind"], string> = {
 };
 
 // A book/film/podcast worth another carer knowing about isn't a formal
-// training course, so it doesn't belong in the catalogue above -- but it's
-// still worth sharing once someone's actually checked it over, so every
-// suggestion sits pending until the content owner approves it.
+// training course, so it starts here as a suggestion -- but once the
+// content owner approves it, it's promoted into the real catalogue below
+// (as a "Next steps (suggested)" resource) rather than living in a
+// separate list, so it gets the exact same display, search, and admin
+// editing as everything else in Training & Resources. This card is only
+// ever the intake form plus "what's mine still waiting" -- never a second
+// copy of what's already published.
 export default function ResourceRecommendations() {
   const supabase = createClient();
-  const [approved, setApproved] = useState<Recommendation[]>([]);
   const [mine, setMine] = useState<Recommendation[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [title, setTitle] = useState("");
@@ -39,10 +42,14 @@ export default function ResourceRecommendations() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    const { data } = await supabase.from("resource_recommendations").select("*").order("created_at", { ascending: false });
-    const rows = (data as Recommendation[] | null) ?? [];
-    setApproved(rows.filter((r) => r.status === "approved"));
-    setMine(rows.filter((r) => r.suggested_by === user?.id && r.status !== "approved"));
+    if (!user) return;
+    const { data } = await supabase
+      .from("resource_recommendations")
+      .select("*")
+      .eq("suggested_by", user.id)
+      .neq("status", "approved")
+      .order("created_at", { ascending: false });
+    setMine((data as Recommendation[] | null) ?? []);
   }
 
   useEffect(() => {
@@ -79,31 +86,9 @@ export default function ResourceRecommendations() {
     <div className="card">
       <h3>💡 Recommended by carers</h3>
       <p className="hint">
-        Books, films, podcasts — anything worth another carer knowing about. New suggestions are
-        reviewed before they show up here.
+        Books, films, podcasts — anything worth another carer knowing about. Approved suggestions
+        show up in the list below, alongside everything else.
       </p>
-      {approved.length === 0 && <p className="empty">Nothing shared yet.</p>}
-      {approved.map((r) => (
-        <div key={r.id} className="rec">
-          <b>
-            {KIND_ICON[r.kind]} {r.title}
-          </b>
-          {r.description && (
-            <>
-              <br />
-              <small className="muted">{r.description}</small>
-            </>
-          )}
-          {r.url && (
-            <>
-              <br />
-              <a href={r.url} target="_blank" rel="noopener noreferrer">
-                <small>Open ↗</small>
-              </a>
-            </>
-          )}
-        </div>
-      ))}
       {mine.length > 0 && (
         <div style={{ marginTop: 10 }}>
           <p className="hint">Your suggestions:</p>
