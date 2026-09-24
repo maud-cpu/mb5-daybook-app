@@ -127,7 +127,7 @@ export default function NewsCard() {
       category: n.category === "training" ? "training" : "surrey",
       source_text: bodyWithLink(n),
     });
-    flashSaved(n.id, "Added to Things To Do");
+    flashSaved(n.id, "Added to Up next");
   }
 
   async function saveToNotes(n: NewsItem) {
