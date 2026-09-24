@@ -585,6 +585,20 @@ export default function AboutScreen() {
   const visitingChildren = children.filter((c) => livesHereOf(c) === false);
   const carerAdults = adults.filter((a) => a.role === "Foster carer");
 
+  // Several children visiting from the same family/household (siblings on a
+  // shared sleepover, a hub carer's own kids) used to each get their own
+  // spoke on the Visitors wheel, all mixed in with adults and the SSW --
+  // grouping them under one hub per family, with a sub circle of just that
+  // family's children behind it, keeps the wheel readable as more visiting
+  // children are added. A child with no family set yet keeps its own spoke.
+  const visitingByFamily: Record<string, Child[]> = {};
+  const visitingUngrouped: Child[] = [];
+  visitingChildren.forEach((c) => {
+    const fam = (c.family || "").trim();
+    if (fam) (visitingByFamily[fam] ||= []).push(c);
+    else visitingUngrouped.push(c);
+  });
+
   const centerLabel = carerAdults.length ? carerAdults.map((a) => firstName(a.name)).join(" & ") : "+ Add carer";
   const householdCenter: WheelNode = { id: CENTER_NODE, label: centerLabel, color: CENTER_COLOR };
 
@@ -598,7 +612,8 @@ export default function AboutScreen() {
   // part of the household, so they don't belong orbiting the same centre.
   const visitorsCenter: WheelNode = { id: "visitors-hub", label: "Visitors", color: SSW_COLOR };
   const visitorsRing: WheelNode[] = [
-    ...visitingChildren.map((c) => ({ id: `visit:${c.id}`, label: firstName(c.name), color: personColor(c.name) })),
+    ...visitingUngrouped.map((c) => ({ id: `visit:${c.id}`, label: firstName(c.name), color: personColor(c.name) })),
+    ...Object.keys(visitingByFamily).map((fam) => ({ id: `family:${fam}`, label: fam, color: personColor(fam) })),
     ...visitors.map((v) => ({ id: `visitor:${v.id}`, label: firstName(v.name), color: SSW_COLOR })),
     { id: SSW_NODE, label: household.ssw_name ? firstName(household.ssw_name) : "SSW", color: SSW_COLOR },
     { id: ADD_VISIT_CHILD, label: "+ child", color: "", dashed: true },
@@ -993,6 +1008,25 @@ export default function AboutScreen() {
       );
     }
 
+    if (selected.startsWith("family:")) {
+      const famName = selected.slice("family:".length);
+      const famChildren = visitingByFamily[famName] || [];
+      const familySubCenter: WheelNode = { id: selected, label: famName, color: personColor(famName) };
+      const familySubRing: WheelNode[] = famChildren.map((c) => ({
+        id: `visit:${c.id}`,
+        label: firstName(c.name),
+        color: personColor(c.name),
+      }));
+      return (
+        <div className="card">
+          <h3>{famName}</h3>
+          <p className="hint">Children visiting from {famName} — tap one for their own details.</p>
+          <RadialWheel center={familySubCenter} ring1={familySubRing} selectedId={null} onSelect={setSelected} maxWidth="360px" />
+          {closeButton()}
+        </div>
+      );
+    }
+
     if (selected.startsWith("visit:")) {
       const id = selected.slice("visit:".length);
       const c = children.find((x) => x.id === id);
@@ -1027,6 +1061,11 @@ export default function AboutScreen() {
             </select>
             <GenderSelect value={c.gender} onChange={(v) => saveChild(c.id, { gender: v })} />
           </div>
+          <input
+            placeholder="Family / household they're visiting from (e.g. Smiths) — groups siblings together on the wheel"
+            value={c.family}
+            onChange={(e) => saveChild(c.id, { family: e.target.value })}
+          />
           {placementEndField(c)}
           <div className="chips" style={{ marginTop: 6 }}>
             <button className="chip" onClick={() => setOpenDocuments(docsOpen ? null : c.id)}>
