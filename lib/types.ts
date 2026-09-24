@@ -581,17 +581,6 @@ export type PendingItem = Partial<EntryRecord> & {
   food_note?: { likes: string; dislikes: string } | null;
   /** Training/CPD the carer said they themselves attended or completed, saved to their training record even when it isn't in the shared catalogue. */
   completed_training?: { title: string; date: string } | null;
-  /** Practical school-admin info (lunch payment app, homework portal, PTA, etc) the AI spotted in the text, offered as a one-click save to the tagged child's School admin. */
-  school_admin?: {
-    lunch_payment: string;
-    homework_app_name: string;
-    homework_app_url: string;
-    class_rep_name: string;
-    class_rep_contact: string;
-    pta_name: string;
-    pta_contact: string;
-    pta_facebook: string;
-    school_office_contact: string;
-    other_links: string;
-  } | null;
+  /** A short summary of practical school-admin info (lunch payment app, homework portal, PTA, etc) the AI spotted in the text, offered as a one-click save to the tagged child's School admin notes. */
+  school_admin_note?: string;
 };
