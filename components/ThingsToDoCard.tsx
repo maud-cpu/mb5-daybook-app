@@ -320,6 +320,7 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
 
   function renderDue(x: DueItem) {
     const gp = medicalGpForKey[x.key];
+    const open = openId === x.key;
     return (
       <div
         key={x.key}
@@ -333,13 +334,22 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
           onChange={() => dismissDue(x)}
           title={x.key.startsWith("rem-") ? "Mark done" : "Dismiss"}
         />
-        <span style={{ flex: 1 }}>
+        <span
+          style={{ flex: 1, cursor: x.detail ? "pointer" : undefined }}
+          onClick={x.detail ? () => setOpenId(open ? null : x.key) : undefined}
+        >
           {x.text}
+          {x.detail && <small className="muted">{open ? "" : " — tap for details"}</small>}
           {gp && (
             <>
               <br />
               <small className="muted">📞 GP: {gp}</small>
             </>
+          )}
+          {open && x.detail && (
+            <div className="muted" style={{ margin: "4px 0" }}>
+              {x.detail}
+            </div>
           )}
         </span>
       </div>
