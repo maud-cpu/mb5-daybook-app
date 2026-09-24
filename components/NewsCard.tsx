@@ -1,9 +1,10 @@
 "use client";
 
-import { ReactNode, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
+import { linkify } from "@/lib/linkify";
 
 type NewsItem = {
   id: string;
@@ -34,28 +35,6 @@ const CATEGORY_ICON: Record<NewsItem["category"], string> = {
 };
 
 const BODY_PREVIEW_LENGTH = 90;
-const URL_RE = /(https?:\/\/[^\s]+)/g;
-
-// A pasted announcement often carries its own booking/info link inline in
-// the body text -- shown as plain text before, it wasn't tappable at all.
-// Splits on URLs and renders each as a real link, leaving everything else
-// as plain text either side of it.
-function linkify(text: string): ReactNode[] {
-  // String.split with a capturing group interleaves the matches back into
-  // the result at odd indices -- checked by position, not by re-testing the
-  // (global, stateful) regex against each piece.
-  const parts = text.split(URL_RE);
-  return parts.map((part, i) =>
-    i % 2 === 1 ? (
-      <a key={i} href={part} target="_blank" rel="noopener noreferrer">
-        {part}
-      </a>
-    ) : (
-      part
-    ),
-  );
-}
-
 // A notice from Surrey/the agency (a training opportunity, a policy
 // change, a deadline) used to only ever reach one carer, by whoever
 // happened to get the email or WhatsApp message -- this is that same
@@ -123,12 +102,20 @@ export default function NewsCard() {
     setTimeout(() => setSavedAction((prev) => ({ ...prev, [id]: "" })), 2000);
   }
 
+  // reminders/records have nowhere to store a structured link, only free
+  // text -- folding the URL into the text itself (rather than dropping it)
+  // is what lets it survive the trip and still show up as a tappable link
+  // wherever that text is later linkified.
+  function bodyWithLink(n: NewsItem): string {
+    return n.url ? `${n.body}${n.body ? "\n\n" : ""}${n.url}` : n.body;
+  }
+
   async function addToCalendar(n: NewsItem) {
     await supabase.from("reminders").insert({
       text: n.title,
       date: n.expires_on || today(),
       category: n.category === "training" ? "training" : "surrey",
-      source_text: n.body,
+      source_text: bodyWithLink(n),
     });
     flashSaved(n.id, "Added to calendar");
   }
@@ -138,15 +125,16 @@ export default function NewsCard() {
       text: n.title,
       date: today(),
       category: n.category === "training" ? "training" : "surrey",
-      source_text: n.body,
+      source_text: bodyWithLink(n),
     });
     flashSaved(n.id, "Added to Things To Do");
   }
 
   async function saveToNotes(n: NewsItem) {
+    const body = bodyWithLink(n);
     await supabase.from("records").insert({
       bucket: "scratch",
-      text: n.body ? `${n.title} — ${n.body}` : n.title,
+      text: body ? `${n.title} — ${body}` : n.title,
       date: today(),
     });
     flashSaved(n.id, "Saved to notes");
