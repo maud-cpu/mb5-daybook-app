@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { BANDS, Rates } from "@/lib/types";
 import { AMAZON_ASSOCIATES_TAG } from "@/lib/amazon";
 import NewsAdmin from "@/components/NewsAdmin";
+import ResourceRecommendationsAdmin from "@/components/ResourceRecommendationsAdmin";
 
 type RotaRow = { date: string; name: string; phone: string };
 type Course = {
@@ -628,6 +629,7 @@ export default function AdminSharedContent() {
   return (
     <div style={{ marginTop: 12 }}>
       <NewsAdmin showToast={showToast} />
+      <ResourceRecommendationsAdmin showToast={showToast} />
       <div className="card">
         <h3>Rates — {rates.label}</h3>
         <label>Label</label>
