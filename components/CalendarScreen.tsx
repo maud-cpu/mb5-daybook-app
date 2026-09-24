@@ -133,7 +133,7 @@ export default function CalendarScreen() {
     const to = isoOf(year, month, daysInMonth(year, month));
     const [{ data: rem }, { data: kids }, { data: hhKids }, { data: adults }, { data: f2fCourses }, { data: f2fProgress }, { data: clubs }] =
       await Promise.all([
-        supabase.from("reminders").select("*").gte("date", from).lte("date", to).order("date"),
+        supabase.from("reminders").select("*").gte("date", from).lte("date", to).eq("todo_only", false).order("date"),
         supabase.from("children").select("id, name").order("name"),
         supabase.from("household_children").select("id, name").order("name"),
         supabase.from("household_adults").select("name").order("name"),
