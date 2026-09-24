@@ -262,7 +262,7 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
   if (!loaded) {
     return (
       <div className="card">
-        <h3>Things to do</h3>
+        <h3>Up next</h3>
         <p className="muted">Loading…</p>
       </div>
     );
@@ -417,7 +417,7 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
 
   return (
     <div className="card" style={{ borderLeft: `4px solid ${anyUrgent ? "var(--danger)" : "var(--marker)"}` }}>
-      <h3>Things to do{anyUrgent ? " ⚠" : ""}</h3>
+      <h3>Up next{anyUrgent ? " ⚠" : ""}</h3>
 
       {newRoutine.map(renderDue)}
       {newFollowUps.map(renderFollowUp)}
