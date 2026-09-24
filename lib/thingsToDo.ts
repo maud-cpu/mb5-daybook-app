@@ -5,6 +5,9 @@ export type DueItem = {
   key: string;
   urgent: boolean;
   text: string;
+  /** Extra context to show when tapped -- e.g. a reminder's source_text,
+   * the body of a news item that was added straight to Things To Do. */
+  detail?: string;
 };
 
 export type IncidentLike = { id: string; text: string; created_at: string; reported: string | null };
@@ -118,5 +121,6 @@ export function dueReminders(reminders: Reminder[]): DueItem[] {
       key: "rem-" + r.id,
       urgent: r.date < t,
       text: r.text + (r.date < t ? ` (overdue ${r.date})` : ""),
+      detail: r.source_text || undefined,
     }));
 }
