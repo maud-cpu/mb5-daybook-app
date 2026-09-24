@@ -15,6 +15,7 @@ import {
   unreportedIncidentItems,
 } from "@/lib/thingsToDo";
 import { FLAGS, Reminder, relatedFormFor } from "@/lib/types";
+import { linkify } from "@/lib/linkify";
 
 type FollowUp = {
   id: string;
@@ -347,8 +348,8 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
             </>
           )}
           {open && x.detail && (
-            <div className="muted" style={{ margin: "4px 0" }}>
-              {x.detail}
+            <div className="muted" style={{ margin: "4px 0", whiteSpace: "pre-wrap" }}>
+              {linkify(x.detail)}
             </div>
           )}
         </span>
