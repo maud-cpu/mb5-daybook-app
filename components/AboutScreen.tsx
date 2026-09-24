@@ -338,11 +338,6 @@ export default function AboutScreen() {
   const [openDocuments, setOpenDocuments] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
-  // Which visiting family's hub is currently showing its children inline on
-  // the wheel itself, instead of needing a tap-through to a card further
-  // down the page just to see who they are. Only one open at a time, same
-  // as the detail panel below.
-  const [expandedFamily, setExpandedFamily] = useState<string | null>(null);
 
   async function load() {
     const [{ data: kids }, { data: hh }, { data: adultRows }, { data: householdChildRows }, { data: visitorRows }] = await Promise.all([
@@ -593,15 +588,29 @@ export default function AboutScreen() {
   // Several children visiting from the same family/household (siblings on a
   // shared sleepover, a hub carer's own kids) used to each get their own
   // spoke on the Visitors wheel, all mixed in with adults and the SSW --
-  // grouping them under one hub per family, with a sub circle of just that
-  // family's children behind it, keeps the wheel readable as more visiting
-  // children are added. A child with no family set yet keeps its own spoke.
+  // three layers reads better: Visitors -> the adult they're visiting with
+  // (when one's on file as a visitor) -> their children nested under that
+  // adult. A visiting child whose family field doesn't match any known
+  // adult visitor falls back to its own family-name hub instead, and a
+  // child with no family set at all keeps its own spoke exactly as before.
+  function familyMatchesVisitor(family: string, visitorName: string): boolean {
+    const f = family.trim().toLowerCase();
+    const v = visitorName.trim().toLowerCase();
+    return !!f && !!v && (f === v || f === firstName(visitorName).toLowerCase());
+  }
+
+  const childrenByVisitorId: Record<string, Child[]> = {};
   const visitingByFamily: Record<string, Child[]> = {};
   const visitingUngrouped: Child[] = [];
   visitingChildren.forEach((c) => {
     const fam = (c.family || "").trim();
-    if (fam) (visitingByFamily[fam] ||= []).push(c);
-    else visitingUngrouped.push(c);
+    if (!fam) {
+      visitingUngrouped.push(c);
+      return;
+    }
+    const matchedVisitor = visitors.find((v) => familyMatchesVisitor(fam, v.name));
+    if (matchedVisitor) (childrenByVisitorId[matchedVisitor.id] ||= []).push(c);
+    else (visitingByFamily[fam] ||= []).push(c);
   });
 
   const centerLabel = carerAdults.length ? carerAdults.map((a) => firstName(a.name)).join(" & ") : "+ Add carer";
@@ -616,32 +625,37 @@ export default function AboutScreen() {
   // A separate, non-touching wheel -- people who visit regularly aren't
   // part of the household, so they don't belong orbiting the same centre.
   const visitorsCenter: WheelNode = { id: "visitors-hub", label: "Visitors", color: SSW_COLOR };
+  const childNode = (c: Child): WheelNode => ({ id: `visit:${c.id}`, label: firstName(c.name), color: personColor(c.name) });
+
   const visitorsRing: WheelNode[] = [
-    ...visitingUngrouped.map((c) => ({ id: `visit:${c.id}`, label: firstName(c.name), color: personColor(c.name) })),
-    // The expanded family's hub stays put (tap it again to collapse) and its
-    // children appear right alongside it in this same ring -- no separate
-    // card, no extra tap needed to see who they are.
+    ...visitingUngrouped.map(childNode),
+    // A family with no matching adult on file falls back to its own hub --
+    // tap it to expand/collapse its children in place, right here in the
+    // ring, same as a matched adult below.
     ...Object.keys(visitingByFamily).flatMap((fam) => {
       const hub: WheelNode = { id: `family:${fam}`, label: fam, color: personColor(fam) };
-      if (fam !== expandedFamily) return [hub];
-      return [hub, ...visitingByFamily[fam].map((c) => ({ id: `visit:${c.id}`, label: firstName(c.name), color: personColor(c.name) }))];
+      if (selected !== hub.id) return [hub];
+      return [hub, ...visitingByFamily[fam].map(childNode)];
     }),
-    ...visitors.map((v) => ({ id: `visitor:${v.id}`, label: firstName(v.name), color: SSW_COLOR })),
+    // An adult visitor with children on file shows them nested underneath
+    // once selected -- Visitors -> adult -> their children, all in this one
+    // ring rather than a separate card just to see who's with them.
+    ...visitors.flatMap((v) => {
+      const node: WheelNode = { id: `visitor:${v.id}`, label: firstName(v.name), color: SSW_COLOR };
+      const kids = childrenByVisitorId[v.id];
+      if (!kids?.length || selected !== node.id) return [node];
+      return [node, ...kids.map(childNode)];
+    }),
     { id: SSW_NODE, label: household.ssw_name ? firstName(household.ssw_name) : "SSW", color: SSW_COLOR },
     { id: ADD_VISIT_CHILD, label: "+ child", color: "", dashed: true },
     { id: ADD_VISITOR, label: "+ adult", color: "", dashed: true },
   ];
 
-  // A family hub tap expands/collapses it in place on the wheel instead of
-  // opening a detail card -- everything else in this ring still opens the
-  // usual detail panel below.
+  // Tapping a family hub or an adult visitor with children toggles their
+  // children in/out of the ring in place; tapping the same node again
+  // collapses it. Everything else still opens the usual detail panel below.
   function selectVisitorsNode(id: string) {
-    if (id.startsWith("family:")) {
-      const fam = id.slice("family:".length);
-      setExpandedFamily((prev) => (prev === fam ? null : fam));
-      return;
-    }
-    setSelected(id);
+    setSelected((prev) => (prev === id ? null : id));
   }
 
   function closeButton() {
@@ -1217,7 +1231,7 @@ export default function AboutScreen() {
           <RadialWheel
             center={visitorsCenter}
             ring1={visitorsRing}
-            selectedId={expandedFamily ? `family:${expandedFamily}` : selected}
+            selectedId={selected}
             onSelect={selectVisitorsNode}
             maxWidth="380px"
           />
