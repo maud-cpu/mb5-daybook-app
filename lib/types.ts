@@ -252,6 +252,9 @@ export type Reminder = {
   amount: number | null;
   series_id: string | null;
   source_text: string;
+  /** Set when this came from News & Events' "To-do" action rather than
+   * "Calendar" -- belongs in Up next only, never on the calendar. */
+  todo_only?: boolean;
 };
 
 export const REPEAT_OPTIONS = [

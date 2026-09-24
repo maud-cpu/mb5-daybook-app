@@ -55,7 +55,13 @@ export default function MiniCalendarCard() {
     const from = days[0];
     const to = days[6];
     const [{ data: rem }, { data: kids }, { data: hhKids }, { data: adults }, { data: clubs }] = await Promise.all([
-      supabase.from("reminders").select("id, date, text, people, category").gte("date", from).lte("date", to).eq("done", false),
+      supabase
+        .from("reminders")
+        .select("id, date, text, people, category")
+        .gte("date", from)
+        .lte("date", to)
+        .eq("done", false)
+        .eq("todo_only", false),
       supabase.from("children").select("id, name"),
       supabase.from("household_children").select("id, name"),
       supabase.from("household_adults").select("name"),

@@ -126,6 +126,7 @@ export default function NewsCard() {
       date: today(),
       category: n.category === "training" ? "training" : "surrey",
       source_text: bodyWithLink(n),
+      todo_only: true,
     });
     flashSaved(n.id, "Added to Up next");
   }
