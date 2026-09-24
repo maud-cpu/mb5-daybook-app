@@ -36,14 +36,29 @@ export default function AddCarerForm() {
         <label>Their email</label>
         <input name="email" type="email" required placeholder="jane@example.com" />
         <div style={{ height: 8 }} />
-        <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <input name="independentHousehold" type="checkbox" style={{ width: "auto" }} />
-          This person runs their own separate household on this app
-        </label>
+        <label>Setup</label>
+        <select name="setup" defaultValue="cocarer">
+          <option value="cocarer">Co-carer in my own household</option>
+          <option value="ownHouseholdSharedContent">Separate household, same rates/training/rota</option>
+          <option value="independent">Not with Surrey (own rates/rota, mostly-shared training)</option>
+        </select>
         <p className="hint" style={{ marginTop: 2 }}>
-          Leave unticked for a co-carer in your own household. Tick this for someone unrelated —
-          e.g. another Mockingbird hub carer — who should have their own independent rates,
-          training catalogue and carers, not share yours. They can still connect with you
+          Their children, diary and contacts are always private to them, whatever you choose here
+          — that&apos;s automatic either way.
+          <br />
+          <b>Co-carer</b>: shares your rates/training/rota, can&apos;t manage carers or edit shared
+          content themselves.
+          <br />
+          <b>Separate household, same rates/training/rota</b>: a different foster family (e.g.
+          another Surrey carer) who still sees your rates/training/rota/news and can manage their
+          own carers, but — like a co-carer — can&apos;t change that shared content themselves;
+          only you can.
+          <br />
+          <b>Not with Surrey</b>: a different local authority/agency, so Surrey&apos;s rates and
+          rota don&apos;t apply — they start with blank rates and an empty rota to set up
+          themselves. Training starts as a copy of your current catalogue, minus the courses that
+          are specifically Surrey&apos;s own mandatory-training requirements — everything else
+          (safer caring, PACE, general skills) carries over. They can still connect with you
           afterwards under Circle.
         </p>
         {error && <p style={{ color: "var(--danger)", fontSize: 14, marginTop: 8 }}>{error}</p>}
