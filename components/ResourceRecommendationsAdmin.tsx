@@ -43,12 +43,24 @@ export default function ResourceRecommendationsAdmin({ showToast }: { showToast:
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    const { error } = await supabase
+    // RLS only lets the literal content owner write these rows -- if this
+    // account isn't that (e.g. a separate admin login from whoever
+    // suggested it), the update matches zero rows and Postgres reports that
+    // as a normal success, not an error. Without checking that a row
+    // actually came back, this silently did nothing: the item vanished from
+    // this list (state was updated regardless) while staying "pending" in
+    // the database forever, invisible everywhere.
+    const { data, error } = await supabase
       .from("resource_recommendations")
       .update({ status, reviewed_by: user?.id, reviewed_at: new Date().toISOString() })
-      .eq("id", id);
+      .eq("id", id)
+      .select("id");
     if (error) {
       showToast("Couldn't update: " + error.message);
+      return;
+    }
+    if (!data || data.length === 0) {
+      showToast("Couldn't update — you may not be signed in as the account that can approve this household's suggestions.");
       return;
     }
     setPending((prev) => prev.filter((r) => r.id !== id));
