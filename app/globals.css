@@ -678,6 +678,19 @@ details table td {
   color: #fff;
 }
 
+.badge-author {
+  display: inline-block;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 12px;
+  font-weight: 700;
+  margin-left: 6px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;
