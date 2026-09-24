@@ -113,6 +113,23 @@ const SortItemSchema = z.object({
     .describe(
       "Set ONLY when the text says the CARER THEMSELVES has attended, done, or completed a specific named training session or course -- something already done (or being done today), not a course suggested for later -- regardless of whether it matches anything in the courses list above. Otherwise null.",
     ),
+  schoolAdmin: z
+    .object({
+      lunchPayment: z.string().describe("How school lunches/other school payments are paid -- an app/website name and/or link, or empty string"),
+      homeworkAppName: z.string().describe("Name of a homework app/website the school uses, or empty string"),
+      homeworkAppUrl: z.string().describe("A link/URL for that homework app or portal, or empty string"),
+      classRepName: z.string().describe("empty string if not given"),
+      classRepContact: z.string().describe("phone/email/WhatsApp for the class rep, or empty string"),
+      ptaName: z.string().describe("Name of the PTA/friends-of-school group, or empty string"),
+      ptaContact: z.string().describe("empty string if not given"),
+      ptaFacebook: z.string().describe("A Facebook/social group link for the PTA, or empty string"),
+      schoolOfficeContact: z.string().describe("Phone/email for the school office, or empty string"),
+      otherLinks: z.string().describe("Any other useful school-admin link (payment portal, newsletter, booking system, uniform shop, etc), or empty string"),
+    })
+    .nullable()
+    .describe(
+      "Practical school ADMIN info -- how to pay for lunches/other school payments, a homework app/portal, a class rep, a PTA/friends-of-school group, the school office, or another useful link (payment portal, newsletter, booking system, uniform shop, etc). NOT a child's day-to-day schooling, teacher, or a one-off event. Only set the specific fields the text actually gives; leave the rest as empty string. Otherwise null.",
+    ),
 });
 const SortResponseSchema = z.object({ items: z.array(SortItemSchema) });
 
@@ -214,6 +231,7 @@ Also separately: if the text identifies someone as a specific child's class teac
 Also separately: if the text describes a child doing a club or extracurricular activity as a standing/ongoing thing (e.g. "which she does every Monday from 5.40 to 6.20pm", "he goes swimming on Wednesdays after school", "after school club for Ruby is called Camp Glide", not a one-off outing), set "club" to {"name":"<club/activity name>","weekday":"<the REGULAR/standing day it's on, or \"Not specified\" if the text doesn't say which day>","timeFrom":"HH:MM or empty string","timeTo":"HH:MM or empty string","provider":"<who runs it and/or the venue, if given, else empty string>","contactInfo":"<a phone number and/or email given for the contact, if any, else empty string>","cost":"<what it costs, if given, else empty string>","website":"<a website/booking link, if given, else empty string>","notes":"<any other useful detail given -- what to bring, term dates, etc, else empty string>"} tied to whichever known children it's for, so it can be offered as a save to their standing clubs list -- fill in every one of those sub-fields the text actually gives, not just name/day/time, since this is meant to be a complete enough record for another carer to pick up from cold. Never guess or invent a weekday that wasn't actually said -- use "Not specified" rather than picking one, the carer can fill it in later. Otherwise null. A one-off event on a specific date, INCLUDING a one-off exception or change to a regular schedule (e.g. "just this week it's moved to Saturday instead"), is a "reminder" (with "reminderCategory" "club"), not a "club" -- set that reminder for the actual one-off date/time in addition to recording the regular "club" info, since the calendar needs to reflect the exception.
 Also separately: if the text says a specific named child likes or dislikes a particular food or drink (e.g. "Rubynn doesn't like carrots", "Ruby loves pasta"), set "foodNote" to {"likes":"<comma-separated foods, or empty string>","dislikes":"<comma-separated foods, or empty string>"} tied to whichever known children it's about, so it can be offered as a save to their Food box. Only for an actual named food/drink, not a vague statement like "fussy eater" with nothing specific said. Otherwise null.
 Also separately: if the text says the CARER THEMSELVES has attended, done, or completed a specific named training session or course (e.g. "did PDA training today", "completed the safer caring refresher", "PDA training at Arthur and Henry's school, 2-3pm") -- something already done or being done today, not a course being suggested for later -- set "completedTraining" to {"title":"<a short clear title, tidied from their own wording>","date":"<the date they did it, or today's date if not stated>"}, so it can be logged on their training record even when it isn't one of the courses listed above. Otherwise null.
+Also separately: if the text gives practical school ADMIN info -- how to pay for school lunches or other school payments (e.g. "ParentPay is the app for school dinner money and other payments", with a link if given), a homework app/portal name or link, a class rep's name/contact, a PTA/friends-of-school group's name/contact/Facebook link, the school office's phone/email, or another useful school-related link (payment portal, newsletter, booking system, uniform shop, etc) -- set "schoolAdmin" with whichever of its fields the text actually gives (leave the rest as empty string), tied to whichever known children it's for, so it can be offered as a save to their School admin details. This is about admin/logistics, not the child's own schooling, a teacher (see "schoolContact" above), or a one-off event. Otherwise null.
 Reason for day care, if said, is one of: ${DAYCARE_REASONS.join("/")}.
 Split into one item per separate thing, under "items".`;
 
@@ -349,6 +367,22 @@ Split into one item per separate thing, under "items".`;
                   typeof p.completedTraining.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(p.completedTraining.date)
                     ? p.completedTraining.date
                     : today(),
+              }
+            : null,
+        school_admin:
+          p.schoolAdmin &&
+          Object.values(p.schoolAdmin).some((v) => v)
+            ? {
+                lunch_payment: p.schoolAdmin.lunchPayment || "",
+                homework_app_name: p.schoolAdmin.homeworkAppName || "",
+                homework_app_url: p.schoolAdmin.homeworkAppUrl || "",
+                class_rep_name: p.schoolAdmin.classRepName || "",
+                class_rep_contact: p.schoolAdmin.classRepContact || "",
+                pta_name: p.schoolAdmin.ptaName || "",
+                pta_contact: p.schoolAdmin.ptaContact || "",
+                pta_facebook: p.schoolAdmin.ptaFacebook || "",
+                school_office_contact: p.schoolAdmin.schoolOfficeContact || "",
+                other_links: p.schoolAdmin.otherLinks || "",
               }
             : null,
       };

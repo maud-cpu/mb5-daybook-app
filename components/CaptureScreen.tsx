@@ -89,6 +89,7 @@ export default function CaptureScreen() {
   const [basicsByChildId, setBasicsByChildId] = useState<Record<string, Record<string, string>>>({});
   const [childTable, setChildTable] = useState<Record<string, "children" | "household_children">>({});
   const [clubsByChildId, setClubsByChildId] = useState<Record<string, { club_name: string }[]>>({});
+  const [schoolAdminByChildId, setSchoolAdminByChildId] = useState<Record<string, Record<string, string>>>({});
   const [firstName, setFirstName] = useState("");
 
   async function loadClubs() {
@@ -98,6 +99,15 @@ export default function CaptureScreen() {
       (map[r.child_id] ||= []).push({ club_name: r.club_name });
     });
     setClubsByChildId(map);
+  }
+
+  async function loadSchoolAdmin() {
+    const { data } = await supabase.from("child_school_admin").select("*");
+    const map: Record<string, Record<string, string>> = {};
+    (data as (Record<string, string> & { child_id: string })[] | null)?.forEach((r) => {
+      map[r.child_id] = r;
+    });
+    setSchoolAdminByChildId(map);
   }
 
   async function loadChildren() {
@@ -142,6 +152,7 @@ export default function CaptureScreen() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data load on mount
     loadChildren();
     loadClubs();
+    loadSchoolAdmin();
     supabase
       .from("shared_rates")
       .select("*")
@@ -423,6 +434,46 @@ export default function CaptureScreen() {
     showToast(`Saved to ${childNames.join(" & ")}'s Food box`);
   }
 
+  const SCHOOL_ADMIN_FIELDS = [
+    ["lunch_payment", "Paying for school lunches"],
+    ["homework_app_name", "Homework app/website"],
+    ["homework_app_url", "Homework app link"],
+    ["class_rep_name", "Class rep"],
+    ["class_rep_contact", "Class rep contact"],
+    ["pta_name", "PTA / friends of school"],
+    ["pta_contact", "PTA contact"],
+    ["pta_facebook", "PTA Facebook / social group"],
+    ["school_office_contact", "School office"],
+    ["other_links", "Other useful links"],
+  ] as const;
+  const SCHOOL_ADMIN_KEYS = SCHOOL_ADMIN_FIELDS.map(([key]) => key);
+
+  // Fills empty boxes only, same rule as everywhere else this app suggests
+  // filling in a profile field from a note -- never overwrites something
+  // already on file, and only counts as "needed" while at least one
+  // extracted field still has nowhere to go.
+  async function saveSchoolAdmin(i: number, childNames: string[]) {
+    const sa = pending[i].school_admin;
+    if (!sa) return;
+    const targets = childNames.map((n) => children.find((c) => c.name === n)).filter((c): c is Child => !!c);
+    if (!targets.length) return;
+    for (const c of targets) {
+      const existing = schoolAdminByChildId[c.id] || {};
+      const next = { ...existing };
+      SCHOOL_ADMIN_KEYS.forEach((key) => {
+        if (sa[key] && !(existing[key] || "").trim()) next[key] = sa[key];
+      });
+      const { error } = await supabase.from("child_school_admin").upsert({ child_id: c.id, ...next }, { onConflict: "child_id" });
+      if (error) {
+        showToast("Couldn't save: " + error.message);
+        return;
+      }
+      setSchoolAdminByChildId((prev) => ({ ...prev, [c.id]: next }));
+    }
+    updatePending(i, { school_admin: null });
+    showToast(`Saved to ${childNames.join(" & ")}'s School admin`);
+  }
+
   // Whether a tagged child still needs this suggestion applied -- shared
   // between the review screen (deciding what to show) and Save all (which
   // now applies every suggestion still showing, so a school contact/club/
@@ -461,6 +512,15 @@ export default function CaptureScreen() {
       return (
         likes.some((f) => !hasFood(basics.food_likes || "", f)) || dislikes.some((f) => !hasFood(basics.food_dislikes || "", f))
       );
+    });
+  }
+  function schoolAdminNeeds(p: PendingItem): string[] {
+    if (!p.school_admin) return [];
+    return p.kids.filter((k) => {
+      const c = children.find((ch) => ch.name === k);
+      if (!c) return false;
+      const existing = schoolAdminByChildId[c.id] || {};
+      return SCHOOL_ADMIN_KEYS.some((key) => p.school_admin![key] && !(existing[key] || "").trim());
     });
   }
 
@@ -554,6 +614,8 @@ export default function CaptureScreen() {
         if (clNeeds.length) jobs.push(saveClub(idx, clNeeds));
         const fnNeeds = foodNoteNeeds(p);
         if (fnNeeds.length) jobs.push(saveFoodNote(idx, fnNeeds));
+        const saNeeds = schoolAdminNeeds(p);
+        if (saNeeds.length) jobs.push(saveSchoolAdmin(idx, saNeeds));
         return jobs;
       }),
     );
@@ -1132,6 +1194,34 @@ export default function CaptureScreen() {
                         Save now to {needsFood.join(" & ")}&apos;s Food box
                       </button>{" "}
                       <button className="chip" onClick={() => updatePending(i, { food_note: null })}>
+                        Don&apos;t save
+                      </button>
+                    </div>
+                  );
+                })()}
+              {p.school_admin &&
+                (() => {
+                  const needsSchoolAdmin = schoolAdminNeeds(p);
+                  if (!needsSchoolAdmin.length) return null;
+                  return (
+                    <div className="note">
+                      <div style={{ marginBottom: 6 }}>
+                        🏫 New school admin info for {needsSchoolAdmin.join(" & ")} — check it&apos;s right (this saves
+                        automatically with Save all):
+                      </div>
+                      {SCHOOL_ADMIN_FIELDS.filter(([key]) => p.school_admin![key]).map(([key, label]) => (
+                        <input
+                          key={key}
+                          placeholder={label}
+                          value={p.school_admin![key]}
+                          onChange={(e) => updatePending(i, { school_admin: { ...p.school_admin!, [key]: e.target.value } })}
+                          style={{ marginBottom: 6 }}
+                        />
+                      ))}
+                      <button className="chip" onClick={() => saveSchoolAdmin(i, needsSchoolAdmin)}>
+                        Save now to {needsSchoolAdmin.join(" & ")}&apos;s School admin
+                      </button>{" "}
+                      <button className="chip" onClick={() => updatePending(i, { school_admin: null })}>
                         Don&apos;t save
                       </button>
                     </div>
