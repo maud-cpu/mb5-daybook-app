@@ -43,23 +43,25 @@ export default function AddCarerForm() {
           <option value="independent">Not with Surrey (own rates/rota, mostly-shared training)</option>
         </select>
         <p className="hint" style={{ marginTop: 2 }}>
-          Their children, diary and contacts are always private to them, whatever you choose here
-          — that&apos;s automatic either way.
+          Their own training records and login stay separate whatever you choose here — only the
+          three options below change who they share children/diary/calendar/contacts and
+          rates/training/rota with.
           <br />
-          <b>Co-carer</b>: shares your rates/training/rota, can&apos;t manage carers or edit shared
+          <b>Co-carer</b>: full sharing — same children, diary, calendar, contacts and household
+          info as you, plus your rates/training/rota. Can&apos;t manage carers or edit shared
           content themselves.
           <br />
           <b>Separate household, same rates/training/rota</b>: a different foster family (e.g.
-          another Surrey carer) who still sees your rates/training/rota/news and can manage their
-          own carers, but — like a co-carer — can&apos;t change that shared content themselves;
-          only you can.
+          another Surrey carer) with their own separate children/diary/calendar, who still sees
+          your rates/training/rota/news and can manage their own carers, but — like a co-carer —
+          can&apos;t change that shared content themselves; only you can.
           <br />
-          <b>Not with Surrey</b>: a different local authority/agency, so Surrey&apos;s rates and
-          rota don&apos;t apply — they start with blank rates and an empty rota to set up
-          themselves. Training starts as a copy of your current catalogue, minus the courses that
-          are specifically Surrey&apos;s own mandatory-training requirements — everything else
-          (safer caring, PACE, general skills) carries over. They can still connect with you
-          afterwards under Circle.
+          <b>Not with Surrey</b>: their own separate children/diary/calendar and a different local
+          authority/agency, so Surrey&apos;s rates and rota don&apos;t apply — they start with
+          blank rates and an empty rota to set up themselves. Training starts as a copy of your
+          current catalogue, minus the courses that are specifically Surrey&apos;s own
+          mandatory-training requirements — everything else (safer caring, PACE, general skills)
+          carries over. They can still connect with you afterwards under Circle.
         </p>
         {error && <p style={{ color: "var(--danger)", fontSize: 14, marginTop: 8 }}>{error}</p>}
         <button className="btn" type="submit" disabled={busy}>
