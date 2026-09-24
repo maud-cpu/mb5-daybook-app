@@ -68,6 +68,7 @@ export default function NewsCard() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [loaded, setLoaded] = useState(false);
   const [showDismissed, setShowDismissed] = useState(false);
+  const [savedAction, setSavedAction] = useState<Record<string, string>>({});
 
   async function load() {
     const t = today();
@@ -108,6 +109,40 @@ export default function NewsCard() {
       data: { user },
     } = await supabase.auth.getUser();
     if (user) await supabase.from("dismissed_news").delete().eq("user_id", user.id).eq("news_id", id);
+  }
+
+  function flashSaved(id: string, label: string) {
+    setSavedAction((prev) => ({ ...prev, [id]: label }));
+    setTimeout(() => setSavedAction((prev) => ({ ...prev, [id]: "" })), 2000);
+  }
+
+  async function addToCalendar(n: NewsItem) {
+    await supabase.from("reminders").insert({
+      text: n.title,
+      date: n.expires_on || today(),
+      category: n.category === "training" ? "training" : "surrey",
+      source_text: n.body,
+    });
+    flashSaved(n.id, "Added to calendar");
+  }
+
+  async function addToTodo(n: NewsItem) {
+    await supabase.from("reminders").insert({
+      text: n.title,
+      date: today(),
+      category: n.category === "training" ? "training" : "surrey",
+      source_text: n.body,
+    });
+    flashSaved(n.id, "Added to Things To Do");
+  }
+
+  async function saveToNotes(n: NewsItem) {
+    await supabase.from("records").insert({
+      bucket: "scratch",
+      text: n.body ? `${n.title} — ${n.body}` : n.title,
+      date: today(),
+    });
+    flashSaved(n.id, "Saved to notes");
   }
 
   function toggleExpanded(id: string) {
@@ -172,6 +207,22 @@ export default function NewsCard() {
                   </>
                 )}
               </small>
+              <div style={{ marginTop: 4 }}>
+                <button className="chip" style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => addToCalendar(n)}>
+                  📅 Calendar
+                </button>
+                <button className="chip" style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => addToTodo(n)}>
+                  ✅ To-do
+                </button>
+                <button className="chip" style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => saveToNotes(n)}>
+                  📝 Notes
+                </button>
+                {savedAction[n.id] && (
+                  <small className="muted" style={{ marginLeft: 6 }}>
+                    {savedAction[n.id]}
+                  </small>
+                )}
+              </div>
             </span>
             <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => dismiss(n.id)}>
               Got it
