@@ -38,6 +38,22 @@ function greeting(): string {
   return "Good evening";
 }
 
+// A child whose own Mockingbird hub is "mb5" (this household's own) has
+// their hub_carer_* fields auto-filled from the household's own hub leader
+// (see mockingbirdHubPatch in AboutScreen.tsx) -- so the same person can
+// show up as both "your hub carer" and "this child's hub carer" on the
+// same entry. Matching on email (the more reliable identifier when both
+// are set) or name is what lets Capture offer just the one checkbox
+// instead of two for the same send.
+function sameHubCarer(c: { hub_carer_name: string; hub_carer_email: string }, hubLeader: { name: string; email: string }): boolean {
+  const email = c.hub_carer_email.trim().toLowerCase();
+  const leaderEmail = hubLeader.email.trim().toLowerCase();
+  if (email && leaderEmail) return email === leaderEmail;
+  const name = c.hub_carer_name.trim().toLowerCase();
+  const leaderName = hubLeader.name.trim().toLowerCase();
+  return !!name && !!leaderName && name === leaderName;
+}
+
 function openLabel(length: string): string {
   const medium = (length.split(/,|—/)[0] || "").trim().toLowerCase();
   if (medium === "book") return "Open book ↗";
@@ -617,7 +633,11 @@ export default function CaptureScreen() {
         }
       });
       if (p.send_own_hub && hubLeader) {
-        queue.push({ hubName: hubLeader.name, hubEmail: hubLeader.email, childName: p.kids[0], text: p.text, bucket: p.bucket, date: d });
+        const matchedChild = p.kids.find((k) => {
+          const c = children.find((ch) => ch.name === k);
+          return c && sameHubCarer(c, hubLeader);
+        });
+        queue.push({ hubName: hubLeader.name, hubEmail: hubLeader.email, childName: matchedChild || p.kids[0], text: p.text, bucket: p.bucket, date: d });
       }
     });
     setPending([]);
@@ -1208,20 +1228,35 @@ export default function CaptureScreen() {
                     </div>
                   );
                 })()}
-              {hubLeader?.name && (
-                <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
-                  <input
-                    type="checkbox"
-                    style={{ width: "auto" }}
-                    checked={!!p.send_own_hub}
-                    onChange={(e) => updatePending(i, { send_own_hub: e.target.checked })}
-                  />
-                  📤 Send directly to {hubLeader.name} (your hub carer) — instead of phoning/messaging them separately
-                </label>
-              )}
+              {hubLeader?.name &&
+                (() => {
+                  // A child on Mockingbird "mb5" (this household's own) has
+                  // their hub carer fields auto-filled from this same
+                  // person -- naming them here means the per-child checkbox
+                  // below can skip them instead of offering the same send
+                  // twice.
+                  const alsoHubFor = p.kids
+                    .map((k) => children.find((c) => c.name === k))
+                    .filter((c): c is Child => !!c && sameHubCarer(c, hubLeader))
+                    .map((c) => c.name);
+                  return (
+                    <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
+                      <input
+                        type="checkbox"
+                        style={{ width: "auto" }}
+                        checked={!!p.send_own_hub}
+                        onChange={(e) => updatePending(i, { send_own_hub: e.target.checked })}
+                      />
+                      📤 Send directly to {hubLeader.name} (your hub carer
+                      {alsoHubFor.length ? `, and ${alsoHubFor.join(" & ")}'s` : ""}) — instead of phoning/messaging
+                      them separately
+                    </label>
+                  );
+                })()}
               {p.kids
                 .map((k) => children.find((c) => c.name === k))
                 .filter((c): c is Child => !!c && !!(c.hub_carer_name || c.hub_carer_email))
+                .filter((c) => !(hubLeader && sameHubCarer(c, hubLeader)))
                 .map((c) => (
                   <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
                     <input
