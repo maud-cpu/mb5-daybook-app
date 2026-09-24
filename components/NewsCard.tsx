@@ -69,19 +69,26 @@ export default function NewsCard() {
   const [loaded, setLoaded] = useState(false);
   const [showDismissed, setShowDismissed] = useState(false);
   const [savedAction, setSavedAction] = useState<Record<string, string>>({});
+  const [lastSignInAt, setLastSignInAt] = useState("");
 
   async function load() {
     const t = today();
-    const [{ data: news }, { data: dis }] = await Promise.all([
+    const [{ data: news }, { data: dis }, { data: userData }] = await Promise.all([
       supabase
         .from("shared_news")
         .select("id, title, body, category, expires_on, url, linked_course_id, created_at")
         .order("created_at", { ascending: false }),
       supabase.from("dismissed_news").select("news_id"),
+      supabase.auth.getUser(),
     ]);
     const active = ((news as NewsItem[] | null) ?? []).filter((n) => !n.expires_on || n.expires_on >= t);
     setItems(active);
     setDismissed(new Set(((dis as { news_id: string }[] | null) ?? []).map((d) => d.news_id)));
+    // Stays fixed at the moment of this session's sign-in (auto-lock's
+    // re-entered password counts as one) until the next real sign-in --
+    // not touched by ordinary token refreshes -- so it's a stable "since I
+    // last properly came back to the app" marker for the whole session.
+    setLastSignInAt(userData.user?.last_sign_in_at || "");
     setLoaded(true);
   }
 
@@ -173,10 +180,20 @@ export default function NewsCard() {
         const isLong = n.body.length > BODY_PREVIEW_LENGTH;
         const isExpanded = expanded.has(n.id);
         const shown = isLong && !isExpanded ? n.body.slice(0, BODY_PREVIEW_LENGTH).trim() + "…" : n.body;
+        const isNew = lastSignInAt && n.created_at > lastSignInAt;
         return (
-          <div key={n.id} className="rec" style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+          <div
+            key={n.id}
+            className="rec"
+            style={{ display: "flex", alignItems: "flex-start", gap: 8, ...(isNew ? { borderLeft: "3px solid var(--accent)", paddingLeft: 8 } : {}) }}
+          >
             <span style={{ flex: 1 }}>
               <b>
+                {isNew && (
+                  <span className="chip on" style={{ fontSize: 10, padding: "1px 6px", marginRight: 6, verticalAlign: "middle" }}>
+                    NEW
+                  </span>
+                )}
                 {CATEGORY_ICON[n.category]} {n.title}
               </b>
               <br />

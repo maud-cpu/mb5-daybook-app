@@ -41,6 +41,10 @@ export default function NewsAdmin({ showToast }: { showToast: (msg: string) => v
   const [items, setItems] = useState<NewsItem[]>([]);
   const [showExpired, setShowExpired] = useState(false);
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<Pick<NewsItem, "title" | "body" | "category" | "expires_on" | "url"> | null>(
+    null,
+  );
 
   async function load() {
     const { data } = await supabase.from("shared_news").select("*").order("created_at", { ascending: false });
@@ -156,6 +160,29 @@ export default function NewsAdmin({ showToast }: { showToast: (msg: string) => v
     discardPending(i);
     load();
     showToast(p.addToTraining ? "Published — also added to Training & Resources" : "Published to News & Events");
+  }
+
+  function startEdit(n: NewsItem) {
+    setEditingId(n.id);
+    setEditDraft({ title: n.title, body: n.body, category: n.category, expires_on: n.expires_on, url: n.url });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditDraft(null);
+  }
+
+  async function saveEdit(id: string) {
+    if (!editDraft || !editDraft.title.trim()) return;
+    const { error } = await supabase.from("shared_news").update(editDraft).eq("id", id);
+    if (error) {
+      showToast("Couldn't save: " + error.message);
+      return;
+    }
+    setEditingId(null);
+    setEditDraft(null);
+    load();
+    showToast("Updated");
   }
 
   async function deleteNews(id: string) {
@@ -284,26 +311,79 @@ export default function NewsAdmin({ showToast }: { showToast: (msg: string) => v
               <option value="oldest">Oldest added first</option>
             </select>
           </div>
-          {activeItems.map((n) => (
-            <div key={n.id} className="rec" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
-              <span style={{ flex: 1 }}>
-                <b>
-                  {CATEGORY_LABELS[n.category]} {n.title}
-                </b>
-                <br />
-                <small className="muted">
-                  {n.body.length > 100 ? n.body.slice(0, 100) + "…" : n.body}
-                  {" · added "}
-                  {new Date(n.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                  {n.expires_on ? ` · deadline ${n.expires_on}` : ""}
-                  {n.url ? " · 🔗 has a link" : ""}
-                </small>
-              </span>
-              <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => deleteNews(n.id)}>
-                Remove
-              </button>
-            </div>
-          ))}
+          {activeItems.map((n) =>
+            editingId === n.id && editDraft ? (
+              <div key={n.id} className="item" style={{ marginBottom: 10 }}>
+                <div className="row">
+                  <input
+                    placeholder="Title"
+                    value={editDraft.title}
+                    onChange={(e) => setEditDraft({ ...editDraft, title: e.target.value })}
+                    style={{ flex: 2 }}
+                  />
+                  <select
+                    value={editDraft.category}
+                    onChange={(e) => setEditDraft({ ...editDraft, category: e.target.value as NewsItem["category"] })}
+                    style={{ flex: "0 0 auto", width: "auto" }}
+                  >
+                    <option value="announcement">📣 Announcement</option>
+                    <option value="training">🎓 Training</option>
+                    <option value="general">📌 General</option>
+                  </select>
+                </div>
+                <textarea
+                  value={editDraft.body}
+                  onChange={(e) => setEditDraft({ ...editDraft, body: e.target.value })}
+                  style={{ marginTop: 6 }}
+                />
+                <input
+                  placeholder="Link (optional)"
+                  value={editDraft.url}
+                  onChange={(e) => setEditDraft({ ...editDraft, url: e.target.value })}
+                  style={{ marginTop: 6 }}
+                />
+                <div className="row" style={{ marginTop: 6, alignItems: "center" }}>
+                  <label className="hint" style={{ flex: "0 0 auto" }}>
+                    Stops showing after
+                  </label>
+                  <input
+                    type="date"
+                    value={editDraft.expires_on || ""}
+                    onChange={(e) => setEditDraft({ ...editDraft, expires_on: e.target.value || null })}
+                    style={{ flex: "0 0 170px" }}
+                  />
+                </div>
+                <div style={{ marginTop: 8 }}>
+                  <button className="chip on" onClick={() => saveEdit(n.id)}>
+                    Save
+                  </button>{" "}
+                  <button className="chip" onClick={cancelEdit}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div key={n.id} className="rec" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
+                <span style={{ flex: 1, cursor: "pointer" }} onClick={() => startEdit(n)}>
+                  <b>
+                    {CATEGORY_LABELS[n.category]} {n.title}
+                  </b>
+                  <br />
+                  <small className="muted">
+                    {n.body.length > 100 ? n.body.slice(0, 100) + "…" : n.body}
+                    {" · added "}
+                    {new Date(n.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                    {n.expires_on ? ` · deadline ${n.expires_on}` : ""}
+                    {n.url ? " · 🔗 has a link" : ""}
+                    {" · tap to edit"}
+                  </small>
+                </span>
+                <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => deleteNews(n.id)}>
+                  Remove
+                </button>
+              </div>
+            ),
+          )}
         </div>
       )}
 
