@@ -338,6 +338,20 @@ export default function AboutScreen() {
   const [openDocuments, setOpenDocuments] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
+  const [familyDraft, setFamilyDraft] = useState({ phone: "", email: "", role: VISITOR_ROLES[0], gender: "" });
+
+  // A family hub on the Visitors wheel starts as nothing more than shared
+  // free text on some children's `family` field -- there's no adult record
+  // behind it yet, so it needs its own form (not updateVisitor) the first
+  // time someone wants to add that adult's actual details. Reset the draft
+  // whenever a different family hub is opened, so leftover text from one
+  // family can't leak onto another.
+  function selectVisitorsNode(id: string | null) {
+    if (id && id.startsWith("family:") && id !== selected) {
+      setFamilyDraft({ phone: "", email: "", role: VISITOR_ROLES[0], gender: "" });
+    }
+    setSelected(id);
+  }
 
   async function load() {
     const [{ data: kids }, { data: hh }, { data: adultRows }, { data: householdChildRows }, { data: visitorRows }] = await Promise.all([
@@ -522,6 +536,30 @@ export default function AboutScreen() {
     setVisitors((prev) => prev.filter((v) => v.id !== id));
     await supabase.from("household_visitors").delete().eq("id", id);
     setSelected(null);
+  }
+
+  // Turns a free-text family hub (e.g. "Smiths") into a real, editable
+  // visitor: creates the household_visitors row, then links every child
+  // currently grouped under that family text onto it via linked_visitor_id,
+  // so they move from the name-matched fallback hub to the real adult.
+  async function promoteFamilyToVisitor(famName: string, kids: Child[]) {
+    const { data, error } = await supabase
+      .from("household_visitors")
+      .insert({ name: famName, ...familyDraft })
+      .select("id")
+      .single();
+    if (error || !data) return;
+    if (kids.length) {
+      await supabase
+        .from("children")
+        .update({ linked_visitor_id: data.id })
+        .in(
+          "id",
+          kids.map((c) => c.id),
+        );
+    }
+    setSelected(`visitor:${data.id}`);
+    await load();
   }
 
   async function addVisitingChild() {
@@ -930,6 +968,41 @@ export default function AboutScreen() {
       );
     }
 
+    if (selected.startsWith("family:")) {
+      const famName = selected.slice("family:".length);
+      const kids = visitingByFamily[famName] || [];
+      return (
+        <div className="card">
+          <h3>{famName}</h3>
+          <p className="hint">
+            Not an adult on file yet — just a family name shared by {kids.length === 1 ? "this child" : "these children"}
+            {kids.length ? ": " + kids.map((c) => c.name || "?").join(", ") : ""}. Add their details below to turn{" "}
+            {famName} into a real, editable adult (like any other visitor).
+          </p>
+          <input placeholder="Phone" value={familyDraft.phone} onChange={(e) => setFamilyDraft({ ...familyDraft, phone: e.target.value })} />
+          <div className="row" style={{ marginTop: 6 }}>
+            <input
+              placeholder="Email"
+              value={familyDraft.email}
+              onChange={(e) => setFamilyDraft({ ...familyDraft, email: e.target.value })}
+            />
+            <select value={familyDraft.role} onChange={(e) => setFamilyDraft({ ...familyDraft, role: e.target.value })}>
+              {VISITOR_ROLES.map((r) => (
+                <option key={r}>{r}</option>
+              ))}
+            </select>
+          </div>
+          <div className="row" style={{ marginTop: 6 }}>
+            <GenderSelect value={familyDraft.gender} onChange={(v) => setFamilyDraft({ ...familyDraft, gender: v })} />
+            <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => promoteFamilyToVisitor(famName, kids)}>
+              + Add as adult
+            </button>
+          </div>
+          {closeButton()}
+        </div>
+      );
+    }
+
     if (selected.startsWith("visitor:")) {
       const id = selected.slice("visitor:".length);
       const v = visitors.find((x) => x.id === id);
@@ -1242,7 +1315,7 @@ export default function AboutScreen() {
             ring1={visitorsRing1}
             ring2={visitorsRing2}
             selectedId={selected}
-            onSelect={setSelected}
+            onSelect={selectVisitorsNode}
             maxWidth="380px"
           />
         </div>
