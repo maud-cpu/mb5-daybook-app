@@ -344,7 +344,7 @@ export default function AboutScreen() {
       supabase
         .from("children")
         .select(
-          "id, name, born, family, basics, category, lives_here, mockingbird, hub_carer_name, hub_carer_phone, hub_carer_email, surrey_contact, gender, placement_end_date",
+          "id, name, born, family, basics, category, lives_here, mockingbird, hub_carer_name, hub_carer_phone, hub_carer_email, surrey_contact, gender, placement_end_date, linked_visitor_id",
         )
         .order("created_at"),
       supabase.from("household").select("*").maybeSingle(),
@@ -589,28 +589,25 @@ export default function AboutScreen() {
   // shared sleepover, a hub carer's own kids) used to each get their own
   // spoke on the Visitors wheel, all mixed in with adults and the SSW --
   // three layers reads better: Visitors -> the adult they're visiting with
-  // (when one's on file as a visitor) -> their children nested under that
-  // adult. A visiting child whose family field doesn't match any known
-  // adult visitor falls back to its own family-name hub instead, and a
-  // child with no family set at all keeps its own spoke exactly as before.
-  function familyMatchesVisitor(family: string, visitorName: string): boolean {
-    const f = family.trim().toLowerCase();
-    const v = visitorName.trim().toLowerCase();
-    return !!f && !!v && (f === v || f === firstName(visitorName).toLowerCase());
-  }
-
+  // (when one's linked) -> their children nested under that adult. This is
+  // a real id link (linked_visitor_id), not a name match -- two visitors
+  // sharing a first name, or a family field that happens to read the same
+  // as someone else's name, used to pick the wrong adult with no way to
+  // tell; an id can only ever mean the one exact visitor it points to. A
+  // visiting child with no adult linked falls back to its family-name hub
+  // instead, and one with no family set at all keeps its own spoke.
+  const validVisitorIds = new Set(visitors.map((v) => v.id));
   const childrenByVisitorId: Record<string, Child[]> = {};
   const visitingByFamily: Record<string, Child[]> = {};
   const visitingUngrouped: Child[] = [];
   visitingChildren.forEach((c) => {
-    const fam = (c.family || "").trim();
-    if (!fam) {
-      visitingUngrouped.push(c);
+    if (c.linked_visitor_id && validVisitorIds.has(c.linked_visitor_id)) {
+      (childrenByVisitorId[c.linked_visitor_id] ||= []).push(c);
       return;
     }
-    const matchedVisitor = visitors.find((v) => familyMatchesVisitor(fam, v.name));
-    if (matchedVisitor) (childrenByVisitorId[matchedVisitor.id] ||= []).push(c);
-    else (visitingByFamily[fam] ||= []).push(c);
+    const fam = (c.family || "").trim();
+    if (fam) (visitingByFamily[fam] ||= []).push(c);
+    else visitingUngrouped.push(c);
   });
 
   const centerLabel = carerAdults.length ? carerAdults.map((a) => firstName(a.name)).join(" & ") : "+ Add carer";
@@ -1072,38 +1069,31 @@ export default function AboutScreen() {
             </select>
             <GenderSelect value={c.gender} onChange={(v) => saveChild(c.id, { gender: v })} />
           </div>
-          {(() => {
-            const matchedVisitor = visitors.find((v) => familyMatchesVisitor(c.family, v.name));
-            return (
-              <>
-                {visitors.length > 0 && (
-                  <select
-                    value={matchedVisitor?.name ?? ""}
-                    onChange={(e) => e.target.value && saveChild(c.id, { family: e.target.value })}
-                  >
-                    <option value="">Link to an adult already on file…</option>
-                    {visitors.map((v) => (
-                      <option key={v.id} value={v.name}>
-                        {v.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <input
-                  placeholder="Family / household they're visiting from (e.g. Smiths) — groups siblings together on the wheel"
-                  value={c.family}
-                  onChange={(e) => saveChild(c.id, { family: e.target.value })}
-                />
-                {c.family.trim() && !matchedVisitor && (
-                  <p className="hint" style={{ margin: "2px 0 0" }}>
-                    No adult on file matches &quot;{c.family}&quot;, so they&apos;ll show under their own family hub
-                    on the wheel rather than nested under an adult. Pick from the list above once that adult&apos;s
-                    added as a visitor, or adjust the spelling here to match their name exactly.
-                  </p>
-                )}
-              </>
-            );
-          })()}
+          {visitors.length > 0 && (
+            <select
+              value={c.linked_visitor_id && visitors.some((v) => v.id === c.linked_visitor_id) ? c.linked_visitor_id : ""}
+              onChange={(e) => saveChild(c.id, { linked_visitor_id: e.target.value || null })}
+            >
+              <option value="">Link to an adult already on file…</option>
+              {visitors.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <input
+            placeholder="Family / household they're visiting from (e.g. Smiths) — groups siblings together on the wheel"
+            value={c.family}
+            onChange={(e) => saveChild(c.id, { family: e.target.value })}
+          />
+          {!c.linked_visitor_id && c.family.trim() && (
+            <p className="hint" style={{ margin: "2px 0 0" }}>
+              Not linked to an adult, so they&apos;ll show under their own family hub on the wheel. Pick the actual
+              adult from the list above once they&apos;re added as a visitor, to nest {c.name || "them"} under that
+              adult instead.
+            </p>
+          )}
           {placementEndField(c)}
           <div className="chips" style={{ marginTop: 6 }}>
             <button className="chip" onClick={() => setOpenDocuments(docsOpen ? null : c.id)}>

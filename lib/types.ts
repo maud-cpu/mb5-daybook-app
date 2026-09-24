@@ -114,6 +114,11 @@ export type Child = {
   surrey_contact: string;
   gender: string;
   placement_end_date: string | null;
+  /** A visiting child's actual link to an adult in household_visitors -- an
+   * unambiguous id, not a name match against the free-text family field
+   * above (which stays as a fallback grouping for when no adult's on
+   * file yet). Absent on children/queries that never select it. */
+  linked_visitor_id?: string | null;
 };
 
 // Used so generated documents (Handover, diary drafts) can use the right
