@@ -392,7 +392,9 @@ export default function AboutScreen() {
   async function saveHousehold(patch: Partial<Household>) {
     const next = { ...household, ...patch };
     setHousehold(next);
-    await supabase.from("household").upsert({ ...next, updated_at: new Date().toISOString() });
+    await supabase
+      .from("household")
+      .upsert({ ...next, updated_at: new Date().toISOString() }, { onConflict: "household_owner_id" });
     flashSaved();
   }
 
@@ -417,7 +419,7 @@ export default function AboutScreen() {
         done: false,
         done_at: null,
       },
-      { onConflict: "user_id,source_key" },
+      { onConflict: "household_owner_id,source_key" },
     );
   }
 

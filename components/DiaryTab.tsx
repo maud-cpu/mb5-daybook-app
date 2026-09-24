@@ -70,7 +70,7 @@ export default function DiaryTab() {
     setSections(next);
     await supabase.from("diaries").upsert(
       { child_names: sortedSelected, date_from: dateFrom || null, date_to: dateTo || null, sw_name: swName, ...next },
-      { onConflict: "user_id,child_names,date_from,date_to" },
+      { onConflict: "household_owner_id,child_names,date_from,date_to" },
     );
     setSavedAt(new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }));
     setTimeout(() => setSavedAt(""), 1500);

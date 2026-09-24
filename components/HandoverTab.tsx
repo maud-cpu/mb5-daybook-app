@@ -233,7 +233,7 @@ export default function HandoverTab() {
         ...patch,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "user_id,child_names,date_from,date_to" },
+      { onConflict: "household_owner_id,child_names,date_from,date_to" },
     );
     flashSaved();
   }
@@ -243,7 +243,7 @@ export default function HandoverTab() {
     setProfiles((prev) => ({ ...prev, [childId]: next }));
     await supabase.from("handover_child_profiles").upsert(
       { child_id: childId, ...next },
-      { onConflict: "user_id,child_id" },
+      { onConflict: "household_owner_id,child_id" },
     );
     flashSaved();
   }
@@ -277,7 +277,9 @@ export default function HandoverTab() {
 
   async function saveHouseholdField(key: string, value: string) {
     setHousehold((prev) => ({ ...prev, [key]: value }));
-    await supabase.from("household").upsert({ [key]: value, updated_at: new Date().toISOString() });
+    await supabase
+      .from("household")
+      .upsert({ [key]: value, updated_at: new Date().toISOString() }, { onConflict: "household_owner_id" });
     flashSaved();
   }
 
