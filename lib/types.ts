@@ -205,6 +205,7 @@ export type EntryRecord = {
   paid: boolean;
   paid_at: string | null;
   edited: string | null;
+  edited_by: string | null;
   created_at: string;
 };
 

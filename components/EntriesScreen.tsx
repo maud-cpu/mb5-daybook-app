@@ -7,6 +7,7 @@ import { daycareAmount, describeExpense, describeMeds, expenseTotals, gbp, today
 import { BUCKETS, Bucket, Child, DAYCARE_REASONS, EntryRecord, FLAGS, livesHereOf, Rates } from "@/lib/types";
 import ComposeEmail from "@/components/ComposeEmail";
 import PhotoField from "@/components/PhotoField";
+import { useHouseholdNames } from "@/lib/useHouseholdNames";
 
 const ERANGES: [string, string][] = [
   ["7d", "Last 7 days"],
@@ -45,6 +46,7 @@ export default function EntriesScreen() {
   const [sendPreset, setSendPreset] = useState<{ child: string; entryId: string } | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const { authorOf, myId } = useHouseholdNames();
 
   function sendToCarer(child: string, entryId: string) {
     setSendPreset({ child, entryId });
@@ -148,7 +150,7 @@ export default function EntriesScreen() {
     const { id, ...patch } = r;
     await supabase
       .from("records")
-      .update({ ...patch, edited: new Date().toISOString() })
+      .update({ ...patch, edited: new Date().toISOString(), edited_by: myId })
       .eq("id", id);
     setEditId(null);
     load();
@@ -293,6 +295,10 @@ export default function EntriesScreen() {
               {tab === "all" ? " · " + BUCKETS[r.bucket] : r.bucket !== tab ? " · filed under " + BUCKETS[r.bucket] : ""}
               {r.shared_with_admin ? " · 📤 shared with admin" : ""}
             </small>
+            {authorOf(r.user_id) && <span className="badge-author">by {authorOf(r.user_id)}</span>}
+            {authorOf(r.edited_by) && r.edited_by !== r.user_id && (
+              <span className="badge-author">edited by {authorOf(r.edited_by)}</span>
+            )}
           </div>
         ))}
         {tab === "expenses" && monthTotals && (
