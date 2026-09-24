@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
 import { Diary, DIARY_SECTIONS } from "@/lib/types";
+import { useHouseholdNames } from "@/lib/useHouseholdNames";
 
 function fmt(iso: string) {
   return iso ? new Date(iso + "T12:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
@@ -26,6 +27,8 @@ export default function DiaryTab() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [savedAt, setSavedAt] = useState("");
+  const [lastTouchedBy, setLastTouchedBy] = useState<string | null>(null);
+  const { authorOf, myId } = useHouseholdNames();
 
   useEffect(() => {
     Promise.all([supabase.from("children").select("name"), supabase.from("household_children").select("name")]).then(
@@ -51,9 +54,11 @@ export default function DiaryTab() {
         const s: Record<string, string> = {};
         DIARY_SECTIONS.forEach(([k]) => (s[k] = d[k] || ""));
         setSections(s);
+        setLastTouchedBy(d.edited_by || d.user_id || null);
       } else {
         setSwName("");
         setSections(blankSections());
+        setLastTouchedBy(null);
       }
     }
      
@@ -69,9 +74,10 @@ export default function DiaryTab() {
     const next = { ...sections, ...patch };
     setSections(next);
     await supabase.from("diaries").upsert(
-      { child_names: sortedSelected, date_from: dateFrom || null, date_to: dateTo || null, sw_name: swName, ...next },
+      { child_names: sortedSelected, date_from: dateFrom || null, date_to: dateTo || null, sw_name: swName, ...next, edited_by: myId },
       { onConflict: "household_owner_id,child_names,date_from,date_to" },
     );
+    setLastTouchedBy(myId);
     setSavedAt(new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }));
     setTimeout(() => setSavedAt(""), 1500);
   }
@@ -144,6 +150,7 @@ ${DIARY_SECTIONS.map(([k, h, hint]) => `<tr class="h"><td colspan="3">${h}<br><s
         </button>
         <p className="note">Drafting fills empty boxes only — it never overwrites what you&apos;ve written.</p>
         {savedAt && <p className="hint">Saved {savedAt}</p>}
+        {authorOf(lastTouchedBy) && <span className="badge-author">last edited by {authorOf(lastTouchedBy)}</span>}
       </div>
 
       {DIARY_SECTIONS.map(([k, h, hint]) => (

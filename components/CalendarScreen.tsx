@@ -15,6 +15,7 @@ import {
 import { addDays, clubText, groupClubsByOccurrence, mondayStartWeekday, occurrenceDates, personColor } from "@/lib/calendarHelpers";
 import PeoplePicker, { PersonOption } from "@/components/PeoplePicker";
 import PersonTags, { PersonDot } from "@/components/PersonTags";
+import { useHouseholdNames } from "@/lib/useHouseholdNames";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -127,6 +128,7 @@ export default function CalendarScreen() {
   const [peopleFilter, setPeopleFilter] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [showSourceFor, setShowSourceFor] = useState<string | null>(null);
+  const { authorOf, myId } = useHouseholdNames();
 
   async function load() {
     const from = isoOf(year, month, 1);
@@ -307,6 +309,7 @@ export default function CalendarScreen() {
       category: editDraft.category,
       people: editDraft.people,
       amount: editDraft.amount ? Number(editDraft.amount) : null,
+      edited_by: myId,
     };
     setEditingId(null);
     setEditDraft(null);
@@ -491,6 +494,10 @@ export default function CalendarScreen() {
                     <PersonTags people={r.people} />
                     {r.amount != null ? <span>£{Number(r.amount).toFixed(2)}</span> : ""}
                     {r.done ? <span>Done</span> : ""}
+                    {authorOf(r.user_id) && <span className="badge-author">by {authorOf(r.user_id)}</span>}
+                    {authorOf(r.edited_by) && r.edited_by !== r.user_id && (
+                      <span className="badge-author">edited by {authorOf(r.edited_by)}</span>
+                    )}
                   </div>
                   {showSourceFor === r.id && r.source_text && (
                     <p className="note" style={{ whiteSpace: "pre-wrap", marginTop: 4 }}>
