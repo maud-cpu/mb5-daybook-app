@@ -625,38 +625,30 @@ export default function AboutScreen() {
   // A separate, non-touching wheel -- people who visit regularly aren't
   // part of the household, so they don't belong orbiting the same centre.
   const visitorsCenter: WheelNode = { id: "visitors-hub", label: "Visitors", color: SSW_COLOR };
-  const childNode = (c: Child): WheelNode => ({ id: `visit:${c.id}`, label: firstName(c.name), color: personColor(c.name) });
+  const childNode = (c: Child, parentId?: string): WheelNode => ({
+    id: `visit:${c.id}`,
+    label: firstName(c.name),
+    color: personColor(c.name),
+    parentId,
+  });
 
-  const visitorsRing: WheelNode[] = [
-    ...visitingUngrouped.map(childNode),
-    // A family with no matching adult on file falls back to its own hub --
-    // tap it to expand/collapse its children in place, right here in the
-    // ring, same as a matched adult below.
-    ...Object.keys(visitingByFamily).flatMap((fam) => {
-      const hub: WheelNode = { id: `family:${fam}`, label: fam, color: personColor(fam) };
-      if (selected !== hub.id) return [hub];
-      return [hub, ...visitingByFamily[fam].map(childNode)];
-    }),
-    // An adult visitor with children on file shows them nested underneath
-    // once selected -- Visitors -> adult -> their children, all in this one
-    // ring rather than a separate card just to see who's with them.
-    ...visitors.flatMap((v) => {
-      const node: WheelNode = { id: `visitor:${v.id}`, label: firstName(v.name), color: SSW_COLOR };
-      const kids = childrenByVisitorId[v.id];
-      if (!kids?.length || selected !== node.id) return [node];
-      return [node, ...kids.map(childNode)];
-    }),
+  // Three layers, all visible at once, no tapping needed: Visitors -> the
+  // adult a child is visiting with (or that child's own family-name hub,
+  // when no matching adult is on file) -> their children, drawn as a real
+  // outer ring with each child's line running from its own adult/family hub
+  // rather than from the centre.
+  const visitorsRing1: WheelNode[] = [
+    ...Object.keys(visitingByFamily).map((fam) => ({ id: `family:${fam}`, label: fam, color: personColor(fam) })),
+    ...visitors.map((v) => ({ id: `visitor:${v.id}`, label: firstName(v.name), color: SSW_COLOR })),
     { id: SSW_NODE, label: household.ssw_name ? firstName(household.ssw_name) : "SSW", color: SSW_COLOR },
     { id: ADD_VISIT_CHILD, label: "+ child", color: "", dashed: true },
     { id: ADD_VISITOR, label: "+ adult", color: "", dashed: true },
   ];
-
-  // Tapping a family hub or an adult visitor with children toggles their
-  // children in/out of the ring in place; tapping the same node again
-  // collapses it. Everything else still opens the usual detail panel below.
-  function selectVisitorsNode(id: string) {
-    setSelected((prev) => (prev === id ? null : id));
-  }
+  const visitorsRing2: WheelNode[] = [
+    ...visitingUngrouped.map((c) => childNode(c)),
+    ...Object.entries(visitingByFamily).flatMap(([fam, kids]) => kids.map((c) => childNode(c, `family:${fam}`))),
+    ...Object.entries(childrenByVisitorId).flatMap(([vid, kids]) => kids.map((c) => childNode(c, `visitor:${vid}`))),
+  ];
 
   function closeButton() {
     return (
@@ -1230,9 +1222,10 @@ export default function AboutScreen() {
           />
           <RadialWheel
             center={visitorsCenter}
-            ring1={visitorsRing}
+            ring1={visitorsRing1}
+            ring2={visitorsRing2}
             selectedId={selected}
-            onSelect={selectVisitorsNode}
+            onSelect={setSelected}
             maxWidth="380px"
           />
         </div>
