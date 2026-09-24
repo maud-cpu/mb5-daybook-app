@@ -102,6 +102,15 @@ export async function createCarer(formData: FormData) {
   return { success: true, email, password };
 }
 
+export async function resetCarerPassword(userId: string) {
+  await requireAdmin();
+  const admin = createAdminClient();
+  const password = randomPassword();
+  const { error } = await admin.auth.admin.updateUserById(userId, { password });
+  if (error) return { error: error.message };
+  return { success: true, password };
+}
+
 export async function removeCarer(userId: string) {
   await requireAdmin();
   const admin = createAdminClient();

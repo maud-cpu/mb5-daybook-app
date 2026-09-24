@@ -7,12 +7,14 @@ export default function AddCarerForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
     setError("");
     setCreated(null);
+    setCopied(false);
     const formData = new FormData(e.currentTarget);
     const result = await createCarer(formData);
     setBusy(false);
@@ -23,6 +25,18 @@ export default function AddCarerForm() {
     if (result.success) {
       setCreated({ email: result.email!, password: result.password! });
       e.currentTarget.reset();
+    }
+  }
+
+  async function copyPassword() {
+    if (!created) return;
+    try {
+      await navigator.clipboard.writeText(created.password);
+      setCopied(true);
+    } catch {
+      // Clipboard access can fail (older browser, no HTTPS, permission
+      // denied) -- the password stays on screen either way so nothing's
+      // lost, just not copied automatically.
     }
   }
 
@@ -71,15 +85,23 @@ export default function AddCarerForm() {
       {created && (
         <div className="note" style={{ marginTop: 12 }}>
           <b>Account created.</b> Give these to {created.email} — this password is only
-          shown this once, so pass it on now (text, call, or hand it over in person):
+          shown this once, so copy or write it down now before doing anything else:
           <div style={{ marginTop: 6, fontFamily: "monospace", fontSize: 15 }}>
             {created.email}
             <br />
             {created.password}
           </div>
+          <div style={{ marginTop: 8 }}>
+            <button type="button" className="chip on" onClick={copyPassword}>
+              {copied ? "Copied ✓" : "Copy password"}
+            </button>{" "}
+            <button type="button" className="chip" onClick={() => setCreated(null)}>
+              Done, I&apos;ve saved it
+            </button>
+          </div>
           <p className="muted" style={{ marginTop: 6 }}>
-            They can sign in straight away. There&apos;s no &quot;change password&quot; screen yet —
-            tell me when you want one and I&apos;ll add it.
+            They can sign in straight away. If you ever lose a password after this, use
+            &quot;Reset password&quot; next to their name in the list below to generate a new one.
           </p>
         </div>
       )}
