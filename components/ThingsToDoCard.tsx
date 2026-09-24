@@ -295,7 +295,12 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
   // from "this has been sitting here for weeks", which is exactly what made
   // the list feel like the same nagging wall every day. New today stays right
   // in view; anything older is tucked behind a tap instead of repeating.
-  const isNewDue = (x: DueItem) => firstSeen[dismissKeyFor(x.key)] === today();
+  // A reminder (key "rem-...") is different from the open-ended admin
+  // nagging items below it -- it's something the carer specifically asked
+  // to be reminded about on/after a given date, so it should keep showing
+  // every day until it's actually ticked off, not get tucked away into
+  // "Been on your list a while" the moment it's no longer brand new.
+  const isNewDue = (x: DueItem) => x.key.startsWith("rem-") || firstSeen[dismissKeyFor(x.key)] === today();
   const isNewFollowUp = (f: FollowUp) => f.created_at?.slice(0, 10) === today();
   const newRoutine = routineDue.filter(isNewDue);
   const newFollowUps = followUps.filter(isNewFollowUp);
