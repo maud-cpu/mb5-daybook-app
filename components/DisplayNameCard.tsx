@@ -1,32 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 
 export default function DisplayNameCard() {
-  const supabase = createClient();
   const [name, setName] = useState("");
   const [saved, setSaved] = useState("");
 
   useEffect(() => {
     async function load() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data } = await supabase.from("profiles").select("display_name").eq("id", user.id).single();
-      setName(data?.display_name || "");
+      const res = await fetch("/api/profile");
+      if (!res.ok) return;
+      const data = await res.json();
+      setName(data.displayName || "");
     }
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function save() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-    await supabase.from("profiles").update({ display_name: name.trim() }).eq("id", user.id);
+    await fetch("/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ displayName: name.trim() }),
+    });
     setSaved("Saved");
     setTimeout(() => setSaved(""), 1500);
   }
