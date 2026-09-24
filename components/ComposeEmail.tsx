@@ -39,25 +39,22 @@ export default function ComposeEmail({
 
   useEffect(() => {
     async function load() {
-      const [{ data: contacts }, { data: household }, { data: kids }, { data: hhKids }, { data: recs }] = await Promise.all([
+      const [{ data: contacts }, { data: household }, { data: kids }, { data: hhKids }, { data: visitors }, { data: recs }] = await Promise.all([
         supabase.from("contacts").select("id, label, name, phone, email"),
         supabase
           .from("household")
           .select("ssw_name, ssw_email, ssw_manager_name, ssw_manager_email, is_mockingbird, hub_leader_name, hub_leader_email")
           .maybeSingle(),
-        // linked_visitor is the same unambiguous adult-link used on the
-        // Visitors wheel (an actual id, not a name typed into hub_carer_name)
-        // -- preferred here for exactly the reason it exists: hub_carer_name
-        // can go stale or get set wrong (e.g. a visiting child left showing
-        // this household's own hub carer instead of whichever other carer
-        // they're actually registered under).
-        supabase
-          .from("children")
-          .select("name, basics, hub_carer_name, hub_carer_email, linked_visitor_id, linked_visitor:household_visitors(name, email)"),
+        supabase.from("children").select("name, basics, hub_carer_name, hub_carer_email, linked_visitor_id"),
         // "Children in your household" (own/adopted/kinship/SGO) don't have
         // an allocated CSW or an external Mockingbird hub carer -- only
         // selectable as who an email is about, never a CSW/carer source.
         supabase.from("household_children").select("name"),
+        // Looked up separately (not as a Postgres embed off linked_visitor_id)
+        // and matched by hand below -- a fresh foreign key isn't always
+        // picked up for auto-embedding straight away, and this is the exact
+        // same plain-query pattern the Visitors wheel already relies on.
+        supabase.from("household_visitors").select("id, name, email"),
         supabase.from("records").select("*").order("created_at", { ascending: false }),
       ]);
       // Show everyone possible, even without an email on file yet -- a name
@@ -75,23 +72,26 @@ export default function ComposeEmail({
         basics: Record<string, string>;
         hub_carer_name: string;
         hub_carer_email: string;
-        linked_visitor: { name: string; email: string } | { name: string; email: string }[] | null;
+        linked_visitor_id: string | null;
       };
       const kidRows = (kids ?? []) as KidRow[];
+      const visitorById = new Map(((visitors as { id: string; name: string; email: string }[] | null) ?? []).map((v) => [v.id, v]));
+      function hubCarerOf(c: KidRow): { name: string; email: string } | null {
+        const linkedVisitor = c.linked_visitor_id ? visitorById.get(c.linked_visitor_id) : undefined;
+        if (linkedVisitor) return { name: linkedVisitor.name, email: linkedVisitor.email || "" };
+        if (c.hub_carer_name) return { name: c.hub_carer_name, email: c.hub_carer_email || "" };
+        return null;
+      }
       kidRows.forEach((c) => {
         const csw = c.basics?.csw?.trim();
         if (csw) opts.push({ key: "csw:" + c.name, label: `${c.name}'s CSW`, name: csw.split(" — ")[0], email: extractEmail(csw) });
-        const linkedVisitor = Array.isArray(c.linked_visitor) ? c.linked_visitor[0] : c.linked_visitor;
-        if (linkedVisitor?.name) {
-          opts.push({ key: "hub:" + c.name, label: `${c.name}'s carer`, name: linkedVisitor.name, email: linkedVisitor.email || "" });
-        } else if (c.hub_carer_name) {
-          opts.push({ key: "hub:" + c.name, label: `${c.name}'s carer`, name: c.hub_carer_name, email: c.hub_carer_email || "" });
-        }
+        const hubCarer = hubCarerOf(c);
+        if (hubCarer) opts.push({ key: "hub:" + c.name, label: `${c.name}'s carer`, name: hubCarer.name, email: hubCarer.email });
       });
       setRecipientOptions(opts);
       if (presetChildName && kidRows.some((c) => c.name === presetChildName)) {
         setSelectedKids([presetChildName]);
-        const hubKey = kidRows.find((c) => c.name === presetChildName && (c.hub_carer_name || c.linked_visitor));
+        const hubKey = kidRows.find((c) => c.name === presetChildName && hubCarerOf(c));
         if (hubKey) setSelectedRecipients(["hub:" + presetChildName]);
       }
       if (presetHub && household?.is_mockingbird && household.hub_leader_name) setSelectedRecipients(["h:hub"]);
