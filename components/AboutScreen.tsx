@@ -1072,11 +1072,38 @@ export default function AboutScreen() {
             </select>
             <GenderSelect value={c.gender} onChange={(v) => saveChild(c.id, { gender: v })} />
           </div>
-          <input
-            placeholder="Family / household they're visiting from (e.g. Smiths) — groups siblings together on the wheel"
-            value={c.family}
-            onChange={(e) => saveChild(c.id, { family: e.target.value })}
-          />
+          {(() => {
+            const matchedVisitor = visitors.find((v) => familyMatchesVisitor(c.family, v.name));
+            return (
+              <>
+                {visitors.length > 0 && (
+                  <select
+                    value={matchedVisitor?.name ?? ""}
+                    onChange={(e) => e.target.value && saveChild(c.id, { family: e.target.value })}
+                  >
+                    <option value="">Link to an adult already on file…</option>
+                    {visitors.map((v) => (
+                      <option key={v.id} value={v.name}>
+                        {v.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <input
+                  placeholder="Family / household they're visiting from (e.g. Smiths) — groups siblings together on the wheel"
+                  value={c.family}
+                  onChange={(e) => saveChild(c.id, { family: e.target.value })}
+                />
+                {c.family.trim() && !matchedVisitor && (
+                  <p className="hint" style={{ margin: "2px 0 0" }}>
+                    No adult on file matches &quot;{c.family}&quot;, so they&apos;ll show under their own family hub
+                    on the wheel rather than nested under an adult. Pick from the list above once that adult&apos;s
+                    added as a visitor, or adjust the spelling here to match their name exactly.
+                  </p>
+                )}
+              </>
+            );
+          })()}
           {placementEndField(c)}
           <div className="chips" style={{ marginTop: 6 }}>
             <button className="chip" onClick={() => setOpenDocuments(docsOpen ? null : c.id)}>
