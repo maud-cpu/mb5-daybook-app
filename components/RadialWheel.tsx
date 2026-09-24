@@ -11,6 +11,11 @@ export type WheelNode = {
   color: string;
   /** A "+ add" node rather than a real person. */
   dashed?: boolean;
+  /** Ring2 only: this node's id in ring1 -- clusters it next to that node
+   * (instead of spreading evenly across the whole outer ring) and draws its
+   * connecting line from that node instead of the centre, so it visibly
+   * reads as "belongs to this one", not "belongs to everyone". */
+  parentId?: string;
 };
 
 type Positioned = WheelNode & { x: number; y: number };
@@ -21,6 +26,39 @@ function layoutRing(nodes: WheelNode[], radius: number): Positioned[] {
     const angle = ((-90 + (360 / Math.max(count, 1)) * i) * Math.PI) / 180;
     return { ...n, x: 50 + radius * Math.cos(angle), y: 50 + radius * Math.sin(angle) };
   });
+}
+
+// Ring2 nodes that name a ring1 parentId fan out in a tight arc centred on
+// that parent's own angle, rather than being spread evenly across the full
+// outer ring -- visually grouping "this adult's children" right next to
+// that adult. Anything left over (no parentId, or a parentId that isn't
+// actually in ring1) falls back to the old even spread.
+function layoutChildRing(nodes: WheelNode[], radius: number, parents: Positioned[]): Positioned[] {
+  const parentAngle = new Map(parents.map((p) => [p.id, Math.atan2(p.y - 50, p.x - 50)]));
+  const byParent = new Map<string, WheelNode[]>();
+  const unparented: WheelNode[] = [];
+  nodes.forEach((n) => {
+    if (n.parentId && parentAngle.has(n.parentId)) {
+      const list = byParent.get(n.parentId) ?? [];
+      list.push(n);
+      byParent.set(n.parentId, list);
+    } else {
+      unparented.push(n);
+    }
+  });
+
+  const clustered: Positioned[] = [];
+  const spread = (30 * Math.PI) / 180;
+  byParent.forEach((kids, parentId) => {
+    const base = parentAngle.get(parentId)!;
+    const step = kids.length > 1 ? spread / (kids.length - 1) : 0;
+    kids.forEach((n, i) => {
+      const angle = kids.length > 1 ? base - spread / 2 + step * i : base;
+      clustered.push({ ...n, x: 50 + radius * Math.cos(angle), y: 50 + radius * Math.sin(angle) });
+    });
+  });
+
+  return [...clustered, ...layoutRing(unparented, radius)];
 }
 
 function NodeButton({
@@ -92,26 +130,31 @@ export default function RadialWheel({
   maxWidth?: string;
 }) {
   const r1 = layoutRing(ring1, 33);
-  const r2 = layoutRing(ring2, 46);
+  const r2 = layoutChildRing(ring2, 46, r1);
   const all = [...r1, ...r2];
+  const r1ById = new Map(r1.map((n) => [n.id, n]));
 
   return (
     <div style={{ position: "relative", width: `min(92vw, ${maxWidth})`, aspectRatio: "1", margin: "10px auto" }}>
       <svg viewBox="0 0 100 100" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
         <circle cx="50" cy="50" r="33" fill="none" stroke="var(--line)" strokeWidth="0.4" />
         {ring2.length > 0 && <circle cx="50" cy="50" r="46" fill="none" stroke="var(--line)" strokeWidth="0.4" />}
-        {all.map((n) => (
-          <line
-            key={n.id}
-            x1="50"
-            y1="50"
-            x2={n.x}
-            y2={n.y}
-            stroke={n.dashed ? "var(--line)" : n.color}
-            strokeWidth="0.5"
-            strokeOpacity={n.dashed ? 0.6 : 0.4}
-          />
-        ))}
+        {all.map((n) => {
+          const parent = n.parentId ? r1ById.get(n.parentId) : undefined;
+          const from = parent ? { x: parent.x, y: parent.y } : { x: 50, y: 50 };
+          return (
+            <line
+              key={n.id}
+              x1={from.x}
+              y1={from.y}
+              x2={n.x}
+              y2={n.y}
+              stroke={n.dashed ? "var(--line)" : n.color}
+              strokeWidth="0.5"
+              strokeOpacity={n.dashed ? 0.6 : 0.4}
+            />
+          );
+        })}
       </svg>
 
       <NodeButton n={center} sizePct={27} isCenter selected={selectedId === center.id} onSelect={onSelect} />
