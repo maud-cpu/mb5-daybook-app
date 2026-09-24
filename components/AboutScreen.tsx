@@ -12,7 +12,7 @@ import ChildClubs from "@/components/ChildClubs";
 import ChildDocuments from "@/components/ChildDocuments";
 import RadialWheel, { WheelNode } from "@/components/RadialWheel";
 
-const ADULT_ROLES = ["Foster carer", "Adult child", "Live-in grandparent", "Other"];
+const ADULT_ROLES = ["Foster carer", "Respite carer", "Short breaks carer", "Adult child", "Live-in grandparent", "Other"];
 const VISITOR_ROLES = ["Mockingbird hub carer", "Respite support worker", "Family friend / helper", "Other"];
 
 function firstName(name: string): string {
@@ -338,6 +338,11 @@ export default function AboutScreen() {
   const [openDocuments, setOpenDocuments] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
+  // Which visiting family's hub is currently showing its children inline on
+  // the wheel itself, instead of needing a tap-through to a card further
+  // down the page just to see who they are. Only one open at a time, same
+  // as the detail panel below.
+  const [expandedFamily, setExpandedFamily] = useState<string | null>(null);
 
   async function load() {
     const [{ data: kids }, { data: hh }, { data: adultRows }, { data: householdChildRows }, { data: visitorRows }] = await Promise.all([
@@ -613,12 +618,31 @@ export default function AboutScreen() {
   const visitorsCenter: WheelNode = { id: "visitors-hub", label: "Visitors", color: SSW_COLOR };
   const visitorsRing: WheelNode[] = [
     ...visitingUngrouped.map((c) => ({ id: `visit:${c.id}`, label: firstName(c.name), color: personColor(c.name) })),
-    ...Object.keys(visitingByFamily).map((fam) => ({ id: `family:${fam}`, label: fam, color: personColor(fam) })),
+    // The expanded family's hub stays put (tap it again to collapse) and its
+    // children appear right alongside it in this same ring -- no separate
+    // card, no extra tap needed to see who they are.
+    ...Object.keys(visitingByFamily).flatMap((fam) => {
+      const hub: WheelNode = { id: `family:${fam}`, label: fam, color: personColor(fam) };
+      if (fam !== expandedFamily) return [hub];
+      return [hub, ...visitingByFamily[fam].map((c) => ({ id: `visit:${c.id}`, label: firstName(c.name), color: personColor(c.name) }))];
+    }),
     ...visitors.map((v) => ({ id: `visitor:${v.id}`, label: firstName(v.name), color: SSW_COLOR })),
     { id: SSW_NODE, label: household.ssw_name ? firstName(household.ssw_name) : "SSW", color: SSW_COLOR },
     { id: ADD_VISIT_CHILD, label: "+ child", color: "", dashed: true },
     { id: ADD_VISITOR, label: "+ adult", color: "", dashed: true },
   ];
+
+  // A family hub tap expands/collapses it in place on the wheel instead of
+  // opening a detail card -- everything else in this ring still opens the
+  // usual detail panel below.
+  function selectVisitorsNode(id: string) {
+    if (id.startsWith("family:")) {
+      const fam = id.slice("family:".length);
+      setExpandedFamily((prev) => (prev === fam ? null : fam));
+      return;
+    }
+    setSelected(id);
+  }
 
   function closeButton() {
     return (
@@ -1008,25 +1032,6 @@ export default function AboutScreen() {
       );
     }
 
-    if (selected.startsWith("family:")) {
-      const famName = selected.slice("family:".length);
-      const famChildren = visitingByFamily[famName] || [];
-      const familySubCenter: WheelNode = { id: selected, label: famName, color: personColor(famName) };
-      const familySubRing: WheelNode[] = famChildren.map((c) => ({
-        id: `visit:${c.id}`,
-        label: firstName(c.name),
-        color: personColor(c.name),
-      }));
-      return (
-        <div className="card">
-          <h3>{famName}</h3>
-          <p className="hint">Children visiting from {famName} — tap one for their own details.</p>
-          <RadialWheel center={familySubCenter} ring1={familySubRing} selectedId={null} onSelect={setSelected} maxWidth="360px" />
-          {closeButton()}
-        </div>
-      );
-    }
-
     if (selected.startsWith("visit:")) {
       const id = selected.slice("visit:".length);
       const c = children.find((x) => x.id === id);
@@ -1212,8 +1217,8 @@ export default function AboutScreen() {
           <RadialWheel
             center={visitorsCenter}
             ring1={visitorsRing}
-            selectedId={selected}
-            onSelect={setSelected}
+            selectedId={expandedFamily ? `family:${expandedFamily}` : selected}
+            onSelect={selectVisitorsNode}
             maxWidth="380px"
           />
         </div>
