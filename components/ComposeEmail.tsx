@@ -45,15 +45,21 @@ export default function ComposeEmail({
           .from("household")
           .select("ssw_name, ssw_email, ssw_manager_name, ssw_manager_email, is_mockingbird, hub_leader_name, hub_leader_email")
           .maybeSingle(),
-        supabase.from("children").select("name, basics, hub_carer_name, hub_carer_email"),
-        // A child in "Children in your household" can be an actual foster
-        // placement too, not just the carer's own/adopted/kinship child --
-        // they need to be selectable and get their CSW/hub carer offered as
-        // a recipient the same as any other child.
-        supabase.from("household_children").select("name, basics, hub_carer_name, hub_carer_email"),
+        // linked_visitor is the same unambiguous adult-link used on the
+        // Visitors wheel (an actual id, not a name typed into hub_carer_name)
+        // -- preferred here for exactly the reason it exists: hub_carer_name
+        // can go stale or get set wrong (e.g. a visiting child left showing
+        // this household's own hub carer instead of whichever other carer
+        // they're actually registered under).
+        supabase
+          .from("children")
+          .select("name, basics, hub_carer_name, hub_carer_email, linked_visitor_id, linked_visitor:household_visitors(name, email)"),
+        // "Children in your household" (own/adopted/kinship/SGO) don't have
+        // an allocated CSW or an external Mockingbird hub carer -- only
+        // selectable as who an email is about, never a CSW/carer source.
+        supabase.from("household_children").select("name"),
         supabase.from("records").select("*").order("created_at", { ascending: false }),
       ]);
-      const allKids = [...(kids ?? []), ...(hhKids ?? [])];
       // Show everyone possible, even without an email on file yet -- a name
       // is enough to appear in the draft ("Dear Rhodri...") and be reminded
       // to fill the email in later.
@@ -64,21 +70,33 @@ export default function ComposeEmail({
         opts.push({ key: "h:sswm", label: "SSW's manager", name: household.ssw_manager_name, email: household.ssw_manager_email || "" });
       if (household?.is_mockingbird && household.hub_leader_name)
         opts.push({ key: "h:hub", label: "Your hub carer", name: household.hub_leader_name, email: household.hub_leader_email || "" });
-      const kidRows = allKids as { name: string; basics: Record<string, string>; hub_carer_name: string; hub_carer_email: string }[];
+      type KidRow = {
+        name: string;
+        basics: Record<string, string>;
+        hub_carer_name: string;
+        hub_carer_email: string;
+        linked_visitor: { name: string; email: string } | { name: string; email: string }[] | null;
+      };
+      const kidRows = (kids ?? []) as KidRow[];
       kidRows.forEach((c) => {
         const csw = c.basics?.csw?.trim();
         if (csw) opts.push({ key: "csw:" + c.name, label: `${c.name}'s CSW`, name: csw.split(" — ")[0], email: extractEmail(csw) });
-        if (c.hub_carer_name) opts.push({ key: "hub:" + c.name, label: `${c.name}'s carer`, name: c.hub_carer_name, email: c.hub_carer_email || "" });
+        const linkedVisitor = Array.isArray(c.linked_visitor) ? c.linked_visitor[0] : c.linked_visitor;
+        if (linkedVisitor?.name) {
+          opts.push({ key: "hub:" + c.name, label: `${c.name}'s carer`, name: linkedVisitor.name, email: linkedVisitor.email || "" });
+        } else if (c.hub_carer_name) {
+          opts.push({ key: "hub:" + c.name, label: `${c.name}'s carer`, name: c.hub_carer_name, email: c.hub_carer_email || "" });
+        }
       });
       setRecipientOptions(opts);
       if (presetChildName && kidRows.some((c) => c.name === presetChildName)) {
         setSelectedKids([presetChildName]);
-        const hubKey = kidRows.find((c) => c.name === presetChildName && c.hub_carer_name);
+        const hubKey = kidRows.find((c) => c.name === presetChildName && (c.hub_carer_name || c.linked_visitor));
         if (hubKey) setSelectedRecipients(["hub:" + presetChildName]);
       }
       if (presetHub && household?.is_mockingbird && household.hub_leader_name) setSelectedRecipients(["h:hub"]);
       if (presetEntryId) setSelectedEntries([presetEntryId]);
-      setChildNames(allKids.map((k) => k.name as string));
+      setChildNames([...kidRows.map((k) => k.name), ...((hhKids as { name: string }[] | null)?.map((k) => k.name) ?? [])]);
       setRecords((recs as EntryRecord[]) ?? []);
     }
 
@@ -93,6 +111,15 @@ export default function ComposeEmail({
   const relevantRecords = selectedKids.length
     ? records.filter((r) => selectedKids.some((k) => r.child === k || r.kids.includes(k)))
     : [];
+
+  // A per-child CSW/carer chip only makes the "Who to" list longer and
+  // easier to pick the wrong person from until a child's actually been
+  // chosen below -- general contacts (SSW, SSW's manager, your own hub
+  // carer, saved contacts) stay visible either way.
+  const visibleRecipientOptions = recipientOptions.filter((o) => {
+    if (!o.key.startsWith("csw:") && !o.key.startsWith("hub:")) return true;
+    return selectedKids.includes(o.key.slice(o.key.indexOf(":") + 1));
+  });
 
   const selectedRecipientObjs = [
     ...recipientOptions.filter((o) => selectedRecipients.includes(o.key)),
@@ -146,10 +173,24 @@ export default function ComposeEmail({
         </button>
       </div>
 
+      <h4 style={{ margin: "14px 0 4px", color: "var(--accent)" }}>Who&apos;s this about?</h4>
+      <div className="chips">
+        {childNames.map((n) => (
+          <button key={n} className={`chip${selectedKids.includes(n) ? " on" : ""}`} onClick={() => toggle(selectedKids, setSelectedKids, n)}>
+            {n}
+          </button>
+        ))}
+      </div>
+      {childNames.length > 0 && (
+        <p className="hint" style={{ margin: "2px 0 0" }}>
+          Pick who this is about to see their own CSW/carer below, as well as the general contacts.
+        </p>
+      )}
+
       <h4 style={{ margin: "14px 0 4px", color: "var(--accent)" }}>Who to</h4>
       <div className="chips">
-        {recipientOptions.length === 0 && <span className="muted">Nobody set up yet — add contacts in About us, or use Other below.</span>}
-        {recipientOptions.map((o) => (
+        {visibleRecipientOptions.length === 0 && <span className="muted">Nobody set up yet — add contacts in About us, or use Other below.</span>}
+        {visibleRecipientOptions.map((o) => (
           <button
             key={o.key}
             className={`chip${selectedRecipients.includes(o.key) ? " on" : ""}`}
@@ -176,15 +217,6 @@ export default function ComposeEmail({
           />
         </div>
       )}
-
-      <h4 style={{ margin: "14px 0 4px", color: "var(--accent)" }}>Who&apos;s this about?</h4>
-      <div className="chips">
-        {childNames.map((n) => (
-          <button key={n} className={`chip${selectedKids.includes(n) ? " on" : ""}`} onClick={() => toggle(selectedKids, setSelectedKids, n)}>
-            {n}
-          </button>
-        ))}
-      </div>
 
       {selectedKids.length > 0 && (
         <>
