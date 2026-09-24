@@ -434,35 +434,19 @@ export default function CaptureScreen() {
     showToast(`Saved to ${childNames.join(" & ")}'s Food box`);
   }
 
-  const SCHOOL_ADMIN_FIELDS = [
-    ["lunch_payment", "Paying for school lunches"],
-    ["homework_app_name", "Homework app/website"],
-    ["homework_app_url", "Homework app link"],
-    ["class_rep_name", "Class rep"],
-    ["class_rep_contact", "Class rep contact"],
-    ["pta_name", "PTA / friends of school"],
-    ["pta_contact", "PTA contact"],
-    ["pta_facebook", "PTA Facebook / social group"],
-    ["school_office_contact", "School office"],
-    ["other_links", "Other useful links"],
-  ] as const;
-  const SCHOOL_ADMIN_KEYS = SCHOOL_ADMIN_FIELDS.map(([key]) => key);
-
-  // Fills empty boxes only, same rule as everywhere else this app suggests
-  // filling in a profile field from a note -- never overwrites something
-  // already on file, and only counts as "needed" while at least one
-  // extracted field still has nowhere to go.
+  // Appended into the child's free-text "notes" box on School admin --
+  // never overwrites anything, just adds this note if it isn't already
+  // there (e.g. re-saving the same note twice from an edited capture).
   async function saveSchoolAdmin(i: number, childNames: string[]) {
-    const sa = pending[i].school_admin;
-    if (!sa) return;
+    const note = (pending[i].school_admin_note || "").trim();
+    if (!note) return;
     const targets = childNames.map((n) => children.find((c) => c.name === n)).filter((c): c is Child => !!c);
     if (!targets.length) return;
     for (const c of targets) {
       const existing = schoolAdminByChildId[c.id] || {};
-      const next = { ...existing };
-      SCHOOL_ADMIN_KEYS.forEach((key) => {
-        if (sa[key] && !(existing[key] || "").trim()) next[key] = sa[key];
-      });
+      const existingNotes = existing.notes || "";
+      if (existingNotes.includes(note)) continue;
+      const next = { ...existing, notes: [existingNotes, note].filter(Boolean).join("\n") };
       const { error } = await supabase.from("child_school_admin").upsert({ child_id: c.id, ...next }, { onConflict: "child_id" });
       if (error) {
         showToast("Couldn't save: " + error.message);
@@ -470,8 +454,8 @@ export default function CaptureScreen() {
       }
       setSchoolAdminByChildId((prev) => ({ ...prev, [c.id]: next }));
     }
-    updatePending(i, { school_admin: null });
-    showToast(`Saved to ${childNames.join(" & ")}'s School admin`);
+    updatePending(i, { school_admin_note: "" });
+    showToast(`Saved to ${childNames.join(" & ")}'s School admin notes`);
   }
 
   // Whether a tagged child still needs this suggestion applied -- shared
@@ -515,12 +499,13 @@ export default function CaptureScreen() {
     });
   }
   function schoolAdminNeeds(p: PendingItem): string[] {
-    if (!p.school_admin) return [];
+    const note = (p.school_admin_note || "").trim();
+    if (!note) return [];
     return p.kids.filter((k) => {
       const c = children.find((ch) => ch.name === k);
       if (!c) return false;
       const existing = schoolAdminByChildId[c.id] || {};
-      return SCHOOL_ADMIN_KEYS.some((key) => p.school_admin![key] && !(existing[key] || "").trim());
+      return !(existing.notes || "").includes(note);
     });
   }
 
@@ -1199,7 +1184,7 @@ export default function CaptureScreen() {
                     </div>
                   );
                 })()}
-              {p.school_admin &&
+              {p.school_admin_note &&
                 (() => {
                   const needsSchoolAdmin = schoolAdminNeeds(p);
                   if (!needsSchoolAdmin.length) return null;
@@ -1209,19 +1194,15 @@ export default function CaptureScreen() {
                         🏫 New school admin info for {needsSchoolAdmin.join(" & ")} — check it&apos;s right (this saves
                         automatically with Save all):
                       </div>
-                      {SCHOOL_ADMIN_FIELDS.filter(([key]) => p.school_admin![key]).map(([key, label]) => (
-                        <input
-                          key={key}
-                          placeholder={label}
-                          value={p.school_admin![key]}
-                          onChange={(e) => updatePending(i, { school_admin: { ...p.school_admin!, [key]: e.target.value } })}
-                          style={{ marginBottom: 6 }}
-                        />
-                      ))}
+                      <textarea
+                        value={p.school_admin_note}
+                        onChange={(e) => updatePending(i, { school_admin_note: e.target.value })}
+                        style={{ marginBottom: 6 }}
+                      />
                       <button className="chip" onClick={() => saveSchoolAdmin(i, needsSchoolAdmin)}>
-                        Save now to {needsSchoolAdmin.join(" & ")}&apos;s School admin
+                        Save now to {needsSchoolAdmin.join(" & ")}&apos;s School admin notes
                       </button>{" "}
-                      <button className="chip" onClick={() => updatePending(i, { school_admin: null })}>
+                      <button className="chip" onClick={() => updatePending(i, { school_admin_note: "" })}>
                         Don&apos;t save
                       </button>
                     </div>
