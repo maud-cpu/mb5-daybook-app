@@ -7,6 +7,7 @@ import { trainingStatus } from "@/lib/domain";
 import { withAmazonAffiliateTag } from "@/lib/amazon";
 import FormsReference from "@/components/FormsReference";
 import RatingWidget, { Feedback } from "@/components/TrainingRating";
+import ResourceRecommendations from "@/components/ResourceRecommendations";
 
 type Course = {
   id: string;
@@ -432,6 +433,7 @@ export default function TrainingScreen() {
       <div className="card">
         <FormsReference />
       </div>
+      <ResourceRecommendations />
       {(() => {
         const sortPicker = (
           <div className="row" style={{ margin: "0 0 10px", alignItems: "center", justifyContent: "space-between" }}>
