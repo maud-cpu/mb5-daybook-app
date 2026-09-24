@@ -49,6 +49,7 @@ export default function NewsCard() {
   const [showDismissed, setShowDismissed] = useState(false);
   const [savedAction, setSavedAction] = useState<Record<string, string>>({});
   const [lastSignInAt, setLastSignInAt] = useState("");
+  const [actionsByNewsId, setActionsByNewsId] = useState<Record<string, string[]>>({});
 
   async function load() {
     const t = today();
@@ -57,12 +58,18 @@ export default function NewsCard() {
         .from("shared_news")
         .select("id, title, body, category, expires_on, url, linked_course_id, created_at")
         .order("created_at", { ascending: false }),
-      supabase.from("dismissed_news").select("news_id"),
+      supabase.from("dismissed_news").select("news_id, dismissed_at, actions_taken"),
       supabase.auth.getUser(),
     ]);
     const active = ((news as NewsItem[] | null) ?? []).filter((n) => !n.expires_on || n.expires_on >= t);
     setItems(active);
-    setDismissed(new Set(((dis as { news_id: string }[] | null) ?? []).map((d) => d.news_id)));
+    const rows = (dis as { news_id: string; dismissed_at: string | null; actions_taken: string[] | null }[] | null) ?? [];
+    setDismissed(new Set(rows.filter((d) => d.dismissed_at).map((d) => d.news_id)));
+    const actions: Record<string, string[]> = {};
+    rows.forEach((d) => {
+      if (d.actions_taken?.length) actions[d.news_id] = d.actions_taken;
+    });
+    setActionsByNewsId(actions);
     // Stays fixed at the moment of this session's sign-in (auto-lock's
     // re-entered password counts as one) until the next real sign-in --
     // not touched by ordinary token refreshes -- so it's a stable "since I
@@ -82,7 +89,7 @@ export default function NewsCard() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (user) await supabase.from("dismissed_news").upsert({ user_id: user.id, news_id: id });
+    if (user) await supabase.from("dismissed_news").upsert({ user_id: user.id, news_id: id, dismissed_at: new Date().toISOString() });
   }
 
   async function undismiss(id: string) {
@@ -94,12 +101,24 @@ export default function NewsCard() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (user) await supabase.from("dismissed_news").delete().eq("user_id", user.id).eq("news_id", id);
+    if (user) await supabase.from("dismissed_news").update({ dismissed_at: null }).eq("user_id", user.id).eq("news_id", id);
   }
 
   function flashSaved(id: string, label: string) {
     setSavedAction((prev) => ({ ...prev, [id]: label }));
     setTimeout(() => setSavedAction((prev) => ({ ...prev, [id]: "" })), 2000);
+  }
+
+  // Recorded permanently (not just the 2-second toast) so the buttons can
+  // show "already added" even after leaving and coming back -- easy to
+  // forget otherwise, since the buttons used to just revert to plain text.
+  async function recordAction(id: string, action: string) {
+    const next = Array.from(new Set([...(actionsByNewsId[id] || []), action]));
+    setActionsByNewsId((prev) => ({ ...prev, [id]: next }));
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) await supabase.from("dismissed_news").upsert({ user_id: user.id, news_id: id, actions_taken: next }, { onConflict: "user_id,news_id" });
   }
 
   // reminders/records have nowhere to store a structured link, only free
@@ -118,6 +137,7 @@ export default function NewsCard() {
       source_text: bodyWithLink(n),
     });
     flashSaved(n.id, "Added to calendar");
+    recordAction(n.id, "calendar");
   }
 
   async function addToTodo(n: NewsItem) {
@@ -129,6 +149,7 @@ export default function NewsCard() {
       todo_only: true,
     });
     flashSaved(n.id, "Added to Up next");
+    recordAction(n.id, "todo");
   }
 
   async function saveToNotes(n: NewsItem) {
@@ -139,6 +160,7 @@ export default function NewsCard() {
       date: today(),
     });
     flashSaved(n.id, "Saved to notes");
+    recordAction(n.id, "notes");
   }
 
   function toggleExpanded(id: string) {
@@ -214,14 +236,26 @@ export default function NewsCard() {
                 )}
               </small>
               <div style={{ marginTop: 4 }}>
-                <button className="chip" style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => addToCalendar(n)}>
-                  📅 Calendar
+                <button
+                  className={actionsByNewsId[n.id]?.includes("calendar") ? "chip on" : "chip"}
+                  style={{ fontSize: 12, padding: "4px 10px" }}
+                  onClick={() => addToCalendar(n)}
+                >
+                  {actionsByNewsId[n.id]?.includes("calendar") ? "✓ On calendar" : "📅 Calendar"}
                 </button>
-                <button className="chip" style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => addToTodo(n)}>
-                  ✅ To-do
+                <button
+                  className={actionsByNewsId[n.id]?.includes("todo") ? "chip on" : "chip"}
+                  style={{ fontSize: 12, padding: "4px 10px" }}
+                  onClick={() => addToTodo(n)}
+                >
+                  {actionsByNewsId[n.id]?.includes("todo") ? "✓ In Up next" : "✅ To-do"}
                 </button>
-                <button className="chip" style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => saveToNotes(n)}>
-                  📝 Notes
+                <button
+                  className={actionsByNewsId[n.id]?.includes("notes") ? "chip on" : "chip"}
+                  style={{ fontSize: 12, padding: "4px 10px" }}
+                  onClick={() => saveToNotes(n)}
+                >
+                  {actionsByNewsId[n.id]?.includes("notes") ? "✓ Saved" : "📝 Notes"}
                 </button>
                 {savedAction[n.id] && (
                   <small className="muted" style={{ marginLeft: 6 }}>
