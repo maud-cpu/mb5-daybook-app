@@ -9,8 +9,9 @@ import { unreportedIncidentItems } from "@/lib/thingsToDo";
 import { BUCKETS, Bucket, Child, EntryRecord, FLAGS, FlagKey, Rates } from "@/lib/types";
 import DiaryTab from "@/components/DiaryTab";
 import HandoverTab from "@/components/HandoverTab";
+import HubLogTab from "@/components/HubLogTab";
 
-type Tab = "month" | "supervision" | "expenses" | "meds" | "diary" | "handover";
+type Tab = "month" | "supervision" | "expenses" | "meds" | "diary" | "handover" | "hub";
 type TrainingCompletion = { title: string; completedOn: string };
 
 function fmtDate(iso: string): string {
@@ -102,7 +103,7 @@ export default function PaperworkScreen() {
   return (
     <div>
       <div className="tabs">
-        {(["month", "supervision", "expenses", "meds", "diary", "handover"] as Tab[]).map((t) => (
+        {(["month", "supervision", "expenses", "meds", "diary", "handover", "hub"] as Tab[]).map((t) => (
           <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
             {t === "month"
               ? "Month"
@@ -114,7 +115,9 @@ export default function PaperworkScreen() {
                     ? "Medication"
                     : t === "diary"
                       ? "Diary for SW"
-                      : "Handover"}
+                      : t === "handover"
+                        ? "Handover"
+                        : "Hub log"}
           </button>
         ))}
       </div>
@@ -230,6 +233,8 @@ export default function PaperworkScreen() {
       )}
 
       {tab === "handover" && <HandoverTab />}
+
+      {tab === "hub" && <HubLogTab />}
     </div>
   );
 }
