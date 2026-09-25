@@ -169,6 +169,20 @@ function linkMentionedChildren(names: string[], item: PendingItem) {
 }
 
 /**
+ * Backstop for hub_update, same idea as linkMentionedChildren above -- the
+ * carer said "basically everyone who is in our hub is hub news", so a plain
+ * name match against the known roster is more reliable than trusting the
+ * model's own read of whether an item "sounds like" hub contact.
+ */
+function linkMentionedHubMembers(hubMemberNames: string[], item: PendingItem) {
+  const found = namesInText(hubMemberNames, item.text);
+  if (!found.length) return;
+  const existing = item.hub_update?.carer_names ? item.hub_update.carer_names.split(",").map((s) => s.trim()) : [];
+  const merged = [...new Set([...existing, ...found])].filter(Boolean);
+  item.hub_update = { carer_names: merged.join(", "), support_type: item.hub_update?.support_type || "other" };
+}
+
+/**
  * Used by every fallback path below (no API key, or the AI call itself
  * failing) -- these used to always save with child/kids empty, meaning a
  * note that named the very child it was about still landed completely
@@ -178,6 +192,11 @@ function linkMentionedChildren(names: string[], item: PendingItem) {
 function fallbackChildMatch(names: string[], text: string): { child: string; kids: string[] } {
   const kids = namesInText(names, text);
   return { child: kids[0] || "", kids };
+}
+
+function fallbackHubMatch(hubMemberNames: string[], text: string): { carer_names: string; support_type: string } | null {
+  const found = namesInText(hubMemberNames, text);
+  return found.length ? { carer_names: found.join(", "), support_type: "other" } : null;
 }
 
 /**
@@ -210,9 +229,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No text given" }, { status: 400 });
   }
 
-  const [{ data: children }, { data: householdChildren }] = await Promise.all([
+  const [{ data: children }, { data: householdChildren }, { data: hubMemberRows }] = await Promise.all([
     supabase.from("children").select("name"),
     supabase.from("household_children").select("name"),
+    supabase.from("hub_members").select("name"),
   ]);
   const { data: courseRows } = await supabase
     .from("shared_training_catalog")
@@ -223,6 +243,11 @@ export async function POST(req: NextRequest) {
   // child -- so notes naming them should match and tag them just like the
   // main children table, instead of being flagged as an unrecognised name.
   const names = [...(children ?? []), ...(householdChildren ?? [])].map((c) => c.name as string);
+  // Anyone on this list is, by definition, hub news -- a plain name match
+  // (same mechanism as linkMentionedChildren below) backstops the AI's own
+  // judgement call, so a known hub carer is never missed just because the
+  // wording of a note didn't read as "hub contact" to the model.
+  const hubMemberNames = (hubMemberRows ?? []).map((m) => m.name as string);
   const courses = (courseRows ?? []).map((c) => {
     const title = c.title as string;
     const description = (c.description as string) || "";
@@ -235,7 +260,19 @@ export async function POST(req: NextRequest) {
     const backstop = backstopFlag(text);
     const { child, kids } = fallbackChildMatch(names, text);
     return NextResponse.json({
-      items: [{ bucket: "scratch", child, kids, also_in: [], text, kind: "purchase", flag: backstop.flag, flag_note: backstop.flagNote }],
+      items: [
+        {
+          bucket: "scratch",
+          child,
+          kids,
+          also_in: [],
+          text,
+          kind: "purchase",
+          flag: backstop.flag,
+          flag_note: backstop.flagNote,
+          hub_update: fallbackHubMatch(hubMemberNames, text),
+        },
+      ],
       warning: "AI sorting isn't set up yet (no ANTHROPIC_API_KEY) — saved as 'Just record' so nothing is lost.",
     });
   }
@@ -403,6 +440,7 @@ Split into one item per separate thing, under "items".`;
     });
 
     items.forEach((item) => linkMentionedChildren(names, item));
+    items.forEach((item) => linkMentionedHubMembers(hubMemberNames, item));
     const deduped = dropRedundantDaycare(items);
 
     return NextResponse.json({ items: deduped });
@@ -426,6 +464,7 @@ Split into one item per separate thing, under "items".`;
           kind: "purchase",
           flag: backstop.flag,
           flag_note: backstop.flagNote,
+          hub_update: fallbackHubMatch(hubMemberNames, text),
         },
       ],
       warning: isCreditIssue

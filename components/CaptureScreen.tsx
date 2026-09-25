@@ -620,6 +620,29 @@ export default function CaptureScreen() {
     if (completedTrainingRows.length) {
       await supabase.from("training_progress").upsert(completedTrainingRows, { onConflict: "user_id,course_title" });
     }
+    // Day care given to another carer's children is, by its nature, hub
+    // support -- logged to the Hub log too, not just Expenses, so it's
+    // already there when the MB5 support-log spreadsheet is due rather than
+    // needing to be typed in twice. carer_names comes from whichever cared-
+    // for child already has a hub carer on file; left blank to fill in by
+    // hand otherwise, same as anything else logged here.
+    const daycareHubRows = pending
+      .filter((p) => p.bucket === "expenses" && p.kind === "daycare")
+      .map((p) => {
+        const carerNames = [
+          ...new Set(
+            p.kids.map((k) => children.find((c) => c.name === k)?.hub_carer_name).filter((n): n is string => !!n && n.trim() !== ""),
+          ),
+        ];
+        return {
+          date: today(),
+          carer_names: carerNames.join(", "),
+          support_type: p.overnight ? (p.reason === "Emergency" ? "sleepover_emergency" : "sleepover_planned") : "daytime_child",
+          amount: p.hours ?? null,
+          notes: p.text,
+        };
+      });
+    if (daycareHubRows.length) await supabase.from("hub_support_log").insert(daycareHubRows);
     // A school contact / club / food note shown as a suggestion is applied
     // automatically here -- not just on its own separate "Save" click --
     // because a click on a small secondary button, easy to miss under the
