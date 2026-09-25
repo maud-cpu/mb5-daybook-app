@@ -70,8 +70,18 @@ export const BASICS_SECTIONS: BasicsSection[] = [
       { key: "gp", label: "GP practice" },
       { key: "nhs", label: "NHS number", placeholder: "where it is kept, or the number if you're happy to hold it here" },
       { key: "allergies", label: "Allergies & medication", placeholder: 'say "none" if none' },
-      { key: "dentist", label: "Dentist / optician", placeholder: "name · last visit" },
+      { key: "dentist", label: "Dentist / optician", placeholder: "practice name" },
       { key: "laceh", label: "CLA health assessment", placeholder: "last · next due" },
+      {
+        key: "recurring_checks",
+        label: "Recurring health checks",
+        addLabel: "add another check",
+        repeatableFields: [
+          { key: "what", label: "What (e.g. Dentist, Eye test, Hearing test)" },
+          { key: "last", label: "Last done", type: "date" },
+          { key: "next", label: "Next due", type: "date" },
+        ],
+      },
     ],
   },
   {
