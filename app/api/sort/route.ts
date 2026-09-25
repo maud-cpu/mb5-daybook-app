@@ -8,6 +8,14 @@ import { today } from "@/lib/domain";
 import { BUCKETS, DAYCARE_REASONS, FlagKey, PendingItem, REMINDER_CATEGORIES } from "@/lib/types";
 import { aiErrorMessage } from "@/lib/aiErrors";
 
+// A long, detailed note (several paragraphs covering a whole incident) needs
+// the model longer to sort into several richly-filled items than Vercel's
+// default serverless function timeout allows -- a real crisis entry was cut
+// off mid-request and silently fell back to a plain, unflagged "Just record"
+// with none of the AI sorting applied. Without this, that failure mode is
+// indistinguishable from the AI just not being available.
+export const maxDuration = 60;
+
 const REMINDER_CATEGORY_KEYS = REMINDER_CATEGORIES.map(([k]) => k);
 
 const FLAG_KEYS = [
@@ -151,6 +159,18 @@ function linkMentionedChildren(names: string[], item: PendingItem) {
 }
 
 /**
+ * Used by every fallback path below (no API key, or the AI call itself
+ * failing) -- these used to always save with child/kids empty, meaning a
+ * note that named the very child it was about still landed completely
+ * untagged if the AI couldn't be reached. A plain name search over the raw
+ * text is a far better bet than nothing.
+ */
+function fallbackChildMatch(names: string[], text: string): { child: string; kids: string[] } {
+  const kids = namesInText(names, text);
+  return { child: kids[0] || "", kids };
+}
+
+/**
  * Everything in one capture batch is for the same day. If a child already
  * has an overnight daycare item in this batch, drop any separate
  * daytime-hours item for the same child -- the overnight rate already
@@ -203,10 +223,9 @@ export async function POST(req: NextRequest) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     const backstop = backstopFlag(text);
+    const { child, kids } = fallbackChildMatch(names, text);
     return NextResponse.json({
-      items: [
-        { bucket: "scratch", child: "", kids: [], also_in: [], text, kind: "purchase", flag: backstop.flag, flag_note: backstop.flagNote },
-      ],
+      items: [{ bucket: "scratch", child, kids, also_in: [], text, kind: "purchase", flag: backstop.flag, flag_note: backstop.flagNote }],
       warning: "AI sorting isn't set up yet (no ANTHROPIC_API_KEY) — saved as 'Just record' so nothing is lost.",
     });
   }
@@ -231,13 +250,12 @@ Split into one item per separate thing, under "items".`;
     const anthropic = new Anthropic({ apiKey });
     const msg = await anthropic.messages.parse({
       model: "claude-sonnet-5",
-      // Was 1500 -- too low for this schema once schoolContact/club/foodNote
-      // were added on top of the original fields, and for a longer, more
-      // detailed note (several symptoms, a med given, an appointment to
-      // book) that needs several richly-filled items in one response. A cut
-      // response is invalid JSON even mid-string, which silently lost
-      // everything in the note rather than just running short.
-      max_tokens: 4096,
+      // Was 1500, then 4096 -- still too low for a long, multi-part note
+      // (e.g. a whole safeguarding incident spanning several hours) that
+      // splits into many richly-filled items, each with its own training
+      // suggestions. A cut response is invalid JSON even mid-string, which
+      // silently lost everything in the note rather than just running short.
+      max_tokens: 8192,
       system: sys,
       messages: [{ role: "user", content: text }],
       output_config: { format: zodOutputFormat(SortResponseSchema) },
@@ -371,6 +389,7 @@ Split into one item per separate thing, under "items".`;
     return NextResponse.json({ items: deduped });
   } catch (e) {
     const backstop = backstopFlag(text);
+    const { child, kids } = fallbackChildMatch(names, text);
     const message = aiErrorMessage(e, "That note was too long to sort in one go");
     // A raw JSON billing error is easy to miss/misread as "some AI glitch"
     // rather than what it actually is -- surfaced this exact way to a real
@@ -381,8 +400,8 @@ Split into one item per separate thing, under "items".`;
       items: [
         {
           bucket: "scratch",
-          child: "",
-          kids: [],
+          child,
+          kids,
           also_in: [],
           text,
           kind: "purchase",
