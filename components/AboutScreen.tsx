@@ -479,6 +479,17 @@ export default function AboutScreen() {
     flashSaved();
   }
 
+  // Used by ChildDocuments' "extract info from this doc" -- several fields
+  // at once in a single write, rather than one round trip per field.
+  async function saveBasicsBulk(childId: string, table: "children" | "household_children", patch: Record<string, string>) {
+    const current = table === "children" ? basics[childId] || {} : householdChildren.find((c) => c.id === childId)?.basics || {};
+    const next = { ...current, ...patch };
+    if (table === "children") setBasics((prev) => ({ ...prev, [childId]: next }));
+    else setHouseholdChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, basics: next } : c)));
+    await supabase.from(table).update({ basics: next }).eq("id", childId);
+    flashSaved();
+  }
+
   function flashSaved() {
     setSavedAt(new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }));
     setTimeout(() => setSavedAt(""), 1500);
@@ -1095,7 +1106,13 @@ export default function AboutScreen() {
           </div>
           {open && <ChildSchoolAdmin childId={c.id} />}
           {clubsOpen && <ChildClubs childId={c.id} />}
-          {docsOpen && <ChildDocuments childId={c.id} />}
+          {docsOpen && (
+            <ChildDocuments
+              childId={c.id}
+              basics={c.basics || {}}
+              onApplyExtracted={(patch) => saveBasicsBulk(c.id, "household_children", patch)}
+            />
+          )}
           {c.category !== "fosters" && (
             <div style={{ marginTop: 10 }}>
               <ChildBasicsPanel
@@ -1184,7 +1201,9 @@ export default function AboutScreen() {
               📎 Documents
             </button>
           </div>
-          {docsOpen && <ChildDocuments childId={c.id} />}
+          {docsOpen && (
+            <ChildDocuments childId={c.id} basics={cb} onApplyExtracted={(patch) => saveBasicsBulk(c.id, "children", patch)} />
+          )}
           <div style={{ marginTop: 10 }}>
             <ChildBasicsPanel
               showMockingbird={true}
@@ -1243,7 +1262,9 @@ export default function AboutScreen() {
           </div>
           {open && <ChildSchoolAdmin childId={c.id} />}
           {clubsOpen && <ChildClubs childId={c.id} />}
-          {docsOpen && <ChildDocuments childId={c.id} />}
+          {docsOpen && (
+            <ChildDocuments childId={c.id} basics={cb} onApplyExtracted={(patch) => saveBasicsBulk(c.id, "children", patch)} />
+          )}
           <div style={{ marginTop: 10 }}>
             <b style={{ fontSize: 14 }}>Living arrangement</b>
             <select
