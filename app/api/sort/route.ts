@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { backstopFlag, FLAG_TRAINING, namesInText } from "@/lib/keywordFlags";
 import { today } from "@/lib/domain";
-import { BUCKETS, DAYCARE_REASONS, FlagKey, PendingItem, REMINDER_CATEGORIES } from "@/lib/types";
+import { BUCKETS, DAYCARE_REASONS, FlagKey, HUB_SUPPORT_TYPE_KEYS, PendingItem, REMINDER_CATEGORIES } from "@/lib/types";
 import { aiErrorMessage } from "@/lib/aiErrors";
 
 // A long, detailed note (several paragraphs covering a whole incident) needs
@@ -130,6 +130,16 @@ const SortItemSchema = z.object({
   schoolAdmin: z.string().describe(
     "If the text gives practical school ADMIN info -- how to pay for lunches/other school payments, a homework app/portal, a class rep, a PTA/friends-of-school group, the school office, or another useful school-related link -- a short, tidied-up summary of exactly what it says (e.g. \"ParentPay: https://... -- for lunches and other payments\"). NOT the child's day-to-day schooling, a teacher, or a one-off event. Empty string if the text doesn't give anything like that.",
   ),
+  // Two flat fields rather than one nullable object, same reasoning as
+  // schoolAdmin above -- keeps this cheap against the schema's size limit.
+  hubCarerNames: z.string().describe(
+    "Comma-separated name(s) of any Mockingbird hub carer(s) this item is about or involves -- direct contact with them (a visit, coffee, paperwork help, a call), a hub social/constellation event, or news learned via the hub about another carer's or their child's situation. E.g. \"Sophie\" or \"Sophie, Becky, Tim, Ali\". Empty string if this item isn't about hub contact/news at all.",
+  ),
+  hubSupportType: z
+    .enum([...HUB_SUPPORT_TYPE_KEYS, ""])
+    .describe(
+      `Only set when hubCarerNames is non-empty: the best-fit category from ${HUB_SUPPORT_TYPE_KEYS.join(", ")} -- default "other" when nothing specific fits. Empty string when hubCarerNames is empty.`,
+    ),
 });
 const SortResponseSchema = z.object({ items: z.array(SortItemSchema) });
 
@@ -243,6 +253,7 @@ Also separately: if the text describes a child doing a club or extracurricular a
 Also separately: if the text says a specific named child likes or dislikes a particular food or drink (e.g. "Rubynn doesn't like carrots", "Ruby loves pasta"), set "foodNote" to {"likes":"<comma-separated foods, or empty string>","dislikes":"<comma-separated foods, or empty string>"} tied to whichever known children it's about, so it can be offered as a save to their Food box. Only for an actual named food/drink, not a vague statement like "fussy eater" with nothing specific said. Otherwise null.
 Also separately: if the text says the CARER THEMSELVES has attended, done, or completed a specific named training session or course (e.g. "did PDA training today", "completed the safer caring refresher", "PDA training at Arthur and Henry's school, 2-3pm") -- something already done or being done today, not a course being suggested for later -- set "completedTraining" to {"title":"<a short clear title, tidied from their own wording>","date":"<the date they did it, or today's date if not stated>"}, so it can be logged on their training record even when it isn't one of the courses listed above. Otherwise null.
 Also separately: if the text gives practical school ADMIN info -- how to pay for school lunches or other school payments (e.g. "ParentPay is the app for school dinner money and other payments", with a link if given), a homework app/portal name or link, a class rep's name/contact, a PTA/friends-of-school group's name/contact/Facebook link, the school office's phone/email, or another useful school-related link (payment portal, newsletter, booking system, uniform shop, etc) -- set "schoolAdmin" to a short, tidied-up summary of exactly what it says, so it can be offered as a save to the relevant children's School admin notes. This is about admin/logistics, not the child's own schooling, a teacher (see "schoolContact" above), or a one-off event. Empty string if nothing like that is in the text.
+Also separately: if the item is about the carer's own peer support network ("the hub", a Mockingbird constellation, or similar) -- direct contact with another carer in it (a visit, coffee together, help with paperwork, a phone call, attending something together like a meeting or review), a hub social get-together or constellation meeting, or news learned via the hub about another carer's own life or a child placed with them (a move, a health update, a placement change, a review, a family/court situation) -- set "hubCarerNames" to the name(s) of the hub carer(s) or person this is about or involves, comma-separated (e.g. "Sophie", "Sophie, Becky, Tim, Ali", "Amy"), and "hubSupportType" to the best fit from ${HUB_SUPPORT_TYPE_KEYS.join(", ")} (default "other" if nothing specific fits). If the WHOLE note opens by framing everything in it as hub news/updates (e.g. "things that have happened in the hub this week"), treat every item split out of it as hub-related this way too by default, even one that only names a child (not an adult) -- use the child's own name for "hubCarerNames" in that case, since the note is clearly still about something happening within the hub network. This is about the carer's OWN peer network generally, not a specific child's individually-assigned Mockingbird hub carer recorded elsewhere. Leave both empty only when the item plainly isn't hub-related at all (e.g. a note about the carer's own household, unconnected to the hub framing above).
 Reason for day care, if said, is one of: ${DAYCARE_REASONS.join("/")}.
 Split into one item per separate thing, under "items".`;
 
@@ -380,6 +391,14 @@ Split into one item per separate thing, under "items".`;
               }
             : null,
         school_admin_note: p.schoolAdmin || "",
+        hub_update: p.hubCarerNames?.trim()
+          ? {
+              carer_names: p.hubCarerNames.trim(),
+              support_type: HUB_SUPPORT_TYPE_KEYS.includes(p.hubSupportType as (typeof HUB_SUPPORT_TYPE_KEYS)[number])
+                ? p.hubSupportType
+                : "other",
+            }
+          : null,
       };
     });
 

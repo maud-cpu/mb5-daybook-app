@@ -18,6 +18,7 @@ import {
   DAYCARE_REASONS,
   EXPENSE_KINDS,
   FLAGS,
+  HUB_SUPPORT_TYPES,
   PendingItem,
   Rates,
 } from "@/lib/types";
@@ -474,6 +475,26 @@ export default function CaptureScreen() {
     showToast(`Saved to ${childNames.join(" & ")}'s School admin notes`);
   }
 
+  // Unlike food/school-admin notes, a hub update has no natural key to dedupe
+  // against -- every one of these is its own moment worth its own row in the
+  // Hub log, same as if it had been typed there directly.
+  async function saveHubUpdate(i: number) {
+    const update = pending[i].hub_update;
+    if (!update) return;
+    const { error } = await supabase.from("hub_support_log").insert({
+      date: today(),
+      carer_names: update.carer_names,
+      support_type: update.support_type,
+      notes: pending[i].text,
+    });
+    if (error) {
+      showToast("Couldn't save: " + error.message);
+      return;
+    }
+    updatePending(i, { hub_update: null });
+    showToast("Saved to Hub log");
+  }
+
   // Whether a tagged child still needs this suggestion applied -- shared
   // between the review screen (deciding what to show) and Save all (which
   // now applies every suggestion still showing, so a school contact/club/
@@ -617,6 +638,7 @@ export default function CaptureScreen() {
         if (fnNeeds.length) jobs.push(saveFoodNote(idx, fnNeeds));
         const saNeeds = schoolAdminNeeds(p);
         if (saNeeds.length) jobs.push(saveSchoolAdmin(idx, saNeeds));
+        if (p.hub_update) jobs.push(saveHubUpdate(idx));
         return jobs;
       }),
     );
@@ -800,6 +822,16 @@ export default function CaptureScreen() {
                       </option>
                     ))}
                   </select>
+                )}
+                {!p.hub_update && (
+                  <button
+                    className="chip"
+                    style={{ flex: "0 0 auto" }}
+                    title="Also log this to the Hub log"
+                    onClick={() => updatePending(i, { hub_update: { carer_names: "", support_type: "other" } })}
+                  >
+                    + Hub news
+                  </button>
                 )}
                 <button className="x" onClick={() => setPending((prev) => prev.filter((_, idx) => idx !== i))}>
                   ×
@@ -1228,6 +1260,37 @@ export default function CaptureScreen() {
                     </div>
                   );
                 })()}
+              {p.hub_update && (
+                <div className="note">
+                  <div style={{ marginBottom: 6 }}>
+                    🐦 Sounds like hub news — check it&apos;s right (this saves automatically with Save all):
+                  </div>
+                  <div className="row" style={{ margin: "0 0 6px" }}>
+                    <input
+                      placeholder="Carer(s) involved"
+                      value={p.hub_update.carer_names}
+                      onChange={(e) => updatePending(i, { hub_update: { ...p.hub_update!, carer_names: e.target.value } })}
+                    />
+                    <select
+                      value={p.hub_update.support_type}
+                      onChange={(e) => updatePending(i, { hub_update: { ...p.hub_update!, support_type: e.target.value } })}
+                      style={{ flex: "0 0 auto", width: "auto" }}
+                    >
+                      {HUB_SUPPORT_TYPES.map(([k, l]) => (
+                        <option key={k} value={k}>
+                          {l}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button className="chip" onClick={() => saveHubUpdate(i)}>
+                    Save now to Hub log
+                  </button>{" "}
+                  <button className="chip" onClick={() => updatePending(i, { hub_update: null })}>
+                    Don&apos;t save
+                  </button>
+                </div>
+              )}
               {hubLeader?.name &&
                 (() => {
                   // A child on Mockingbird "mb5" (this household's own) has

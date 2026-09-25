@@ -291,6 +291,36 @@ export function reminderCategoryLabel(cat: string): string {
   return REMINDER_CATEGORIES.find(([k]) => k === cat)?.[1] ?? "📌 Other";
 }
 
+// Shared between HubLogTab (the manual log form) and /api/sort (which offers
+// a capture note about hub contact/news as a one-click save into the same
+// log) -- kept in one place so the two never drift out of sync with each
+// other or with hub_support_log's own check constraint.
+export const HUB_SUPPORT_TYPES = [
+  ["daytime_satellite", "Daytime support — for a satellite carer"],
+  ["daytime_child", "Daytime support — for children/young people"],
+  ["social_activity", "Social activity"],
+  ["constellation_meeting", "Constellation meeting"],
+  ["sleepover_planned", "Planned sleepover overnight"],
+  ["sleepover_emergency", "Emergency sleepover overnight"],
+  ["training_session", "Training session"],
+  ["other", "Other / general check-in"],
+] as const;
+
+// A separate literal tuple (rather than deriving it from HUB_SUPPORT_TYPES
+// via .map()) purely so z.enum() in /api/sort gets a proper fixed-length
+// tuple of string literals to work from, same shape as FLAG_KEYS there --
+// kept in sync with HUB_SUPPORT_TYPES by eye since it's just the 8 keys.
+export const HUB_SUPPORT_TYPE_KEYS = [
+  "daytime_satellite",
+  "daytime_child",
+  "social_activity",
+  "constellation_meeting",
+  "sleepover_planned",
+  "sleepover_emergency",
+  "training_session",
+  "other",
+] as const;
+
 // Split out of the combined "🎓 Training" label so a day's list of items can
 // show one consistent icon + text hierarchy per row instead of repeating the
 // emoji inline with the label text.
@@ -583,4 +613,6 @@ export type PendingItem = Partial<EntryRecord> & {
   completed_training?: { title: string; date: string } | null;
   /** A short summary of practical school-admin info (lunch payment app, homework portal, PTA, etc) the AI spotted in the text, offered as a one-click save to the tagged child's School admin notes. */
   school_admin_note?: string;
+  /** Set when the note is about contact with, or news via, the carer's Mockingbird hub network -- offered as a one-click save to the Hub log. */
+  hub_update?: { carer_names: string; support_type: string } | null;
 };
