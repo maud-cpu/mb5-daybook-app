@@ -113,6 +113,41 @@ export function placementEndItems(children: Pick<Child, "id" | "name" | "placeme
     .filter((x): x is DueItem => x !== null);
 }
 
+type RecurringCheck = { what?: string; last?: string; next?: string };
+
+function parseRecurringChecks(raw: string): RecurringCheck[] {
+  try {
+    const parsed = JSON.parse(raw || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+// Dentist, eye test, hearing test, or anything else that needs doing on a
+// regular basis -- basics.recurring_checks (About us) holds a "next due"
+// date per check; this surfaces it here the same way placementEndItems
+// does, rather than leaving it as a field nobody's reminded to look at.
+export function recurringCheckItems(children: (Pick<Child, "id" | "name"> & { basics: Record<string, string> })[]): DueItem[] {
+  const t = today();
+  const WARN_DAYS = 14;
+  const warnFrom = new Date();
+  warnFrom.setDate(warnFrom.getDate() + WARN_DAYS);
+  const warnFromStr = warnFrom.toISOString().slice(0, 10);
+  const out: DueItem[] = [];
+  children.forEach((c) => {
+    parseRecurringChecks(c.basics?.recurring_checks || "").forEach((check, i) => {
+      if (!check.what?.trim() || !check.next) return;
+      if (check.next <= t) {
+        out.push({ key: `check-${c.id}-${i}`, urgent: false, text: `${c.name}'s ${check.what} was due ${check.next} — book it in` });
+      } else if (check.next <= warnFromStr) {
+        out.push({ key: `check-${c.id}-${i}`, urgent: false, text: `${c.name}'s ${check.what} due ${check.next}` });
+      }
+    });
+  });
+  return out;
+}
+
 export function dueReminders(reminders: Reminder[]): DueItem[] {
   const t = today();
   return reminders

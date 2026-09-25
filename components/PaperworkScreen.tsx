@@ -402,7 +402,7 @@ const CLA_SECTIONS: { title: string; keys: string[] }[] = [
     title: "Social work team",
     keys: ["csw", "csw_phone", "csw_email", "cswm", "cswm_phone", "cswm_email", "iro", "iro_phone", "iro_email", "duty"],
   },
-  { title: "Health", keys: ["gp", "nhs", "allergies", "dentist", "laceh"] },
+  { title: "Health", keys: ["gp", "nhs", "allergies", "dentist", "recurring_checks", "laceh"] },
   { title: "Education", keys: ["school", "teacher", "pep", "send"] },
   { title: "Family & contact", keys: ["contact", "nocontact", "family", "cc_contact", "cc_phone"] },
   { title: "Key dates", keys: ["review_last", "review_next", "visit_last", "visit_next", "other"] },

@@ -12,6 +12,7 @@ import {
   invoiceMonthItems,
   missingNumbersItems,
   placementEndItems,
+  recurringCheckItems,
   unreportedIncidentItems,
 } from "@/lib/thingsToDo";
 import { FLAGS, Reminder, relatedFormFor } from "@/lib/types";
@@ -140,6 +141,7 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
       ...bandChangeItems(allChildren),
       ...trainingItems,
       ...missingNumbersItems(allChildren),
+      ...recurringCheckItems(allChildren),
       ...placementEndItems(children ?? []),
       ...edtMissingItem(household?.edt ?? ""),
       ...dueReminders(remindersList),
