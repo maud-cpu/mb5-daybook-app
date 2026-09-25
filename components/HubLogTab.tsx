@@ -20,6 +20,8 @@ type LogEntry = {
   notes: string;
 };
 
+type HubMember = { id: string; name: string };
+
 type Draft = { date: string; carer_names: string; support_type: string; amount: string; notes: string };
 
 function blankDraft(): Draft {
@@ -33,6 +35,8 @@ function fmtDate(iso: string): string {
 export default function HubLogTab() {
   const supabase = createClient();
   const [entries, setEntries] = useState<LogEntry[]>([]);
+  const [members, setMembers] = useState<HubMember[]>([]);
+  const [newMember, setNewMember] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [draft, setDraft] = useState<Draft>(blankDraft());
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -40,8 +44,12 @@ export default function HubLogTab() {
   const [range, setRange] = useState<"month" | "all">("month");
 
   async function load() {
-    const { data } = await supabase.from("hub_support_log").select("*").order("date", { ascending: false });
+    const [{ data }, { data: memberRows }] = await Promise.all([
+      supabase.from("hub_support_log").select("*").order("date", { ascending: false }),
+      supabase.from("hub_members").select("id, name").order("name"),
+    ]);
     setEntries((data as LogEntry[]) ?? []);
+    setMembers((memberRows as HubMember[]) ?? []);
     setLoaded(true);
   }
 
@@ -50,6 +58,19 @@ export default function HubLogTab() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function addMember() {
+    const name = newMember.trim();
+    if (!name) return;
+    await supabase.from("hub_members").insert({ name });
+    setNewMember("");
+    load();
+  }
+
+  async function removeMember(id: string) {
+    setMembers((prev) => prev.filter((m) => m.id !== id));
+    await supabase.from("hub_members").delete().eq("id", id);
+  }
 
   const thisMonth = today().slice(0, 7);
   const shown = range === "month" ? entries.filter((e) => e.date.startsWith(thisMonth)) : entries;
@@ -118,6 +139,33 @@ export default function HubLogTab() {
 
   return (
     <div>
+      <div className="card">
+        <h3>Who&apos;s in your hub</h3>
+        <p className="hint">
+          Anyone on this list gets picked up automatically when you mention them in Capture — no need to remember to
+          log it separately. Prune anything you don&apos;t want once you&apos;re doing your spreadsheet, easier than
+          checking beforehand.
+        </p>
+        <div className="chips" style={{ marginTop: 6 }}>
+          {members.map((m) => (
+            <button key={m.id} className="chip on" onClick={() => removeMember(m.id)} title="Remove">
+              {m.name} ×
+            </button>
+          ))}
+        </div>
+        <div className="row" style={{ marginTop: 8 }}>
+          <input
+            placeholder="Add a name (e.g. Sophie)"
+            value={newMember}
+            onChange={(e) => setNewMember(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addMember()}
+          />
+          <button className="chip" style={{ flex: "0 0 auto" }} onClick={addMember}>
+            + Add
+          </button>
+        </div>
+      </div>
+
       <div className="card">
         <h3>Log a hub interaction</h3>
         <p className="hint">
