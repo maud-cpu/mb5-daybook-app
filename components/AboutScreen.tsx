@@ -309,7 +309,6 @@ const emptyHousehold: Household = {
 };
 
 const CENTER_COLOR = "#1f5e52";
-const SSW_COLOR = "#96712f";
 const ADD_HH_CHILD = "add-household-child";
 const ADD_VISIT_CHILD = "add-visiting-child";
 const ADD_VISITOR = "add-visitor";
@@ -340,6 +339,7 @@ export default function AboutScreen() {
   const [savedAt, setSavedAt] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [familyDraft, setFamilyDraft] = useState({ phone: "", email: "", role: VISITOR_ROLES[0], gender: "" });
+  const [visitorSearch, setVisitorSearch] = useState("");
 
   // A family hub on the Visitors wheel starts as nothing more than shared
   // free text on some children's `family` field -- there's no adult record
@@ -674,33 +674,25 @@ export default function AboutScreen() {
     { id: ADD_HH_CHILD, label: "+", color: "", dashed: true },
   ];
 
-  // A separate, non-touching wheel -- people who visit regularly aren't
-  // part of the household, so they don't belong orbiting the same centre.
-  const visitorsCenter: WheelNode = { id: "visitors-hub", label: "Visitors", color: SSW_COLOR };
-  const childNode = (c: Child, parentId?: string): WheelNode => ({
-    id: `visit:${c.id}`,
-    label: firstName(c.name),
-    color: personColor(c.name),
-    parentId,
-  });
-
-  // Three layers, all visible at once, no tapping needed: Visitors -> the
-  // adult a child is visiting with (or that child's own family-name hub,
-  // when no matching adult is on file) -> their children, drawn as a real
-  // outer ring with each child's line running from its own adult/family hub
-  // rather than from the centre.
-  const visitorsRing1: WheelNode[] = [
-    ...Object.keys(visitingByFamily).map((fam) => ({ id: `family:${fam}`, label: fam, color: personColor(fam) })),
-    ...visitors.map((v) => ({ id: `visitor:${v.id}`, label: firstName(v.name), color: SSW_COLOR })),
-    { id: SSW_NODE, label: household.ssw_name ? firstName(household.ssw_name) : "SSW", color: SSW_COLOR },
-    { id: ADD_VISIT_CHILD, label: "+ child", color: "", dashed: true },
-    { id: ADD_VISITOR, label: "+ adult", color: "", dashed: true },
-  ];
-  const visitorsRing2: WheelNode[] = [
-    ...visitingUngrouped.map((c) => childNode(c)),
-    ...Object.entries(visitingByFamily).flatMap(([fam, kids]) => kids.map((c) => childNode(c, `family:${fam}`))),
-    ...Object.entries(childrenByVisitorId).flatMap(([vid, kids]) => kids.map((c) => childNode(c, `visitor:${vid}`))),
-  ];
+  // The Visitors wheel worked while there were a handful of people on it,
+  // but once everyone in the hub/daycare/family-friends is added it's dozens
+  // of names squeezed onto one ring -- unreadable and impossible to tap
+  // accurately. A searchable, grouped list scales the same way a contacts
+  // app does, and reuses the exact same selection ids (visitor:/family:/
+  // visit:/SSW_NODE/ADD_VISITOR/ADD_VISIT_CHILD) as the old wheel, so every
+  // edit panel below (renderSelected) needed no changes at all.
+  const sswLabel = household.ssw_name ? household.ssw_name : "SSW";
+  const visitorSearchQ = visitorSearch.trim().toLowerCase();
+  const matchesSearch = (name: string) => !visitorSearchQ || name.toLowerCase().includes(visitorSearchQ);
+  const visitorGroups = VISITOR_ROLES.map((role) => ({
+    role,
+    items: visitors.filter((v) => v.role === role && matchesSearch(v.name)),
+  })).filter((g) => g.items.length > 0);
+  const visibleFamilyGroups = Object.entries(visitingByFamily).filter(([fam]) => matchesSearch(fam));
+  const visibleUngrouped = visitingUngrouped.filter((c) => matchesSearch(c.name));
+  const sswVisible = matchesSearch(sswLabel);
+  const visitorsDirectoryEmpty =
+    visitorGroups.length === 0 && visibleFamilyGroups.length === 0 && visibleUngrouped.length === 0 && !sswVisible;
 
   function closeButton() {
     return (
@@ -1330,10 +1322,7 @@ export default function AboutScreen() {
     <div>
       <div className="card">
         <h3>About us</h3>
-        <p className="hint">
-          Your household on the left, people who visit regularly on the right. Tap a circle to see and edit their
-          details.
-        </p>
+        <p className="hint">Your household — tap a circle to see and edit their details.</p>
         <div className="about-wheels">
           <RadialWheel
             center={householdCenter}
@@ -1342,15 +1331,116 @@ export default function AboutScreen() {
             onSelect={setSelected}
             maxWidth="380px"
           />
-          <RadialWheel
-            center={visitorsCenter}
-            ring1={visitorsRing1}
-            ring2={visitorsRing2}
-            selectedId={selected}
-            onSelect={selectVisitorsNode}
-            maxWidth="380px"
-          />
         </div>
+      </div>
+
+      <div className="card">
+        <h3>Visitors</h3>
+        <p className="hint">Everyone who visits regularly but doesn&apos;t live here. Search, or browse by who they are.</p>
+        <input
+          placeholder="Search visitors…"
+          value={visitorSearch}
+          onChange={(e) => setVisitorSearch(e.target.value)}
+        />
+        <div className="chips" style={{ marginTop: 8 }}>
+          <button className="chip add" onClick={() => selectVisitorsNode(ADD_VISITOR)}>
+            + Adult
+          </button>
+          <button className="chip add" onClick={() => selectVisitorsNode(ADD_VISIT_CHILD)}>
+            + Child
+          </button>
+        </div>
+
+        {sswVisible && (
+          <div
+            className="rec"
+            style={{ background: selected === SSW_NODE ? "#fbfaf6" : undefined }}
+            onClick={() => selectVisitorsNode(SSW_NODE)}
+          >
+            <b>{sswLabel}</b>
+            <br />
+            <small className="muted">Supervising social worker</small>
+          </div>
+        )}
+
+        {visitorGroups.map((g) => (
+          <div key={g.role} style={{ marginTop: 12 }}>
+            <small className="muted" style={{ textTransform: "uppercase", letterSpacing: 0.4 }}>
+              {g.role}
+            </small>
+            {g.items.map((v) => {
+              const kids = childrenByVisitorId[v.id] || [];
+              return (
+                <div
+                  key={v.id}
+                  className="rec"
+                  style={{ background: selected === `visitor:${v.id}` ? "#fbfaf6" : undefined }}
+                  onClick={() => selectVisitorsNode(`visitor:${v.id}`)}
+                >
+                  <b>{v.name}</b>
+                  {kids.length > 0 && (
+                    <div className="chips" style={{ marginTop: 4 }}>
+                      {kids.map((c) => (
+                        <span key={c.id} className="chip" style={{ pointerEvents: "none" }}>
+                          {c.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+
+        {visibleFamilyGroups.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <small className="muted" style={{ textTransform: "uppercase", letterSpacing: 0.4 }}>
+              Family — not yet added as an adult
+            </small>
+            {visibleFamilyGroups.map(([fam, kids]) => (
+              <div
+                key={fam}
+                className="rec"
+                style={{ background: selected === `family:${fam}` ? "#fbfaf6" : undefined }}
+                onClick={() => selectVisitorsNode(`family:${fam}`)}
+              >
+                <b>{fam}</b>
+                <div className="chips" style={{ marginTop: 4 }}>
+                  {kids.map((c) => (
+                    <span key={c.id} className="chip" style={{ pointerEvents: "none" }}>
+                      {c.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {visibleUngrouped.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <small className="muted" style={{ textTransform: "uppercase", letterSpacing: 0.4 }}>
+              Other visiting children
+            </small>
+            {visibleUngrouped.map((c) => (
+              <div
+                key={c.id}
+                className="rec"
+                style={{ background: selected === `visit:${c.id}` ? "#fbfaf6" : undefined }}
+                onClick={() => selectVisitorsNode(`visit:${c.id}`)}
+              >
+                <b>{c.name}</b>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {visitorsDirectoryEmpty && (
+          <p className="empty" style={{ marginTop: 10 }}>
+            {visitorSearchQ ? `No one matches "${visitorSearch.trim()}".` : "No visitors added yet."}
+          </p>
+        )}
       </div>
 
       {children.length === 0 && householdChildren.length === 0 && (
