@@ -32,6 +32,19 @@ const KEYWORD_FLAGS: { flag: FlagKey; test: (s: string) => boolean }[] = [
         s,
       ),
   },
+  {
+    // A mental health crisis serious enough to involve an ambulance,
+    // hospital, sectioning, or self-harm is exactly the kind of thing this
+    // backstop exists for -- caught here so a note like this still lands
+    // flagged even if the AI call itself fails outright (a real production
+    // failure: a long, detailed crisis note timed out and fell back to a
+    // completely unflagged "Just record" with nothing else applied).
+    flag: "health",
+    test: (s) =>
+      /\bambulance\b|\bsection(?:ed|ing)?\b.{0,20}\bmental health\b|\bmental health act\b|\bA ?& ?E\b|\bpolice\b[^.?!]{0,25}\bcalled\b|\bself[- ]?harm(?:ed|ing)?\b|\bsuicid(?:e|al)\b|\boverdosed?\b|\bcrisis team\b|\bcamhs\b/i.test(
+        s,
+      ),
+  },
 ];
 
 const KEYWORD_TRAINING: { test: RegExp; note: string }[] = [
