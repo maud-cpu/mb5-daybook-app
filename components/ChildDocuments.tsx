@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { childDocumentUrl, deleteChildDocumentFile, uploadChildDocument } from "@/lib/childDocuments";
+import { BASICS_SECTIONS } from "@/lib/basics";
 
 type Doc = {
   id: string;
@@ -13,7 +14,27 @@ type Doc = {
   uploaded_at: string;
 };
 
-export default function ChildDocuments({ childId }: { childId: string }) {
+type Conflict = { key: string; current: string; extracted: string };
+
+function fieldLabel(key: string): string {
+  for (const section of BASICS_SECTIONS) {
+    const field = section.fields.find((f) => f.key === key);
+    if (field) return field.label;
+  }
+  return key;
+}
+
+export default function ChildDocuments({
+  childId,
+  basics,
+  onApplyExtracted,
+}: {
+  childId: string;
+  /** Current basics values, so extraction only offers to fill empty boxes and flags the rest as conflicts. */
+  basics?: Record<string, string>;
+  /** Applies one or more extracted fields straight to this child's basics -- caller owns which table (children vs household_children). */
+  onApplyExtracted?: (patch: Record<string, string>) => void;
+}) {
   const supabase = createClient();
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -22,6 +43,10 @@ export default function ChildDocuments({ childId }: { childId: string }) {
   const [category, setCategory] = useState("");
   const [uploading, setUploading] = useState(false);
   const [openingId, setOpeningId] = useState<string | null>(null);
+  const [extractingId, setExtractingId] = useState<string | null>(null);
+  const [extractError, setExtractError] = useState("");
+  const [filledCount, setFilledCount] = useState(0);
+  const [conflicts, setConflicts] = useState<Conflict[]>([]);
 
   async function load() {
     setLoaded(false);
@@ -88,6 +113,55 @@ export default function ChildDocuments({ childId }: { childId: string }) {
     await deleteChildDocumentFile(supabase, doc.file_path);
   }
 
+  async function extractInfo(doc: Doc) {
+    if (!onApplyExtracted) return;
+    setExtractingId(doc.id);
+    setExtractError("");
+    setConflicts([]);
+    setFilledCount(0);
+    try {
+      const res = await fetch("/api/extract-child-doc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: doc.file_path }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setExtractError(data.error);
+        setExtractingId(null);
+        return;
+      }
+      const profile = data.profile as Record<string, string>;
+      const current = basics || {};
+      const toFill: Record<string, string> = {};
+      const conflictList: Conflict[] = [];
+      Object.entries(profile).forEach(([key, value]) => {
+        const v = (value || "").trim();
+        if (!v) return;
+        const existing = (current[key] || "").trim();
+        if (!existing) toFill[key] = v;
+        else if (existing !== v) conflictList.push({ key, current: existing, extracted: v });
+      });
+      if (Object.keys(toFill).length) {
+        onApplyExtracted(toFill);
+        setFilledCount(Object.keys(toFill).length);
+      }
+      setConflicts(conflictList);
+      if (!Object.keys(toFill).length && !conflictList.length) {
+        setExtractError("Couldn't find anything new in that document.");
+      }
+    } catch {
+      setExtractError("Couldn't reach the reading service — try again in a moment.");
+    }
+    setExtractingId(null);
+  }
+
+  function resolveConflict(key: string, replace: boolean) {
+    const conflict = conflicts.find((c) => c.key === key);
+    if (replace && conflict && onApplyExtracted) onApplyExtracted({ [key]: conflict.extracted });
+    setConflicts((prev) => prev.filter((c) => c.key !== key));
+  }
+
   if (!loaded) return <p className="hint">Loading…</p>;
 
   return (
@@ -113,12 +187,45 @@ export default function ChildDocuments({ childId }: { childId: string }) {
             <button className="chip" disabled={openingId === d.id} onClick={() => open(d)}>
               {openingId === d.id ? "Opening…" : "Open ↗"}
             </button>{" "}
+            {onApplyExtracted && (
+              <button className="chip" disabled={extractingId === d.id} onClick={() => extractInfo(d)}>
+                {extractingId === d.id ? "Reading…" : "🪄 Extract info"}
+              </button>
+            )}{" "}
             <button className="chip" onClick={() => remove(d)}>
               Remove
             </button>
           </span>
         </div>
       ))}
+      {extractError && <p style={{ color: "var(--danger)", fontSize: 14 }}>{extractError}</p>}
+      {filledCount > 0 && (
+        <p className="hint">
+          Filled in {filledCount} empty box{filledCount === 1 ? "" : "es"} from that document.
+        </p>
+      )}
+      {conflicts.length > 0 && (
+        <div className="note" style={{ marginTop: 8 }}>
+          <b>Already filled in — replace with what the document says?</b>
+          {conflicts.map((c) => (
+            <div key={c.key} style={{ marginTop: 8 }}>
+              <b>{fieldLabel(c.key)}</b>
+              <div className="muted" style={{ fontSize: 13 }}>
+                Currently: {c.current}
+              </div>
+              <div className="muted" style={{ fontSize: 13 }}>
+                Document says: {c.extracted}
+              </div>
+              <button className="chip" onClick={() => resolveConflict(c.key, true)}>
+                Replace
+              </button>{" "}
+              <button className="chip" onClick={() => resolveConflict(c.key, false)}>
+                Keep mine
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
       <div style={{ marginTop: 10, padding: 8, background: "#fbfaf6", borderRadius: "var(--radius-sm)" }}>
         <input placeholder="Title (optional — defaults to the filename)" value={title} onChange={(e) => setTitle(e.target.value)} />
         <input
