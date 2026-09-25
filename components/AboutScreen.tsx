@@ -324,6 +324,7 @@ export default function AboutScreen() {
   const [household, setHousehold] = useState<Household>(emptyHousehold);
   const [adults, setAdults] = useState<Adult[]>([]);
   const [newAdult, setNewAdult] = useState({ name: "", phone: "", email: "", role: ADULT_ROLES[0], gender: "" });
+  const [adultError, setAdultError] = useState("");
   const [householdChildren, setHouseholdChildren] = useState<HouseholdChild[]>([]);
   const [newHouseholdChild, setNewHouseholdChild] = useState({ name: "", born: "", category: "", notes: "", gender: "" });
   const [visitors, setVisitors] = useState<Visitor[]>([]);
@@ -485,7 +486,12 @@ export default function AboutScreen() {
 
   async function addAdult() {
     if (!newAdult.name.trim()) return;
-    await supabase.from("household_adults").insert(newAdult);
+    const { error } = await supabase.from("household_adults").insert(newAdult);
+    if (error) {
+      setAdultError(error.message);
+      return;
+    }
+    setAdultError("");
     setNewAdult({ name: "", phone: "", email: "", role: ADULT_ROLES[0], gender: "" });
     await load();
   }
@@ -766,6 +772,11 @@ export default function AboutScreen() {
                 + Add adult
               </button>
             </div>
+            {adultError && (
+              <p className="hint" style={{ color: "var(--danger)", marginTop: 4 }}>
+                Couldn&apos;t add: {adultError}
+              </p>
+            )}
           </div>
 
           <h3 style={{ marginTop: 18 }}>Your Mockingbird</h3>
