@@ -20,7 +20,13 @@ type LogEntry = {
   notes: string;
 };
 
-type HubMember = { id: string; name: string };
+type HubMember = { id: string; name: string; household_label: string | null; role: string };
+
+const ROLE_OPTIONS: [string, string][] = [
+  ["carer", "Carer"],
+  ["partner", "Partner"],
+  ["child", "Child"],
+];
 
 type Draft = { date: string; carer_names: string; support_type: string; amount: string; notes: string };
 
@@ -37,6 +43,8 @@ export default function HubLogTab() {
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [members, setMembers] = useState<HubMember[]>([]);
   const [newMember, setNewMember] = useState("");
+  const [newMemberHousehold, setNewMemberHousehold] = useState("");
+  const [newMemberRole, setNewMemberRole] = useState("carer");
   const [loaded, setLoaded] = useState(false);
   const [draft, setDraft] = useState<Draft>(blankDraft());
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -46,7 +54,7 @@ export default function HubLogTab() {
   async function load() {
     const [{ data }, { data: memberRows }] = await Promise.all([
       supabase.from("hub_support_log").select("*").order("date", { ascending: false }),
-      supabase.from("hub_members").select("id, name").order("name"),
+      supabase.from("hub_members").select("id, name, household_label, role").order("household_label").order("name"),
     ]);
     setEntries((data as LogEntry[]) ?? []);
     setMembers((memberRows as HubMember[]) ?? []);
@@ -62,8 +70,12 @@ export default function HubLogTab() {
   async function addMember() {
     const name = newMember.trim();
     if (!name) return;
-    await supabase.from("hub_members").insert({ name });
+    await supabase.from("hub_members").insert({ name, household_label: newMemberHousehold.trim() || null, role: newMemberRole });
     setNewMember("");
+    setNewMemberRole("carer");
+    // Deliberately NOT clearing the household field -- adding a carer, their
+    // partner, and a couple of kids one after another is the normal flow,
+    // and retyping the same household name each time would be tedious.
     load();
   }
 
@@ -143,21 +155,74 @@ export default function HubLogTab() {
         <h3>Who&apos;s in your hub</h3>
         <p className="hint">
           Anyone on this list gets picked up automatically when you mention them in Capture — no need to remember to
-          log it separately. Prune anything you don&apos;t want once you&apos;re doing your spreadsheet, easier than
-          checking beforehand.
+          log it separately. Add a carer&apos;s partner and children too, grouped under the same household, so a note
+          naming any of them still counts as that carer&apos;s hub news. Prune anything you don&apos;t want once
+          you&apos;re doing your spreadsheet, easier than checking beforehand.
         </p>
-        <div className="chips" style={{ marginTop: 6 }}>
-          {members.map((m) => (
-            <button key={m.id} className="chip on" onClick={() => removeMember(m.id)} title="Remove">
-              {m.name} ×
-            </button>
+        {(() => {
+          const groups = new Map<string, HubMember[]>();
+          members.forEach((m) => {
+            const key = m.household_label || "";
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key)!.push(m);
+          });
+          const labelled = [...groups.entries()].filter(([label]) => label);
+          const ungrouped = groups.get("") || [];
+          return (
+            <>
+              {labelled.map(([label, group]) => (
+                <div key={label} style={{ marginTop: 8 }}>
+                  <b style={{ fontSize: 13 }}>{label}&apos;s household</b>
+                  <div className="chips" style={{ marginTop: 4 }}>
+                    {group.map((m) => (
+                      <button key={m.id} className="chip on" onClick={() => removeMember(m.id)} title="Remove">
+                        {m.name} ({ROLE_OPTIONS.find(([k]) => k === m.role)?.[1] || m.role}) ×
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {ungrouped.length > 0 && (
+                <div style={{ marginTop: labelled.length ? 8 : 6 }}>
+                  {labelled.length > 0 && <b style={{ fontSize: 13 }}>Not grouped yet</b>}
+                  <div className="chips" style={{ marginTop: 4 }}>
+                    {ungrouped.map((m) => (
+                      <button key={m.id} className="chip on" onClick={() => removeMember(m.id)} title="Remove">
+                        {m.name} ×
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          );
+        })()}
+        <datalist id="hub-household-labels">
+          {[...new Set(members.map((m) => m.household_label).filter((l): l is string => !!l))].map((l) => (
+            <option key={l} value={l} />
           ))}
-        </div>
+        </datalist>
         <div className="row" style={{ marginTop: 8 }}>
           <input
-            placeholder="Add a name (e.g. Sophie)"
+            placeholder="Name (e.g. Sophie)"
             value={newMember}
             onChange={(e) => setNewMember(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addMember()}
+          />
+          <select value={newMemberRole} onChange={(e) => setNewMemberRole(e.target.value)} style={{ flex: "0 0 auto", width: "auto" }}>
+            {ROLE_OPTIONS.map(([k, l]) => (
+              <option key={k} value={k}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="row" style={{ marginTop: 6 }}>
+          <input
+            list="hub-household-labels"
+            placeholder="Household (e.g. Sophie — leave blank if not needed)"
+            value={newMemberHousehold}
+            onChange={(e) => setNewMemberHousehold(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addMember()}
           />
           <button className="chip" style={{ flex: "0 0 auto" }} onClick={addMember}>

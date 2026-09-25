@@ -168,17 +168,41 @@ function linkMentionedChildren(names: string[], item: PendingItem) {
   if (!item.child && item.kids.length) item.child = item.kids[0];
 }
 
+type HubMemberRow = { name: string; household_label: string | null; role: string };
+
+/**
+ * A mention of a hub carer's partner or child is still that carer's hub
+ * news -- but the log entry should credit the actual CARER, not whichever
+ * family member happened to be named. Resolves each matched name to its
+ * household's carer(s) when it belongs to a grouped household and isn't
+ * itself the carer; falls back to the matched name itself when ungrouped,
+ * or when no carer is on file for that household yet.
+ */
+function resolveHubCarerNames(rows: HubMemberRow[], matchedNames: string[]): string[] {
+  const byName = new Map(rows.map((r) => [r.name.toLowerCase(), r]));
+  const resolved = matchedNames.flatMap((n) => {
+    const row = byName.get(n.toLowerCase());
+    if (!row || row.role === "carer" || !row.household_label) return [n];
+    const carers = rows.filter((r) => r.household_label === row.household_label && r.role === "carer").map((r) => r.name);
+    return carers.length ? carers : [n];
+  });
+  return [...new Set(resolved)];
+}
+
 /**
  * Backstop for hub_update, same idea as linkMentionedChildren above -- the
  * carer said "basically everyone who is in our hub is hub news", so a plain
  * name match against the known roster is more reliable than trusting the
  * model's own read of whether an item "sounds like" hub contact.
  */
-function linkMentionedHubMembers(hubMemberNames: string[], item: PendingItem) {
-  const found = namesInText(hubMemberNames, item.text);
+function linkMentionedHubMembers(hubMemberRows: HubMemberRow[], item: PendingItem) {
+  const found = namesInText(
+    hubMemberRows.map((r) => r.name),
+    item.text,
+  );
   if (!found.length) return;
   const existing = item.hub_update?.carer_names ? item.hub_update.carer_names.split(",").map((s) => s.trim()) : [];
-  const merged = [...new Set([...existing, ...found])].filter(Boolean);
+  const merged = [...new Set([...existing, ...resolveHubCarerNames(hubMemberRows, found)])].filter(Boolean);
   item.hub_update = { carer_names: merged.join(", "), support_type: item.hub_update?.support_type || "other" };
 }
 
@@ -194,9 +218,12 @@ function fallbackChildMatch(names: string[], text: string): { child: string; kid
   return { child: kids[0] || "", kids };
 }
 
-function fallbackHubMatch(hubMemberNames: string[], text: string): { carer_names: string; support_type: string } | null {
-  const found = namesInText(hubMemberNames, text);
-  return found.length ? { carer_names: found.join(", "), support_type: "other" } : null;
+function fallbackHubMatch(hubMemberRows: HubMemberRow[], text: string): { carer_names: string; support_type: string } | null {
+  const found = namesInText(
+    hubMemberRows.map((r) => r.name),
+    text,
+  );
+  return found.length ? { carer_names: resolveHubCarerNames(hubMemberRows, found).join(", "), support_type: "other" } : null;
 }
 
 /**
@@ -232,7 +259,7 @@ export async function POST(req: NextRequest) {
   const [{ data: children }, { data: householdChildren }, { data: hubMemberRows }] = await Promise.all([
     supabase.from("children").select("name"),
     supabase.from("household_children").select("name"),
-    supabase.from("hub_members").select("name"),
+    supabase.from("hub_members").select("name, household_label, role"),
   ]);
   const { data: courseRows } = await supabase
     .from("shared_training_catalog")
@@ -246,8 +273,10 @@ export async function POST(req: NextRequest) {
   // Anyone on this list is, by definition, hub news -- a plain name match
   // (same mechanism as linkMentionedChildren below) backstops the AI's own
   // judgement call, so a known hub carer is never missed just because the
-  // wording of a note didn't read as "hub contact" to the model.
-  const hubMemberNames = (hubMemberRows ?? []).map((m) => m.name as string);
+  // wording of a note didn't read as "hub contact" to the model. A partner
+  // or child's name resolves back to their household's actual carer(s) --
+  // see resolveHubCarerNames.
+  const hubMembers = (hubMemberRows ?? []) as HubMemberRow[];
   const courses = (courseRows ?? []).map((c) => {
     const title = c.title as string;
     const description = (c.description as string) || "";
@@ -270,7 +299,7 @@ export async function POST(req: NextRequest) {
           kind: "purchase",
           flag: backstop.flag,
           flag_note: backstop.flagNote,
-          hub_update: fallbackHubMatch(hubMemberNames, text),
+          hub_update: fallbackHubMatch(hubMembers, text),
         },
       ],
       warning: "AI sorting isn't set up yet (no ANTHROPIC_API_KEY) — saved as 'Just record' so nothing is lost.",
@@ -440,7 +469,7 @@ Split into one item per separate thing, under "items".`;
     });
 
     items.forEach((item) => linkMentionedChildren(names, item));
-    items.forEach((item) => linkMentionedHubMembers(hubMemberNames, item));
+    items.forEach((item) => linkMentionedHubMembers(hubMembers, item));
     const deduped = dropRedundantDaycare(items);
 
     return NextResponse.json({ items: deduped });
@@ -464,7 +493,7 @@ Split into one item per separate thing, under "items".`;
           kind: "purchase",
           flag: backstop.flag,
           flag_note: backstop.flagNote,
-          hub_update: fallbackHubMatch(hubMemberNames, text),
+          hub_update: fallbackHubMatch(hubMembers, text),
         },
       ],
       warning: isCreditIssue
