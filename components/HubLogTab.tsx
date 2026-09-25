@@ -20,13 +20,12 @@ type LogEntry = {
   notes: string;
 };
 
-type HubMember = { id: string; name: string; household_label: string | null; role: string };
-
-const ROLE_OPTIONS: [string, string][] = [
-  ["carer", "Carer"],
-  ["partner", "Partner"],
-  ["child", "Child"],
-];
+// "Who's in your hub" is just a focused view onto household_visitors (the
+// same adults shown on the About Us Visitors wheel) and the visiting
+// children linked to them -- not a separate list, so adding someone here
+// shows up there too and vice versa. See migration 0065.
+type HubVisitor = { id: string; name: string; role: string };
+type HubChild = { id: string; name: string; linked_visitor_id: string | null };
 
 type Draft = { date: string; carer_names: string; support_type: string; amount: string; notes: string };
 
@@ -41,10 +40,10 @@ function fmtDate(iso: string): string {
 export default function HubLogTab() {
   const supabase = createClient();
   const [entries, setEntries] = useState<LogEntry[]>([]);
-  const [members, setMembers] = useState<HubMember[]>([]);
-  const [newMember, setNewMember] = useState("");
-  const [newMemberHousehold, setNewMemberHousehold] = useState("");
-  const [newMemberRole, setNewMemberRole] = useState("carer");
+  const [visitors, setVisitors] = useState<HubVisitor[]>([]);
+  const [hubChildren, setHubChildren] = useState<HubChild[]>([]);
+  const [newVisitorName, setNewVisitorName] = useState("");
+  const [newChildName, setNewChildName] = useState<Record<string, string>>({});
   const [loaded, setLoaded] = useState(false);
   const [draft, setDraft] = useState<Draft>(blankDraft());
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -52,12 +51,14 @@ export default function HubLogTab() {
   const [range, setRange] = useState<"month" | "all">("month");
 
   async function load() {
-    const [{ data }, { data: memberRows }] = await Promise.all([
+    const [{ data }, { data: visitorRows }, { data: childRows }] = await Promise.all([
       supabase.from("hub_support_log").select("*").order("date", { ascending: false }),
-      supabase.from("hub_members").select("id, name, household_label, role").order("household_label").order("name"),
+      supabase.from("household_visitors").select("id, name, role").order("name"),
+      supabase.from("children").select("id, name, linked_visitor_id").eq("lives_here", false),
     ]);
     setEntries((data as LogEntry[]) ?? []);
-    setMembers((memberRows as HubMember[]) ?? []);
+    setVisitors((visitorRows as HubVisitor[]) ?? []);
+    setHubChildren((childRows as HubChild[]) ?? []);
     setLoaded(true);
   }
 
@@ -67,21 +68,30 @@ export default function HubLogTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function addMember() {
-    const name = newMember.trim();
+  async function addVisitor() {
+    const name = newVisitorName.trim();
     if (!name) return;
-    await supabase.from("hub_members").insert({ name, household_label: newMemberHousehold.trim() || null, role: newMemberRole });
-    setNewMember("");
-    setNewMemberRole("carer");
-    // Deliberately NOT clearing the household field -- adding a carer, their
-    // partner, and a couple of kids one after another is the normal flow,
-    // and retyping the same household name each time would be tedious.
+    await supabase.from("household_visitors").insert({ name, role: "Mockingbird hub carer" });
+    setNewVisitorName("");
     load();
   }
 
-  async function removeMember(id: string) {
-    setMembers((prev) => prev.filter((m) => m.id !== id));
-    await supabase.from("hub_members").delete().eq("id", id);
+  async function removeVisitor(id: string) {
+    setVisitors((prev) => prev.filter((v) => v.id !== id));
+    await supabase.from("household_visitors").delete().eq("id", id);
+  }
+
+  async function addChildFor(visitorId: string) {
+    const name = (newChildName[visitorId] || "").trim();
+    if (!name) return;
+    await supabase.from("children").insert({ name, lives_here: false, category: "", linked_visitor_id: visitorId });
+    setNewChildName((prev) => ({ ...prev, [visitorId]: "" }));
+    load();
+  }
+
+  async function removeHubChild(id: string) {
+    setHubChildren((prev) => prev.filter((c) => c.id !== id));
+    await supabase.from("children").delete().eq("id", id);
   }
 
   const thisMonth = today().slice(0, 7);
@@ -154,78 +164,47 @@ export default function HubLogTab() {
       <div className="card">
         <h3>Who&apos;s in your hub</h3>
         <p className="hint">
-          Anyone on this list gets picked up automatically when you mention them in Capture — no need to remember to
-          log it separately. Add a carer&apos;s partner and children too, grouped under the same household, so a note
-          naming any of them still counts as that carer&apos;s hub news. Prune anything you don&apos;t want once
-          you&apos;re doing your spreadsheet, easier than checking beforehand.
+          Adding someone here adds them to the About Us Visitors circle too, and vice versa — one list, shown both
+          places. Add a carer&apos;s children underneath them so a note naming a child still counts as that carer&apos;s
+          hub news. Anyone here gets picked up automatically when you mention them in Capture. Prune anything you
+          don&apos;t want once you&apos;re doing your spreadsheet, easier than checking beforehand.
         </p>
-        {(() => {
-          const groups = new Map<string, HubMember[]>();
-          members.forEach((m) => {
-            const key = m.household_label || "";
-            if (!groups.has(key)) groups.set(key, []);
-            groups.get(key)!.push(m);
-          });
-          const labelled = [...groups.entries()].filter(([label]) => label);
-          const ungrouped = groups.get("") || [];
+        {visitors.map((v) => {
+          const kids = hubChildren.filter((c) => c.linked_visitor_id === v.id);
           return (
-            <>
-              {labelled.map(([label, group]) => (
-                <div key={label} style={{ marginTop: 8 }}>
-                  <b style={{ fontSize: 13 }}>{label}&apos;s household</b>
-                  <div className="chips" style={{ marginTop: 4 }}>
-                    {group.map((m) => (
-                      <button key={m.id} className="chip on" onClick={() => removeMember(m.id)} title="Remove">
-                        {m.name} ({ROLE_OPTIONS.find(([k]) => k === m.role)?.[1] || m.role}) ×
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              {ungrouped.length > 0 && (
-                <div style={{ marginTop: labelled.length ? 8 : 6 }}>
-                  {labelled.length > 0 && <b style={{ fontSize: 13 }}>Not grouped yet</b>}
-                  <div className="chips" style={{ marginTop: 4 }}>
-                    {ungrouped.map((m) => (
-                      <button key={m.id} className="chip on" onClick={() => removeMember(m.id)} title="Remove">
-                        {m.name} ×
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
+            <div key={v.id} style={{ marginTop: 8 }}>
+              <div className="chips">
+                <button className="chip on" onClick={() => removeVisitor(v.id)} title="Remove">
+                  {v.name} ×
+                </button>
+                {kids.map((c) => (
+                  <button key={c.id} className="chip" onClick={() => removeHubChild(c.id)} title="Remove">
+                    {c.name} ×
+                  </button>
+                ))}
+              </div>
+              <div className="row" style={{ marginTop: 4 }}>
+                <input
+                  placeholder={`Add ${v.name.split(" ")[0]}'s child…`}
+                  value={newChildName[v.id] || ""}
+                  onChange={(e) => setNewChildName((prev) => ({ ...prev, [v.id]: e.target.value }))}
+                  onKeyDown={(e) => e.key === "Enter" && addChildFor(v.id)}
+                />
+                <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => addChildFor(v.id)}>
+                  + Add
+                </button>
+              </div>
+            </div>
           );
-        })()}
-        <datalist id="hub-household-labels">
-          {[...new Set(members.map((m) => m.household_label).filter((l): l is string => !!l))].map((l) => (
-            <option key={l} value={l} />
-          ))}
-        </datalist>
+        })}
         <div className="row" style={{ marginTop: 8 }}>
           <input
-            placeholder="Name (e.g. Sophie)"
-            value={newMember}
-            onChange={(e) => setNewMember(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addMember()}
+            placeholder="Add a hub carer (e.g. Sophie)"
+            value={newVisitorName}
+            onChange={(e) => setNewVisitorName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addVisitor()}
           />
-          <select value={newMemberRole} onChange={(e) => setNewMemberRole(e.target.value)} style={{ flex: "0 0 auto", width: "auto" }}>
-            {ROLE_OPTIONS.map(([k, l]) => (
-              <option key={k} value={k}>
-                {l}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="row" style={{ marginTop: 6 }}>
-          <input
-            list="hub-household-labels"
-            placeholder="Household (e.g. Sophie — leave blank if not needed)"
-            value={newMemberHousehold}
-            onChange={(e) => setNewMemberHousehold(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addMember()}
-          />
-          <button className="chip" style={{ flex: "0 0 auto" }} onClick={addMember}>
+          <button className="chip" style={{ flex: "0 0 auto" }} onClick={addVisitor}>
             + Add
           </button>
         </div>

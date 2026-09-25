@@ -168,23 +168,34 @@ function linkMentionedChildren(names: string[], item: PendingItem) {
   if (!item.child && item.kids.length) item.child = item.kids[0];
 }
 
-type HubMemberRow = { name: string; household_label: string | null; role: string };
+// "Hub members" aren't a separate list -- they're household_visitors (the
+// same adults on the About Us Visitors wheel) plus the visiting children
+// linked to them (0062's linked_visitor_id), so adding someone in one place
+// shows up in the other. See migration 0065.
+type HubVisitorRow = { id: string; name: string };
+type HubChildRow = { name: string; linked_visitor_id: string | null };
+type HubRoster = { visitors: HubVisitorRow[]; children: HubChildRow[] };
+
+function hubRosterNames(roster: HubRoster): string[] {
+  return [...roster.visitors.map((v) => v.name), ...roster.children.map((c) => c.name)];
+}
 
 /**
- * A mention of a hub carer's partner or child is still that carer's hub
- * news -- but the log entry should credit the actual CARER, not whichever
- * family member happened to be named. Resolves each matched name to its
- * household's carer(s) when it belongs to a grouped household and isn't
- * itself the carer; falls back to the matched name itself when ungrouped,
- * or when no carer is on file for that household yet.
+ * A mention of a hub carer's own linked child is still that carer's hub
+ * news -- but the log entry should credit the actual carer, not the child's
+ * name. Resolves each matched name back to the visitor it belongs to when
+ * it's a linked child; a visitor's own name (or an unlinked child, which
+ * shouldn't happen but is handled the same as not matching at all) passes
+ * through unchanged.
  */
-function resolveHubCarerNames(rows: HubMemberRow[], matchedNames: string[]): string[] {
-  const byName = new Map(rows.map((r) => [r.name.toLowerCase(), r]));
+function resolveHubCarerNames(roster: HubRoster, matchedNames: string[]): string[] {
+  const visitorByName = new Set(roster.visitors.map((v) => v.name.toLowerCase()));
+  const visitorById = new Map(roster.visitors.map((v) => [v.id, v.name]));
+  const childByName = new Map(roster.children.map((c) => [c.name.toLowerCase(), c]));
   const resolved = matchedNames.flatMap((n) => {
-    const row = byName.get(n.toLowerCase());
-    if (!row || row.role === "carer" || !row.household_label) return [n];
-    const carers = rows.filter((r) => r.household_label === row.household_label && r.role === "carer").map((r) => r.name);
-    return carers.length ? carers : [n];
+    if (visitorByName.has(n.toLowerCase())) return [n];
+    const carerName = childByName.get(n.toLowerCase())?.linked_visitor_id;
+    return carerName && visitorById.has(carerName) ? [visitorById.get(carerName)!] : [n];
   });
   return [...new Set(resolved)];
 }
@@ -195,14 +206,11 @@ function resolveHubCarerNames(rows: HubMemberRow[], matchedNames: string[]): str
  * name match against the known roster is more reliable than trusting the
  * model's own read of whether an item "sounds like" hub contact.
  */
-function linkMentionedHubMembers(hubMemberRows: HubMemberRow[], item: PendingItem) {
-  const found = namesInText(
-    hubMemberRows.map((r) => r.name),
-    item.text,
-  );
+function linkMentionedHubMembers(roster: HubRoster, item: PendingItem) {
+  const found = namesInText(hubRosterNames(roster), item.text);
   if (!found.length) return;
   const existing = item.hub_update?.carer_names ? item.hub_update.carer_names.split(",").map((s) => s.trim()) : [];
-  const merged = [...new Set([...existing, ...resolveHubCarerNames(hubMemberRows, found)])].filter(Boolean);
+  const merged = [...new Set([...existing, ...resolveHubCarerNames(roster, found)])].filter(Boolean);
   item.hub_update = { carer_names: merged.join(", "), support_type: item.hub_update?.support_type || "other" };
 }
 
@@ -218,12 +226,9 @@ function fallbackChildMatch(names: string[], text: string): { child: string; kid
   return { child: kids[0] || "", kids };
 }
 
-function fallbackHubMatch(hubMemberRows: HubMemberRow[], text: string): { carer_names: string; support_type: string } | null {
-  const found = namesInText(
-    hubMemberRows.map((r) => r.name),
-    text,
-  );
-  return found.length ? { carer_names: resolveHubCarerNames(hubMemberRows, found).join(", "), support_type: "other" } : null;
+function fallbackHubMatch(roster: HubRoster, text: string): { carer_names: string; support_type: string } | null {
+  const found = namesInText(hubRosterNames(roster), text);
+  return found.length ? { carer_names: resolveHubCarerNames(roster, found).join(", "), support_type: "other" } : null;
 }
 
 /**
@@ -256,10 +261,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No text given" }, { status: 400 });
   }
 
-  const [{ data: children }, { data: householdChildren }, { data: hubMemberRows }] = await Promise.all([
+  const [{ data: children }, { data: householdChildren }, { data: hubVisitorRows }, { data: hubChildRows }] = await Promise.all([
     supabase.from("children").select("name"),
     supabase.from("household_children").select("name"),
-    supabase.from("hub_members").select("name, household_label, role"),
+    supabase.from("household_visitors").select("id, name"),
+    supabase.from("children").select("name, linked_visitor_id").eq("lives_here", false),
   ]);
   const { data: courseRows } = await supabase
     .from("shared_training_catalog")
@@ -270,13 +276,12 @@ export async function POST(req: NextRequest) {
   // child -- so notes naming them should match and tag them just like the
   // main children table, instead of being flagged as an unrecognised name.
   const names = [...(children ?? []), ...(householdChildren ?? [])].map((c) => c.name as string);
-  // Anyone on this list is, by definition, hub news -- a plain name match
+  // Anyone on this roster is, by definition, hub news -- a plain name match
   // (same mechanism as linkMentionedChildren below) backstops the AI's own
   // judgement call, so a known hub carer is never missed just because the
-  // wording of a note didn't read as "hub contact" to the model. A partner
-  // or child's name resolves back to their household's actual carer(s) --
-  // see resolveHubCarerNames.
-  const hubMembers = (hubMemberRows ?? []) as HubMemberRow[];
+  // wording of a note didn't read as "hub contact" to the model. A linked
+  // child's name resolves back to their carer -- see resolveHubCarerNames.
+  const hubRoster: HubRoster = { visitors: (hubVisitorRows ?? []) as HubVisitorRow[], children: (hubChildRows ?? []) as HubChildRow[] };
   const courses = (courseRows ?? []).map((c) => {
     const title = c.title as string;
     const description = (c.description as string) || "";
@@ -299,7 +304,7 @@ export async function POST(req: NextRequest) {
           kind: "purchase",
           flag: backstop.flag,
           flag_note: backstop.flagNote,
-          hub_update: fallbackHubMatch(hubMembers, text),
+          hub_update: fallbackHubMatch(hubRoster, text),
         },
       ],
       warning: "AI sorting isn't set up yet (no ANTHROPIC_API_KEY) — saved as 'Just record' so nothing is lost.",
@@ -469,7 +474,7 @@ Split into one item per separate thing, under "items".`;
     });
 
     items.forEach((item) => linkMentionedChildren(names, item));
-    items.forEach((item) => linkMentionedHubMembers(hubMembers, item));
+    items.forEach((item) => linkMentionedHubMembers(hubRoster, item));
     const deduped = dropRedundantDaycare(items);
 
     return NextResponse.json({ items: deduped });
@@ -493,7 +498,7 @@ Split into one item per separate thing, under "items".`;
           kind: "purchase",
           flag: backstop.flag,
           flag_note: backstop.flagNote,
-          hub_update: fallbackHubMatch(hubMembers, text),
+          hub_update: fallbackHubMatch(hubRoster, text),
         },
       ],
       warning: isCreditIssue
