@@ -244,12 +244,13 @@ export default function CircleScreen() {
               </div>
             ))}
           </div>
-          <div className="row">
+          <div className="row" style={{ alignItems: "flex-end" }}>
             <textarea
               rows={2}
               placeholder="Write a message…"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
+              style={{ flex: 1, minWidth: 0 }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
@@ -257,7 +258,7 @@ export default function CircleScreen() {
                 }
               }}
             />
-            <button className="btn" style={{ flex: "0 0 auto" }} disabled={!draft.trim()} onClick={send}>
+            <button className="btn" style={{ flex: "0 0 auto", width: "auto", alignSelf: "flex-end" }} disabled={!draft.trim()} onClick={send}>
               Send
             </button>
           </div>
