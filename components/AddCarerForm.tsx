@@ -54,28 +54,30 @@ export default function AddCarerForm() {
         <select name="setup" defaultValue="cocarer">
           <option value="cocarer">Co-carer in my own household</option>
           <option value="ownHouseholdSharedContent">Separate household, same rates/training/rota</option>
-          <option value="independent">Not with Surrey (own rates/rota, mostly-shared training)</option>
+          <option value="independent">Separate household, not with Surrey</option>
         </select>
         <p className="hint" style={{ marginTop: 2 }}>
-          Their own training records and login stay separate whatever you choose here — only the
-          three options below change who they share children/diary/calendar/contacts and
-          rates/training/rota with.
+          Only for someone who&apos;ll actually log in and use this app themselves — a friend, hub
+          contact, or respite carer you just want to keep track of doesn&apos;t need an account at
+          all; add them in About Us / the Hub instead. Their own training records and login stay
+          separate whatever you choose here — these options only change who they share
+          children/diary/calendar/contacts with. None of them can manage other carers or see the
+          admin dashboard — that stays with you.
           <br />
           <b>Co-carer</b>: full sharing — same children, diary, calendar, contacts and household
-          info as you, plus your rates/training/rota. Can&apos;t manage carers or edit shared
-          content themselves.
+          info as you, plus your rates/training/rota.
           <br />
-          <b>Separate household, same rates/training/rota</b>: a different foster family (e.g.
-          another Surrey carer) with their own separate children/diary/calendar, who still sees
-          your rates/training/rota/news and can manage their own carers, but — like a co-carer —
-          can&apos;t change that shared content themselves; only you can.
+          <b>Separate household, same rates/training/rota</b>: a genuinely different foster family
+          (e.g. another Surrey carer) with their own separate children/diary/calendar, who still
+          sees your rates/training/rota/news but can&apos;t change it themselves — only you can.
           <br />
-          <b>Not with Surrey</b>: their own separate children/diary/calendar and a different local
-          authority/agency, so Surrey&apos;s rates and rota don&apos;t apply — they start with
-          blank rates and an empty rota to set up themselves. Training starts as a copy of your
-          current catalogue, minus the courses that are specifically Surrey&apos;s own
-          mandatory-training requirements — everything else (safer caring, PACE, general skills)
-          carries over. They can still connect with you afterwards under Circle.
+          <b>Separate household, not with Surrey</b>: a separate family with their own separate
+          children/diary/calendar and a different local authority/agency, so Surrey&apos;s rates
+          and rota don&apos;t apply — they start with blank rates and an empty rota to set up
+          themselves. Training starts as a copy of your current catalogue, minus the courses that
+          are specifically Surrey&apos;s own mandatory-training requirements — everything else
+          (safer caring, PACE, general skills) carries over. They can still connect with you
+          afterwards under Circle.
         </p>
         {error && <p style={{ color: "var(--danger)", fontSize: 14, marginTop: 8 }}>{error}</p>}
         <button className="btn" type="submit" disabled={busy}>

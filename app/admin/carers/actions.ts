@@ -38,25 +38,33 @@ export async function createCarer(formData: FormData) {
   // right, since the column defaults only exist on the *shared* tables,
   // not profiles itself.
   //
-  // household_owner_id decides who manages this person's carer list
-  // (admin_carer_overview). content_owner_id decides whose shared
+  // household_owner_id decides whose children/diary/calendar this person
+  // sees -- their own, for "independent"/"ownHouseholdSharedContent" below,
+  // since those are for a genuinely separate family (a friend, respite
+  // carer, or hub contact with their own household), not someone who should
+  // see this admin's own children. content_owner_id decides whose shared
   // rates/training/rota/news they see -- the two only ever differ for
-  // "ownHouseholdSharedContent": a separate family, running their own
-  // household with their own admin, but still on the creating admin's
-  // Surrey rates/training/rota rather than starting their own from
-  // scratch. Migration 0053's write policies further require the literal
-  // content owner's own auth.uid() to edit that shared content, so being
-  // "admin" here never lets this person change rates/training/rota/news
-  // that belong to someone else's content group -- only their own carers.
+  // "ownHouseholdSharedContent", which keeps them on the creating admin's
+  // Surrey rates/training/rota rather than starting from scratch. Migration
+  // 0053's write policies require the literal content owner's own
+  // auth.uid() to edit that shared content, so neither path ever lets this
+  // person change rates/training/rota/news that belong to someone else's
+  // content group. Role is deliberately left as the trigger's plain 'carer'
+  // default in every case here -- managing further carers of their own is a
+  // separate, rare need (an actual hub leader), never assumed just because
+  // their data is kept separate.
   const myHouseholdOwnerId = profile.household_owner_id ?? user.id;
   const myContentOwnerId = profile.content_owner_id ?? user.id;
 
   if (setup === "independent") {
     const newContentOwnerId = data.user!.id;
-    await admin
-      .from("profiles")
-      .update({ household_owner_id: data.user!.id, content_owner_id: newContentOwnerId, role: "admin" })
-      .eq("id", data.user!.id);
+    // role stays the trigger's default 'carer' -- a separate household here
+    // means their own private children/diary/calendar, not the ability to
+    // add and manage further carers themselves. That's a genuinely rare
+    // need (only an actual Mockingbird hub LEADER runs other carers), never
+    // the default for a friend, respite carer, or hub contact with their
+    // own separate family.
+    await admin.from("profiles").update({ household_owner_id: data.user!.id, content_owner_id: newContentOwnerId }).eq("id", data.user!.id);
 
     // Not on Surrey's own rates/rota, so those start blank for them to
     // fill in themselves -- but the training catalogue is mostly generic
@@ -87,10 +95,8 @@ export async function createCarer(formData: FormData) {
         .insert(sharedCourses.map((c) => ({ ...c, household_owner_id: newContentOwnerId, session_date: null })));
     }
   } else if (setup === "ownHouseholdSharedContent") {
-    await admin
-      .from("profiles")
-      .update({ household_owner_id: data.user!.id, content_owner_id: myContentOwnerId, role: "admin" })
-      .eq("id", data.user!.id);
+    // Same reasoning as "independent" above -- role stays 'carer'.
+    await admin.from("profiles").update({ household_owner_id: data.user!.id, content_owner_id: myContentOwnerId }).eq("id", data.user!.id);
   } else {
     await admin
       .from("profiles")
