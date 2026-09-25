@@ -438,65 +438,71 @@ function ClaPrepReport({ childList, records }: { childList: ChildWithBasics[]; r
   // out per child; the field's right there to correct per meeting anyway.
   const [sinceDate, setSinceDate] = useState(addDays(today(), -180));
   const [copyMsg, setCopyMsg] = useState("");
+  // A written-out summary paragraph per child (from /api/cla-summary) rather
+  // than a bullet list of every single flagged/incident/to-raise entry --
+  // fetched on demand per child since it's an AI call, and cleared whenever
+  // the review period changes since a summary is only ever true of the
+  // period it was generated for.
+  const [summaries, setSummaries] = useState<Record<string, string>>({});
+  const [summarizing, setSummarizing] = useState<Record<string, boolean>>({});
+  const [summaryError, setSummaryError] = useState<Record<string, string>>({});
 
-  const text = childList.length
-    ? childList
-        .map((c) => {
-          const basics = c.basics || {};
-          const kidRecords = records.filter((r) => r.kids.includes(c.name));
-          const openFollowUps = [...kidRecords].filter((r) => r.flag && !r.flag_done).sort((a, b) => b.date.localeCompare(a.date));
-          const unreported = unreportedIncidentItems(
-            kidRecords
-              .filter((r) => r.bucket === "incident")
-              .map((r) => ({ id: r.id, text: r.text, created_at: r.created_at, reported: r.reported })),
-          );
-          const incidentsSince = kidRecords
-            .filter((r) => r.bucket === "incident" && r.date >= sinceDate)
-            .sort((a, b) => b.date.localeCompare(a.date));
-          const toRaise = kidRecords
-            .filter((r) => (r.bucket === "supervision" || r.also_in.includes("supervision")) && r.date >= sinceDate)
-            .sort((a, b) => b.date.localeCompare(a.date));
+  async function generateSummary(childId: string, childName: string) {
+    setSummarizing((prev) => ({ ...prev, [childId]: true }));
+    setSummaryError((prev) => ({ ...prev, [childId]: "" }));
+    try {
+      const res = await fetch("/api/cla-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ childName, sinceDate }),
+      });
+      const data = await res.json();
+      if (data.error) setSummaryError((prev) => ({ ...prev, [childId]: data.error }));
+      else setSummaries((prev) => ({ ...prev, [childId]: data.summary || "Nothing to summarise since this date." }));
+    } catch {
+      setSummaryError((prev) => ({ ...prev, [childId]: "Couldn't reach the summarising service — try again in a moment." }));
+    }
+    setSummarizing((prev) => ({ ...prev, [childId]: false }));
+  }
 
-          let out = `CLA REVIEW PREP — ${c.name}\n`;
-          let hadAnySection = false;
-          CLA_SECTIONS.forEach((section) => {
-            const rows = section.keys
-              .map((key) => {
-                const field = basicsField(section.title, key);
-                const value = formatBasicsValue(field, basics[key] || "");
-                return value ? `  ${field?.label || key}: ${value}\n` : "";
-              })
-              .join("");
-            if (rows) {
-              hadAnySection = true;
-              out += `\n${section.title.toUpperCase()}\n${rows}`;
-            }
-          });
-          if (!hadAnySection) out += `\n  Nothing filled in yet on ${c.name}'s profile — add it from About Us first.\n`;
+  const sheets = childList.map((c) => {
+    const basics = c.basics || {};
+    const kidRecords = records.filter((r) => r.kids.includes(c.name));
+    const openFollowUps = kidRecords.filter((r) => r.flag && !r.flag_done);
+    const unreported = kidRecords.filter((r) => r.bucket === "incident" && !r.reported);
+    const incidentsSince = kidRecords.filter((r) => r.bucket === "incident" && r.date >= sinceDate);
+    const toRaise = kidRecords.filter((r) => (r.bucket === "supervision" || r.also_in.includes("supervision")) && r.date >= sinceDate);
+    const itemCount = new Set([...openFollowUps, ...unreported, ...incidentsSince, ...toRaise].map((r) => r.id)).size;
 
+    let profileOut = `CLA REVIEW PREP — ${c.name}\n`;
+    let hadAnySection = false;
+    CLA_SECTIONS.forEach((section) => {
+      const rows = section.keys
+        .map((key) => {
+          const field = basicsField(section.title, key);
+          const value = formatBasicsValue(field, basics[key] || "");
+          return value ? `  ${field?.label || key}: ${value}\n` : "";
+        })
+        .join("");
+      if (rows) {
+        hadAnySection = true;
+        profileOut += `\n${section.title.toUpperCase()}\n${rows}`;
+      }
+    });
+    if (!hadAnySection) profileOut += `\n  Nothing filled in yet on ${c.name}'s profile — add it from About Us first.\n`;
+
+    return { c, profileOut, itemCount, urgent: openFollowUps.length + unreported.length };
+  });
+
+  const text = sheets.length
+    ? sheets
+        .map(({ c, profileOut, itemCount }) => {
+          let out = profileOut;
           out += `\nSINCE ${fmtDate(sinceDate)}\n`;
-          if (openFollowUps.length) {
-            out += `  Still open:\n`;
-            openFollowUps.forEach((r) => {
-              const label = FLAGS[r.flag as FlagKey]?.label || r.flag;
-              out += `    ${fmtDate(r.date)}: ${label}${r.flag_note ? ` -- ${r.flag_note}` : ""}\n`;
-            });
-          }
-          if (unreported.length) {
-            out += `  Incidents not yet reported:\n`;
-            unreported.forEach((u) => (out += `    ${u.text}\n`));
-          }
-          if (incidentsSince.length) {
-            out += `  Incidents this period:\n`;
-            incidentsSince.forEach((r) => (out += `    ${fmtDate(r.date)}: ${r.text}\n`));
-          }
-          if (toRaise.length) {
-            out += `  Logged to raise:\n`;
-            toRaise.forEach((r) => (out += `    ${fmtDate(r.date)}: ${r.text}\n`));
-          }
-          if (!openFollowUps.length && !unreported.length && !incidentsSince.length && !toRaise.length) {
-            out += `  Nothing flagged for ${c.name} in this period.\n`;
-          }
+          const summary = summaries[c.id];
+          if (summary) out += `  ${summary}\n`;
+          else if (itemCount) out += `  (${itemCount} item${itemCount === 1 ? "" : "s"} not yet summarised — tap "Generate summary" above.)\n`;
+          else out += `  Nothing flagged for ${c.name} in this period.\n`;
           return out;
         })
         .join("\n" + "—".repeat(32) + "\n\n")
@@ -516,15 +522,51 @@ function ClaPrepReport({ childList, records }: { childList: ChildWithBasics[]; r
       <p className="note">
         Everything worth having to hand before a Child Looked After review — health (dentist, optician, health
         assessment), education (PEP, SEND), key dates, social work and legal details from each child&apos;s profile,
-        plus anything flagged, any incidents, and anything logged to raise since the date below.
+        plus a summary of anything flagged, any incidents, and anything logged to raise since the date below.
       </p>
       <div className="row" style={{ alignItems: "center", marginTop: 6 }}>
         <label className="hint" style={{ flex: "0 0 auto" }}>
           Since (usually the last review)
         </label>
-        <input type="date" style={{ flex: "0 0 170px" }} value={sinceDate} onChange={(e) => setSinceDate(e.target.value)} />
+        <input
+          type="date"
+          style={{ flex: "0 0 170px" }}
+          value={sinceDate}
+          onChange={(e) => {
+            setSinceDate(e.target.value);
+            setSummaries({});
+            setSummaryError({});
+          }}
+        />
       </div>
-      <pre id="rep">{text}</pre>
+
+      {sheets.map(({ c, itemCount, urgent }) => (
+        <div key={c.id} className="row" style={{ marginTop: 8, alignItems: "center" }}>
+          <span className="hint" style={{ flex: 1 }}>
+            {c.name}:{" "}
+            {summaries[c.id]
+              ? "summarised"
+              : itemCount
+                ? `${itemCount} item${itemCount === 1 ? "" : "s"} to summarise${urgent ? " (some still open)" : ""}`
+                : "nothing to summarise"}
+          </span>
+          {itemCount > 0 && (
+            <button className="chip" disabled={!!summarizing[c.id]} onClick={() => generateSummary(c.id, c.name)}>
+              {summarizing[c.id] ? "Summarising…" : summaries[c.id] ? "Regenerate summary" : "Generate summary"}
+            </button>
+          )}
+          {summaryError[c.id] && (
+            <span className="hint" style={{ color: "var(--danger)" }}>
+              {" "}
+              {summaryError[c.id]}
+            </span>
+          )}
+        </div>
+      ))}
+
+      <pre id="rep" style={{ marginTop: 12 }}>
+        {text}
+      </pre>
       <button className="btn" onClick={copy}>
         Copy prep sheet
       </button>
