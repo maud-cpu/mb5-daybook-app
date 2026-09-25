@@ -7,11 +7,13 @@ import { describeExpense, describeMeds, expenseTotals, gbp, today } from "@/lib/
 import { addDays } from "@/lib/calendarHelpers";
 import { unreportedIncidentItems } from "@/lib/thingsToDo";
 import { BUCKETS, Bucket, Child, EntryRecord, FLAGS, FlagKey, Rates } from "@/lib/types";
+import { BASICS_SECTIONS } from "@/lib/basics";
 import DiaryTab from "@/components/DiaryTab";
 import HandoverTab from "@/components/HandoverTab";
 import HubLogTab from "@/components/HubLogTab";
 
-type Tab = "month" | "supervision" | "expenses" | "meds" | "diary" | "handover" | "hub";
+type Tab = "month" | "supervision" | "cla" | "expenses" | "meds" | "diary" | "handover" | "hub";
+type ChildWithBasics = Child & { basics: Record<string, string> };
 type TrainingCompletion = { title: string; completedOn: string };
 
 function fmtDate(iso: string): string {
@@ -26,7 +28,7 @@ export default function PaperworkScreen() {
   const supabase = createClient();
   const [tab, setTab] = useState<Tab>("month");
   const [records, setRecords] = useState<EntryRecord[]>([]);
-  const [children, setChildren] = useState<Child[]>([]);
+  const [children, setChildren] = useState<ChildWithBasics[]>([]);
   const [rates, setRates] = useState<Rates | null>(null);
   const [claimedOpen, setClaimedOpen] = useState(false);
   const [childFilter, setChildFilter] = useState<string[]>([]);
@@ -56,18 +58,20 @@ export default function PaperworkScreen() {
     async function load() {
       const [{ data: recs }, { data: kids }, { data: hhKids }, { data: r }, { data: training }] = await Promise.all([
         supabase.from("records").select("*").order("date", { ascending: false }),
-        supabase.from("children").select("id, name, born, family"),
+        supabase.from("children").select("id, name, born, family, lives_here, category, basics"),
         // A child in "Children in your household" can be an actual foster
         // placement too, not just the carer's own/adopted/kinship child --
         // include them so month reports and expense filters cover them too.
-        supabase.from("household_children").select("id, name, born"),
+        supabase.from("household_children").select("id, name, born, category, basics"),
         supabase.from("shared_rates").select("*").single(),
         supabase.from("training_progress").select("course_title, completed_on").not("completed_on", "is", null),
       ]);
       setRecords((recs as EntryRecord[]) ?? []);
       setChildren([
-        ...((kids as Child[]) ?? []),
-        ...(((hhKids as Pick<Child, "id" | "name" | "born">[]) ?? []).map((h) => ({ ...h, family: "" }) as Child)),
+        ...((kids as ChildWithBasics[]) ?? []).map((c) => ({ ...c, basics: c.basics || {} })),
+        ...(((hhKids as (Pick<Child, "id" | "name" | "born" | "category"> & { basics: Record<string, string> })[]) ?? []).map(
+          (h) => ({ ...h, family: "", lives_here: true, basics: h.basics || {} }) as ChildWithBasics,
+        )),
       ]);
       setRates(r as Rates);
       setTrainingDone(
@@ -99,30 +103,36 @@ export default function PaperworkScreen() {
   // stays relevant across a month boundary until it's actually resolved --
   // so this filters by child only, across every record.
   const supervisionRecs = childFilter.length ? records.filter((r) => r.kids.some((k) => childFilter.includes(k))) : records;
+  // CLA reviews only ever concern a child actually placed with you, never a
+  // visiting/daycare child who just happens to be in the same "children"
+  // table -- lives_here is only ever explicitly false for those.
+  const claChildren = children.filter((c) => c.lives_here !== false && (childFilter.length === 0 || childFilter.includes(c.name)));
 
   return (
     <div>
       <div className="tabs">
-        {(["month", "supervision", "expenses", "meds", "diary", "handover", "hub"] as Tab[]).map((t) => (
+        {(["month", "supervision", "cla", "expenses", "meds", "diary", "handover", "hub"] as Tab[]).map((t) => (
           <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
             {t === "month"
               ? "Month"
               : t === "supervision"
                 ? "Supervision"
-                : t === "expenses"
-                  ? "Expenses"
-                  : t === "meds"
-                    ? "Medication"
-                    : t === "diary"
-                      ? "Diary for SW"
-                      : t === "handover"
-                        ? "Handover"
-                        : "Hub log"}
+                : t === "cla"
+                  ? "CLA prep"
+                  : t === "expenses"
+                    ? "Expenses"
+                    : t === "meds"
+                      ? "Medication"
+                      : t === "diary"
+                        ? "Diary for SW"
+                        : t === "handover"
+                          ? "Handover"
+                          : "Hub log"}
           </button>
         ))}
       </div>
 
-      {["month", "supervision", "expenses", "meds"].includes(tab) && children.length > 0 && (
+      {["month", "supervision", "cla", "expenses", "meds"].includes(tab) && children.length > 0 && (
         <div className="chips" style={{ marginTop: 10 }}>
           {children.map((c) => (
             <button
@@ -146,6 +156,8 @@ export default function PaperworkScreen() {
       {tab === "month" && rates && <MonthReport records={monthRecs} kids={children} rates={rates} thisMonth={thisMonth} />}
 
       {tab === "supervision" && <SupervisionReport records={supervisionRecs} training={trainingDone} />}
+
+      {tab === "cla" && <ClaPrepReport childList={claChildren} records={records} />}
 
       {tab === "expenses" && rates && (
         <div className="card">
@@ -376,6 +388,152 @@ function SupervisionReport({ records, training }: { records: EntryRecord[]; trai
         Copy report
       </button>
       {copyMsg && <span className="hint"> {copyMsg}</span>}
+    </div>
+  );
+}
+
+// Which basics fields (see lib/basics.ts) are worth having to hand at a CLA
+// review -- everything except Food (not something an IRO asks about) and the
+// Authority section's delegated-authority checklist (useful day to day, but
+// too long to belong on a one-page prep sheet).
+const CLA_SECTIONS: { title: string; keys: string[] }[] = [
+  { title: "Placement", keys: ["status", "type", "start", "la"] },
+  {
+    title: "Social work team",
+    keys: ["csw", "csw_phone", "csw_email", "cswm", "cswm_phone", "cswm_email", "iro", "iro_phone", "iro_email", "duty"],
+  },
+  { title: "Health", keys: ["gp", "nhs", "allergies", "dentist", "laceh"] },
+  { title: "Education", keys: ["school", "teacher", "pep", "send"] },
+  { title: "Family & contact", keys: ["contact", "nocontact", "family", "cc_contact", "cc_phone"] },
+  { title: "Key dates", keys: ["review_last", "review_next", "visit_last", "visit_next", "other"] },
+  { title: "Authority", keys: ["photos", "notes"] },
+];
+
+function basicsField(sectionTitle: string, key: string) {
+  return BASICS_SECTIONS.find((s) => s.title === sectionTitle)?.fields.find((f) => f.key === key);
+}
+
+// A repeatable field (key contacts, other dates) is stored as a JSON array --
+// see parseRepeatableItems in AboutScreen.tsx for the input side of this.
+function formatBasicsValue(field: ReturnType<typeof basicsField>, raw: string): string {
+  if (!raw) return "";
+  if (field?.repeatableFields) {
+    try {
+      const arr = JSON.parse(raw);
+      if (!Array.isArray(arr) || !arr.length) return "";
+      return arr
+        .map((it: Record<string, string>) => field.repeatableFields!.map((sf) => it[sf.key]).filter(Boolean).join(" · "))
+        .filter(Boolean)
+        .join("; ");
+    } catch {
+      return raw;
+    }
+  }
+  return field?.type === "date" ? fmtDate(raw) : raw;
+}
+
+function ClaPrepReport({ childList, records }: { childList: ChildWithBasics[]; records: EntryRecord[] }) {
+  // CLA reviews look back over the period since the last one -- defaulting
+  // to 6 months covers the usual review cycle without her having to work it
+  // out per child; the field's right there to correct per meeting anyway.
+  const [sinceDate, setSinceDate] = useState(addDays(today(), -180));
+  const [copyMsg, setCopyMsg] = useState("");
+
+  const text = childList.length
+    ? childList
+        .map((c) => {
+          const basics = c.basics || {};
+          const kidRecords = records.filter((r) => r.kids.includes(c.name));
+          const openFollowUps = [...kidRecords].filter((r) => r.flag && !r.flag_done).sort((a, b) => b.date.localeCompare(a.date));
+          const unreported = unreportedIncidentItems(
+            kidRecords
+              .filter((r) => r.bucket === "incident")
+              .map((r) => ({ id: r.id, text: r.text, created_at: r.created_at, reported: r.reported })),
+          );
+          const incidentsSince = kidRecords
+            .filter((r) => r.bucket === "incident" && r.date >= sinceDate)
+            .sort((a, b) => b.date.localeCompare(a.date));
+          const toRaise = kidRecords
+            .filter((r) => (r.bucket === "supervision" || r.also_in.includes("supervision")) && r.date >= sinceDate)
+            .sort((a, b) => b.date.localeCompare(a.date));
+
+          let out = `CLA REVIEW PREP — ${c.name}\n`;
+          let hadAnySection = false;
+          CLA_SECTIONS.forEach((section) => {
+            const rows = section.keys
+              .map((key) => {
+                const field = basicsField(section.title, key);
+                const value = formatBasicsValue(field, basics[key] || "");
+                return value ? `  ${field?.label || key}: ${value}\n` : "";
+              })
+              .join("");
+            if (rows) {
+              hadAnySection = true;
+              out += `\n${section.title.toUpperCase()}\n${rows}`;
+            }
+          });
+          if (!hadAnySection) out += `\n  Nothing filled in yet on ${c.name}'s profile — add it from About Us first.\n`;
+
+          out += `\nSINCE ${fmtDate(sinceDate)}\n`;
+          if (openFollowUps.length) {
+            out += `  Still open:\n`;
+            openFollowUps.forEach((r) => {
+              const label = FLAGS[r.flag as FlagKey]?.label || r.flag;
+              out += `    ${fmtDate(r.date)}: ${label}${r.flag_note ? ` -- ${r.flag_note}` : ""}\n`;
+            });
+          }
+          if (unreported.length) {
+            out += `  Incidents not yet reported:\n`;
+            unreported.forEach((u) => (out += `    ${u.text}\n`));
+          }
+          if (incidentsSince.length) {
+            out += `  Incidents this period:\n`;
+            incidentsSince.forEach((r) => (out += `    ${fmtDate(r.date)}: ${r.text}\n`));
+          }
+          if (toRaise.length) {
+            out += `  Logged to raise:\n`;
+            toRaise.forEach((r) => (out += `    ${fmtDate(r.date)}: ${r.text}\n`));
+          }
+          if (!openFollowUps.length && !unreported.length && !incidentsSince.length && !toRaise.length) {
+            out += `  Nothing flagged for ${c.name} in this period.\n`;
+          }
+          return out;
+        })
+        .join("\n" + "—".repeat(32) + "\n\n")
+    : "No children currently placed with you to prepare a CLA review for.";
+
+  function copy() {
+    navigator.clipboard.writeText(text).then(
+      () => setCopyMsg("Copied"),
+      () => setCopyMsg("Couldn't copy"),
+    );
+    setTimeout(() => setCopyMsg(""), 2000);
+  }
+
+  return (
+    <div className="card">
+      <h3>CLA review prep</h3>
+      <p className="note">
+        Everything worth having to hand before a Child Looked After review — health (dentist, optician, health
+        assessment), education (PEP, SEND), key dates, social work and legal details from each child&apos;s profile,
+        plus anything flagged, any incidents, and anything logged to raise since the date below.
+      </p>
+      <div className="row" style={{ alignItems: "center", marginTop: 6 }}>
+        <label className="hint" style={{ flex: "0 0 auto" }}>
+          Since (usually the last review)
+        </label>
+        <input type="date" style={{ flex: "0 0 170px" }} value={sinceDate} onChange={(e) => setSinceDate(e.target.value)} />
+      </div>
+      <pre id="rep">{text}</pre>
+      <button className="btn" onClick={copy}>
+        Copy prep sheet
+      </button>
+      {copyMsg && <span className="hint"> {copyMsg}</span>}
+      {childList.length > 0 && (
+        <p className="hint" style={{ marginTop: 8 }}>
+          Missing something? Fill it in from About Us — this pulls straight from each child&apos;s profile.
+        </p>
+      )}
     </div>
   );
 }
