@@ -136,8 +136,17 @@ export default function NewsCard() {
       category: n.category === "training" ? "training" : "surrey",
       source_text: bodyWithLink(n),
     });
-    flashSaved(n.id, "Added to calendar");
+    // A date on the calendar isn't the same as an actual place at the
+    // thing -- most training/events with a link need a separate form
+    // filled in to book on. Flag that in the moment, not just silently
+    // fold the link into source_text where it's easy to never look again.
+    flashSaved(n.id, n.url && !actionsByNewsId[n.id]?.includes("registered") ? "Added to calendar — don't forget to register too" : "Added to calendar");
     recordAction(n.id, "calendar");
+  }
+
+  function openRegister(n: NewsItem) {
+    if (n.url) window.open(n.url, "_blank", "noopener,noreferrer");
+    recordAction(n.id, "registered");
   }
 
   async function addToTodo(n: NewsItem) {
@@ -241,7 +250,7 @@ export default function NewsCard() {
                   style={{ fontSize: 12, padding: "4px 10px" }}
                   onClick={() => addToCalendar(n)}
                 >
-                  {actionsByNewsId[n.id]?.includes("calendar") ? "✓ On calendar" : "📅 Calendar"}
+                  {actionsByNewsId[n.id]?.includes("calendar") ? "✓ Added to calendar" : "📅 Calendar"}
                 </button>
                 <button
                   className={actionsByNewsId[n.id]?.includes("todo") ? "chip on" : "chip"}
@@ -257,6 +266,15 @@ export default function NewsCard() {
                 >
                   {actionsByNewsId[n.id]?.includes("notes") ? "✓ Saved" : "📝 Notes"}
                 </button>
+                {n.url && (
+                  <button
+                    className={actionsByNewsId[n.id]?.includes("registered") ? "chip on" : "chip"}
+                    style={{ fontSize: 12, padding: "4px 10px" }}
+                    onClick={() => openRegister(n)}
+                  >
+                    {actionsByNewsId[n.id]?.includes("registered") ? "✓ Registered" : "📝 Register ↗"}
+                  </button>
+                )}
                 {savedAction[n.id] && (
                   <small className="muted" style={{ marginLeft: 6 }}>
                     {savedAction[n.id]}

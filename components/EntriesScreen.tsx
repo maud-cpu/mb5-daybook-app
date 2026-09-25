@@ -328,8 +328,27 @@ function EditForm({
   rates: Rates | null;
   children_: Child[];
 }) {
+  const supabase = createClient();
   const [draft, setDraft] = useState(record);
+  const [hubMsg, setHubMsg] = useState("");
   const names = children_.map((c) => c.name);
+
+  // Capture only offers "add to Hub log" on a note at the moment it's first
+  // sorted -- a note saved before that existed (or where it wasn't picked
+  // up) had no way back in short of retyping it in the Hub log tab by hand.
+  // This inserts straight from whatever the entry says right now, carer
+  // name left blank to fill in over there -- same "record it, tidy up
+  // later" approach as everywhere else this saves to the Hub log.
+  async function addToHubLog() {
+    const { error } = await supabase.from("hub_support_log").insert({
+      date: draft.date,
+      carer_names: "",
+      support_type: "other",
+      notes: draft.text,
+    });
+    setHubMsg(error ? "Couldn't add: " + error.message : "Added to Hub log");
+    setTimeout(() => setHubMsg(""), 2500);
+  }
 
   function toggleKid(n: string) {
     const kids = draft.kids.includes(n) ? draft.kids.filter((k) => k !== n) : [...draft.kids, n];
@@ -478,6 +497,13 @@ function EditForm({
           )}
         </div>
       )}
+
+      <div className="row" style={{ alignItems: "center" }}>
+        <button className="chip" onClick={addToHubLog}>
+          🐦 Add to Hub log
+        </button>
+        {hubMsg && <span className="hint">{hubMsg}</span>}
+      </div>
 
       <div className="row">
         <button className="btn" style={{ flex: 1 }} onClick={() => onSave(draft)}>
