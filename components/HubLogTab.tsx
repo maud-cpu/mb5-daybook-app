@@ -3,17 +3,9 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
+import { HUB_SUPPORT_TYPES } from "@/lib/types";
 
-const SUPPORT_TYPES: [string, string][] = [
-  ["daytime_satellite", "Daytime support — for a satellite carer"],
-  ["daytime_child", "Daytime support — for children/young people"],
-  ["social_activity", "Social activity"],
-  ["constellation_meeting", "Constellation meeting"],
-  ["sleepover_planned", "Planned sleepover overnight"],
-  ["sleepover_emergency", "Emergency sleepover overnight"],
-  ["training_session", "Training session"],
-  ["other", "Other / general check-in"],
-];
+const SUPPORT_TYPES = HUB_SUPPORT_TYPES;
 
 function typeLabel(key: string): string {
   return SUPPORT_TYPES.find(([k]) => k === key)?.[1] || key;
