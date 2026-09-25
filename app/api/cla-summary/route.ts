@@ -28,8 +28,12 @@ export async function POST(req: NextRequest) {
   // notes are actually worth handing to the model -- an open follow-up or
   // unreported incident matters regardless of date (a safeguarding concern
   // doesn't stop mattering because it's older than the "since" cutoff),
-  // everything else is scoped to the review period.
-  const stillRelevant = kidRecords.filter((r) => (r.flag && !r.flag_done) || (r.bucket === "incident" && !r.reported));
+  // everything else is scoped to the review period. "reminder" is excluded
+  // from "open follow-ups" -- it's just a calendar nudge (a club day, a
+  // lunch-money reminder), not something needing following up at a CLA
+  // review, and it stays "open" until its date passes rather than because
+  // anyone resolved it.
+  const stillRelevant = kidRecords.filter((r) => (r.flag && r.flag !== "reminder" && !r.flag_done) || (r.bucket === "incident" && !r.reported));
   const sinceScoped = kidRecords.filter(
     (r) => (r.bucket === "incident" || r.bucket === "supervision" || r.also_in.includes("supervision")) && (!sinceDate || r.date >= sinceDate),
   );

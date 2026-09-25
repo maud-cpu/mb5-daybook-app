@@ -468,7 +468,10 @@ function ClaPrepReport({ childList, records }: { childList: ChildWithBasics[]; r
   const sheets = childList.map((c) => {
     const basics = c.basics || {};
     const kidRecords = records.filter((r) => r.kids.includes(c.name));
-    const openFollowUps = kidRecords.filter((r) => r.flag && !r.flag_done);
+    // "reminder" is excluded here -- it's just a calendar nudge (a club day,
+    // a school-lunch-money reminder), not a CLA follow-up, and it stays
+    // "open" until its date passes rather than because anyone resolved it.
+    const openFollowUps = kidRecords.filter((r) => r.flag && r.flag !== "reminder" && !r.flag_done);
     const unreported = kidRecords.filter((r) => r.bucket === "incident" && !r.reported);
     const incidentsSince = kidRecords.filter((r) => r.bucket === "incident" && r.date >= sinceDate);
     const toRaise = kidRecords.filter((r) => (r.bucket === "supervision" || r.also_in.includes("supervision")) && r.date >= sinceDate);
