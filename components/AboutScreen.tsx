@@ -615,6 +615,27 @@ export default function AboutScreen() {
     setSelected(null);
   }
 
+  // A visitor who actually lives here (added here by mistake, or moved in
+  // since) needs to become a household adult to show next to the primary
+  // carer in the centre circle -- the Visitors list and the household ring
+  // are deliberately separate tables, so this copies their details across
+  // and removes the now-redundant visitor row rather than leaving both.
+  async function promoteVisitorToAdult(v: Visitor) {
+    if (!confirm(`Move ${v.name} into your household as an adult? They'll show next to you in the main circle instead of in Visitors.`))
+      return;
+    setRemoveError("");
+    const { error } = await supabase
+      .from("household_adults")
+      .insert({ name: v.name, phone: v.phone, email: v.email, gender: v.gender, role: ADULT_ROLES[0] });
+    if (error) {
+      setRemoveError(error.message);
+      return;
+    }
+    await supabase.from("household_visitors").delete().eq("id", v.id);
+    setSelected(CENTER_NODE);
+    await load();
+  }
+
   // Turns a free-text family hub (e.g. "Smiths") into a real, editable
   // visitor: creates the household_visitors row, then links every child
   // currently grouped under that family text onto it via linked_visitor_id,
@@ -1190,6 +1211,9 @@ export default function AboutScreen() {
             <input placeholder="Email" value={v.email} onChange={(e) => updateVisitor(v.id, { email: e.target.value })} />
             <GenderSelect value={v.gender} onChange={(val) => updateVisitor(v.id, { gender: val })} />
           </div>
+          <button className="chip" style={{ marginTop: 8 }} onClick={() => promoteVisitorToAdult(v)}>
+            🏠 They actually live here — move to household
+          </button>
           {closeButton()}
         </div>
       );
@@ -1496,7 +1520,10 @@ export default function AboutScreen() {
 
       <div className="card">
         <h3>Visitors</h3>
-        <p className="hint">Everyone who visits regularly but doesn&apos;t live here. Search, or browse by who they are.</p>
+        <p className="hint">
+          Everyone who visits regularly but doesn&apos;t live here. To add someone who lives with you, tap the circle
+          in the middle of your household above instead. Search, or browse by who they are.
+        </p>
         <input
           placeholder="Search visitors…"
           value={visitorSearch}
@@ -1504,10 +1531,10 @@ export default function AboutScreen() {
         />
         <div className="chips" style={{ marginTop: 8 }}>
           <button className="chip add" onClick={() => selectVisitorsNode(ADD_VISITOR)}>
-            + Adult
+            + Visiting adult
           </button>
           <button className="chip add" onClick={() => selectVisitorsNode(ADD_VISIT_CHILD)}>
-            + Child
+            + Visiting child
           </button>
         </div>
 
