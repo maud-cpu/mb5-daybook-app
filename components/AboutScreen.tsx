@@ -331,6 +331,11 @@ export default function AboutScreen() {
   // on the next reload, with no clue why. Checking the result and undoing
   // the optimistic removal on failure means a blocked delete says so.
   const [removeError, setRemoveError] = useState("");
+  // Shared across every "add" form's already-exists path -- reusing an
+  // existing person instead of creating a duplicate used to clear the form
+  // with no visible sign anything happened, which looked exactly like a
+  // broken add button.
+  const [addNotice, setAddNotice] = useState("");
   const [householdChildren, setHouseholdChildren] = useState<HouseholdChild[]>([]);
   const [newHouseholdChild, setNewHouseholdChild] = useState({ name: "", born: "", category: "", notes: "", gender: "" });
   const [visitors, setVisitors] = useState<Visitor[]>([]);
@@ -512,10 +517,12 @@ export default function AboutScreen() {
 
   async function addAdult() {
     if (!newAdult.name.trim()) return;
+    setAdultError("");
+    setAddNotice("");
     const match = await findPersonByName(supabase, "household_adults", newAdult.name);
     if (match && confirmUseExisting(match.name)) {
-      setAdultError("");
       setNewAdult({ name: "", phone: "", email: "", role: ADULT_ROLES[0], gender: "" });
+      setAddNotice(`Already had ${match.name} on your list — didn't add a second one.`);
       return;
     }
     const { error } = await supabase.from("household_adults").insert(newAdult);
@@ -523,7 +530,6 @@ export default function AboutScreen() {
       setAdultError(error.message);
       return;
     }
-    setAdultError("");
     setNewAdult({ name: "", phone: "", email: "", role: ADULT_ROLES[0], gender: "" });
     await load();
   }
@@ -545,9 +551,11 @@ export default function AboutScreen() {
 
   async function addHouseholdChild() {
     if (!newHouseholdChild.name.trim()) return;
+    setAddNotice("");
     const match = await findPersonByName(supabase, "household_children", newHouseholdChild.name);
     if (match && confirmUseExisting(match.name)) {
       setNewHouseholdChild({ name: "", born: "", category: "", notes: "", gender: "" });
+      setAddNotice(`Already had ${match.name} on your list — showing them below instead of adding a second one.`);
       setSelected(`hh:${match.id}`);
       return;
     }
@@ -576,9 +584,11 @@ export default function AboutScreen() {
 
   async function addVisitor() {
     if (!newVisitor.name.trim()) return;
+    setAddNotice("");
     const match = await findPersonByName(supabase, "household_visitors", newVisitor.name);
     if (match && confirmUseExisting(match.name)) {
       setNewVisitor({ name: "", phone: "", email: "", role: VISITOR_ROLES[0], gender: "" });
+      setAddNotice(`Already had ${match.name} on your list — showing them below instead of adding a second one.`);
       setSelected(`visitor:${match.id}`);
       return;
     }
@@ -669,11 +679,13 @@ export default function AboutScreen() {
 
   async function addVisitingChild() {
     if (!newVisitingChild.name.trim()) return;
+    setAddNotice("");
     const match = await findPersonByName(supabase, "children", newVisitingChild.name);
     if (match && confirmUseExisting(match.name)) {
       setNewVisitingChild({ name: "", born: "", category: VISITS_CATS[0][0], gender: "" });
       setImportText("");
       setPendingImportBasics(null);
+      setAddNotice(`Already had ${match.name} on your list — showing them below instead of adding a second one.`);
       setSelected(`visit:${match.id}`);
       return;
     }
@@ -884,6 +896,11 @@ export default function AboutScreen() {
             {adultError && (
               <p className="hint" style={{ color: "var(--danger)", marginTop: 4 }}>
                 Couldn&apos;t add: {adultError}
+              </p>
+            )}
+            {addNotice && (
+              <p className="hint" style={{ marginTop: 4 }}>
+                {addNotice}
               </p>
             )}
           </div>
@@ -1159,6 +1176,7 @@ export default function AboutScreen() {
               Couldn&apos;t remove: {removeError}
             </p>
           )}
+          {addNotice && <p className="hint">{addNotice}</p>}
           <div className="row" style={{ marginTop: 8 }}>
             <input value={v.name} onChange={(e) => updateVisitor(v.id, { name: e.target.value })} />
             <select value={v.role} onChange={(e) => updateVisitor(v.id, { role: e.target.value })}>
@@ -1197,6 +1215,7 @@ export default function AboutScreen() {
               Couldn&apos;t remove: {removeError}
             </p>
           )}
+          {addNotice && <p className="hint">{addNotice}</p>}
           <div className="row" style={{ marginTop: 8 }}>
             <input value={c.name} onChange={(e) => updateHouseholdChild(c.id, { name: e.target.value })} />
             <input
@@ -1282,6 +1301,7 @@ export default function AboutScreen() {
               Couldn&apos;t remove: {removeError}
             </p>
           )}
+          {addNotice && <p className="hint">{addNotice}</p>}
           <div className="row" style={{ marginTop: 8 }}>
             <input value={c.name} onChange={(e) => saveChild(c.id, { name: e.target.value })} />
             <input
