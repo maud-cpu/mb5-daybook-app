@@ -324,6 +324,12 @@ export default function AboutScreen() {
   const [adults, setAdults] = useState<Adult[]>([]);
   const [newAdult, setNewAdult] = useState({ name: "", phone: "", email: "", role: ADULT_ROLES[0], gender: "" });
   const [adultError, setAdultError] = useState("");
+  // Shared across every "remove" action below (adult/visitor/child) -- these
+  // used to delete optimistically with no check at all, so a delete blocked
+  // by RLS or a constraint would vanish from view and then silently reappear
+  // on the next reload, with no clue why. Checking the result and undoing
+  // the optimistic removal on failure means a blocked delete says so.
+  const [removeError, setRemoveError] = useState("");
   const [householdChildren, setHouseholdChildren] = useState<HouseholdChild[]>([]);
   const [newHouseholdChild, setNewHouseholdChild] = useState({ name: "", born: "", category: "", notes: "", gender: "" });
   const [visitors, setVisitors] = useState<Visitor[]>([]);
@@ -466,8 +472,14 @@ export default function AboutScreen() {
 
   async function removeChild(childId: string, name: string) {
     if (!confirm(`Remove ${name || "this child"}? Their diary entries and other records are kept, just no longer linked to a child in this list.`)) return;
+    setRemoveError("");
     setChildren((prev) => prev.filter((c) => c.id !== childId));
-    await supabase.from("children").delete().eq("id", childId);
+    const { error, data } = await supabase.from("children").delete().eq("id", childId).select();
+    if (error || !data?.length) {
+      await load();
+      setRemoveError(error?.message || "Couldn't remove them — reload and try again.");
+      return;
+    }
     setSelected(null);
   }
 
@@ -513,8 +525,13 @@ export default function AboutScreen() {
   }
 
   async function removeAdult(id: string) {
+    setRemoveError("");
     setAdults((prev) => prev.filter((a) => a.id !== id));
-    await supabase.from("household_adults").delete().eq("id", id);
+    const { error, data } = await supabase.from("household_adults").delete().eq("id", id).select();
+    if (error || !data?.length) {
+      await load();
+      setRemoveError(error?.message || "Couldn't remove them — reload and try again.");
+    }
   }
 
   async function addHouseholdChild() {
@@ -531,8 +548,14 @@ export default function AboutScreen() {
   }
 
   async function removeHouseholdChild(id: string) {
+    setRemoveError("");
     setHouseholdChildren((prev) => prev.filter((c) => c.id !== id));
-    await supabase.from("household_children").delete().eq("id", id);
+    const { error, data } = await supabase.from("household_children").delete().eq("id", id).select();
+    if (error || !data?.length) {
+      await load();
+      setRemoveError(error?.message || "Couldn't remove them — reload and try again.");
+      return;
+    }
     setSelected(null);
   }
 
@@ -550,8 +573,14 @@ export default function AboutScreen() {
   }
 
   async function removeVisitor(id: string) {
+    setRemoveError("");
     setVisitors((prev) => prev.filter((v) => v.id !== id));
-    await supabase.from("household_visitors").delete().eq("id", id);
+    const { error, data } = await supabase.from("household_visitors").delete().eq("id", id).select();
+    if (error || !data?.length) {
+      await load();
+      setRemoveError(error?.message || "Couldn't remove them — reload and try again.");
+      return;
+    }
     setSelected(null);
   }
 
@@ -738,6 +767,11 @@ export default function AboutScreen() {
         <div className="card">
           <h3>Adults in your household</h3>
           <p className="hint">Everyone in the household — so it&apos;s all in one place, not scattered across contacts.</p>
+          {removeError && (
+            <p className="hint" style={{ color: "var(--danger)" }}>
+              Couldn&apos;t remove: {removeError}
+            </p>
+          )}
           {adults.map((a) => (
             <div className="item" key={a.id}>
               <div className="row">
@@ -1029,6 +1063,11 @@ export default function AboutScreen() {
               ×
             </button>
           </div>
+          {removeError && (
+            <p className="hint" style={{ color: "var(--danger)" }}>
+              Couldn&apos;t remove: {removeError}
+            </p>
+          )}
           <div className="row" style={{ marginTop: 8 }}>
             <input value={v.name} onChange={(e) => updateVisitor(v.id, { name: e.target.value })} />
             <select value={v.role} onChange={(e) => updateVisitor(v.id, { role: e.target.value })}>
@@ -1062,6 +1101,11 @@ export default function AboutScreen() {
               ×
             </button>
           </div>
+          {removeError && (
+            <p className="hint" style={{ color: "var(--danger)" }}>
+              Couldn&apos;t remove: {removeError}
+            </p>
+          )}
           <div className="row" style={{ marginTop: 8 }}>
             <input value={c.name} onChange={(e) => updateHouseholdChild(c.id, { name: e.target.value })} />
             <input
@@ -1142,6 +1186,11 @@ export default function AboutScreen() {
               ×
             </button>
           </div>
+          {removeError && (
+            <p className="hint" style={{ color: "var(--danger)" }}>
+              Couldn&apos;t remove: {removeError}
+            </p>
+          )}
           <div className="row" style={{ marginTop: 8 }}>
             <input value={c.name} onChange={(e) => saveChild(c.id, { name: e.target.value })} />
             <input
@@ -1353,8 +1402,12 @@ export default function AboutScreen() {
 
         {sswVisible && (
           <div
-            className="rec"
-            style={{ background: selected === SSW_NODE ? "#fbfaf6" : undefined }}
+            className="item"
+            style={{
+              cursor: "pointer",
+              background: selected === SSW_NODE ? "var(--pine-soft)" : undefined,
+              boxShadow: selected === SSW_NODE ? "0 0 0 2px var(--pine)" : undefined,
+            }}
             onClick={() => selectVisitorsNode(SSW_NODE)}
           >
             <b>{sswLabel}</b>
@@ -1364,7 +1417,7 @@ export default function AboutScreen() {
         )}
 
         {visitorGroups.map((g) => (
-          <div key={g.role} style={{ marginTop: 12 }}>
+          <div key={g.role} style={{ marginTop: 16 }}>
             <small className="muted" style={{ textTransform: "uppercase", letterSpacing: 0.4 }}>
               {g.role}
             </small>
@@ -1373,13 +1426,19 @@ export default function AboutScreen() {
               return (
                 <div
                   key={v.id}
-                  className="rec"
-                  style={{ background: selected === `visitor:${v.id}` ? "#fbfaf6" : undefined }}
+                  className="item"
+                  style={{
+                    cursor: "pointer",
+                    marginTop: 8,
+                    borderLeft: `4px solid ${personColor(v.name)}`,
+                    background: selected === `visitor:${v.id}` ? "var(--pine-soft)" : undefined,
+                    boxShadow: selected === `visitor:${v.id}` ? "0 0 0 2px var(--pine)" : undefined,
+                  }}
                   onClick={() => selectVisitorsNode(`visitor:${v.id}`)}
                 >
                   <b>{v.name}</b>
                   {kids.length > 0 && (
-                    <div className="chips" style={{ marginTop: 4 }}>
+                    <div className="chips" style={{ marginTop: 6 }}>
                       {kids.map((c) => (
                         <span key={c.id} className="chip" style={{ pointerEvents: "none" }}>
                           {c.name}
@@ -1394,19 +1453,25 @@ export default function AboutScreen() {
         ))}
 
         {visibleFamilyGroups.length > 0 && (
-          <div style={{ marginTop: 12 }}>
+          <div style={{ marginTop: 16 }}>
             <small className="muted" style={{ textTransform: "uppercase", letterSpacing: 0.4 }}>
               Family — not yet added as an adult
             </small>
             {visibleFamilyGroups.map(([fam, kids]) => (
               <div
                 key={fam}
-                className="rec"
-                style={{ background: selected === `family:${fam}` ? "#fbfaf6" : undefined }}
+                className="item"
+                style={{
+                  cursor: "pointer",
+                  marginTop: 8,
+                  borderLeft: `4px solid ${personColor(fam)}`,
+                  background: selected === `family:${fam}` ? "var(--pine-soft)" : undefined,
+                  boxShadow: selected === `family:${fam}` ? "0 0 0 2px var(--pine)" : undefined,
+                }}
                 onClick={() => selectVisitorsNode(`family:${fam}`)}
               >
                 <b>{fam}</b>
-                <div className="chips" style={{ marginTop: 4 }}>
+                <div className="chips" style={{ marginTop: 6 }}>
                   {kids.map((c) => (
                     <span key={c.id} className="chip" style={{ pointerEvents: "none" }}>
                       {c.name}
@@ -1419,15 +1484,21 @@ export default function AboutScreen() {
         )}
 
         {visibleUngrouped.length > 0 && (
-          <div style={{ marginTop: 12 }}>
+          <div style={{ marginTop: 16 }}>
             <small className="muted" style={{ textTransform: "uppercase", letterSpacing: 0.4 }}>
               Other visiting children
             </small>
             {visibleUngrouped.map((c) => (
               <div
                 key={c.id}
-                className="rec"
-                style={{ background: selected === `visit:${c.id}` ? "#fbfaf6" : undefined }}
+                className="item"
+                style={{
+                  cursor: "pointer",
+                  marginTop: 8,
+                  borderLeft: `4px solid ${personColor(c.name)}`,
+                  background: selected === `visit:${c.id}` ? "var(--pine-soft)" : undefined,
+                  boxShadow: selected === `visit:${c.id}` ? "0 0 0 2px var(--pine)" : undefined,
+                }}
                 onClick={() => selectVisitorsNode(`visit:${c.id}`)}
               >
                 <b>{c.name}</b>

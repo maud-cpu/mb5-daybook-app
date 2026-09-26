@@ -19,6 +19,7 @@ import {
   EXPENSE_KINDS,
   FLAGS,
   HUB_SUPPORT_TYPES,
+  livesHereOf,
   PendingItem,
   Rates,
 } from "@/lib/types";
@@ -129,17 +130,19 @@ export default function CaptureScreen() {
 
   async function loadChildren() {
     const [{ data: visiting }, { data: household }] = await Promise.all([
-      supabase.from("children").select("id, name, born, family, hub_carer_name, hub_carer_email, basics").order("created_at"),
+      supabase.from("children").select("id, name, born, family, lives_here, hub_carer_name, hub_carer_email, basics").order("created_at"),
       supabase.from("household_children").select("id, name, born, hub_carer_name, hub_carer_email, basics").order("created_at"),
     ]);
     // A child in the household (household_children) is sometimes an actual
     // foster placement too, not just the carer's own/adopted/kinship child --
     // they need to show up here to be tagged on entries the same as any
     // other child, so they're merged in rather than only offering the
-    // separate "children" (visiting/placement) table.
+    // separate "children" (visiting/placement) table. household_children has
+    // no lives_here column of its own -- everyone in it lives here, by
+    // definition of which table they're in.
     const visitingRows = (visiting as (Child & { basics: Record<string, string> })[]) ?? [];
     const householdRows = (household as (Child & { basics: Record<string, string> })[]) ?? [];
-    setChildren([...visitingRows, ...householdRows.map((h) => ({ ...h, family: "" }))]);
+    setChildren([...visitingRows, ...householdRows.map((h) => ({ ...h, family: "", lives_here: true }))]);
     const basicsMap: Record<string, Record<string, string>> = {};
     const tableMap: Record<string, "children" | "household_children"> = {};
     visitingRows.forEach((c) => {
@@ -704,6 +707,24 @@ export default function CaptureScreen() {
   }
 
   const names = children.map((c) => c.name);
+  // Split so the household picker doesn't get lost in a long hub/daycare
+  // roster -- most entries are about the household, so that group goes
+  // first and stays short regardless of how many visiting children exist.
+  const householdNames = children.filter((c) => livesHereOf(c) !== false).map((c) => c.name);
+  const visitingNames = children.filter((c) => livesHereOf(c) === false).map((c) => c.name);
+
+  function kidChips(i: number, list: string[], kids: string[]) {
+    return list.map((n) => (
+      <button
+        key={n}
+        className={`chip${kids.includes(n) ? " on" : ""}`}
+        style={{ flex: "0 0 auto" }}
+        onClick={() => toggleKid(i, n)}
+      >
+        {n}
+      </button>
+    ));
+  }
 
   function addChildForm() {
     return (
@@ -880,18 +901,24 @@ export default function CaptureScreen() {
               )}
 
               {p.bucket !== "expenses" && (
-                <div className="row" style={{ flexWrap: "wrap" }}>
-                  {names.map((n) => (
-                    <button
-                      key={n}
-                      className={`chip${p.kids.includes(n) ? " on" : ""}`}
-                      style={{ flex: "0 0 auto" }}
-                      onClick={() => toggleKid(i, n)}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
+                <>
+                  <div className="row" style={{ flexWrap: "wrap" }}>
+                    {visitingNames.length > 0 && householdNames.length > 0 && (
+                      <small className="muted" style={{ flexBasis: "100%" }}>
+                        Household
+                      </small>
+                    )}
+                    {kidChips(i, householdNames, p.kids)}
+                  </div>
+                  {visitingNames.length > 0 && (
+                    <div className="row" style={{ flexWrap: "wrap", marginTop: 2 }}>
+                      <small className="muted" style={{ flexBasis: "100%" }}>
+                        Visiting
+                      </small>
+                      {kidChips(i, visitingNames, p.kids)}
+                    </div>
+                  )}
+                </>
               )}
 
               {p.bucket === "expenses" && p.kind === "mileage" && (
@@ -909,17 +936,21 @@ export default function CaptureScreen() {
               {p.bucket === "expenses" && p.kind === "daycare" && (
                 <>
                   <div className="row" style={{ flexWrap: "wrap" }}>
-                    {names.map((n) => (
-                      <button
-                        key={n}
-                        className={`chip${p.kids.includes(n) ? " on" : ""}`}
-                        style={{ flex: "0 0 auto" }}
-                        onClick={() => toggleKid(i, n)}
-                      >
-                        {n}
-                      </button>
-                    ))}
+                    {visitingNames.length > 0 && householdNames.length > 0 && (
+                      <small className="muted" style={{ flexBasis: "100%" }}>
+                        Household
+                      </small>
+                    )}
+                    {kidChips(i, householdNames, p.kids)}
                   </div>
+                  {visitingNames.length > 0 && (
+                    <div className="row" style={{ flexWrap: "wrap", marginTop: 2 }}>
+                      <small className="muted" style={{ flexBasis: "100%" }}>
+                        Visiting
+                      </small>
+                      {kidChips(i, visitingNames, p.kids)}
+                    </div>
+                  )}
                   <div className="row">
                     <input
                       type="time"
