@@ -94,6 +94,12 @@ export default function PaperworkScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The child-filter chips used to be one flat list -- fine for a handful of
+  // kids, unreadable once the visiting/hub roster grew. Household first
+  // (usually short) and Visiting second, same split as Capture's picker.
+  const householdFilterChildren = children.filter((c) => c.lives_here !== false);
+  const visitingFilterChildren = children.filter((c) => c.lives_here === false);
+
   const thisMonth = today().slice(0, 7);
   const allMonthRecs = records.filter((r) => r.date.startsWith(thisMonth));
   const monthRecs = childFilter.length
@@ -133,18 +139,41 @@ export default function PaperworkScreen() {
       </div>
 
       {["month", "supervision", "cla", "expenses", "meds"].includes(tab) && children.length > 0 && (
-        <div className="chips" style={{ marginTop: 10 }}>
-          {children.map((c) => (
-            <button
-              key={c.id}
-              className={`chip${childFilter.includes(c.name) ? " on" : ""}`}
-              onClick={() => toggleChildFilter(c.name)}
-            >
-              {c.name}
-            </button>
-          ))}
+        <div style={{ marginTop: 10 }}>
+          <div className="chips">
+            {householdFilterChildren.length > 0 && visitingFilterChildren.length > 0 && (
+              <small className="muted" style={{ flexBasis: "100%" }}>
+                Household
+              </small>
+            )}
+            {householdFilterChildren.map((c) => (
+              <button
+                key={c.id}
+                className={`chip${childFilter.includes(c.name) ? " on" : ""}`}
+                onClick={() => toggleChildFilter(c.name)}
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
+          {visitingFilterChildren.length > 0 && (
+            <div className="chips" style={{ marginTop: 4 }}>
+              <small className="muted" style={{ flexBasis: "100%" }}>
+                Visiting
+              </small>
+              {visitingFilterChildren.map((c) => (
+                <button
+                  key={c.id}
+                  className={`chip${childFilter.includes(c.name) ? " on" : ""}`}
+                  onClick={() => toggleChildFilter(c.name)}
+                >
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          )}
           {childFilter.length > 0 && (
-            <button className="chip" onClick={() => setChildFilter([])}>
+            <button className="chip" style={{ marginTop: 4 }} onClick={() => setChildFilter([])}>
               Clear
             </button>
           )}
