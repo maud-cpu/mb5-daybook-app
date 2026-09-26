@@ -18,8 +18,16 @@ export async function findPersonByName(
 ): Promise<NameMatch | null> {
   const trimmed = name.trim();
   if (!trimmed) return null;
-  const { data } = await supabase.from(table).select("id, name").ilike("name", trimmed).limit(1);
-  return (data?.[0] as NameMatch | undefined) ?? null;
+  // This check must never be able to block the actual add -- if the lookup
+  // itself fails for any reason (network blip, etc.) treat it the same as
+  // "no match found" rather than letting the error bubble up and abort the
+  // whole add silently, which would look exactly like a broken add button.
+  try {
+    const { data } = await supabase.from(table).select("id, name").ilike("name", trimmed).limit(1);
+    return (data?.[0] as NameMatch | undefined) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 // Shared phrasing so every add-flow asks the same way, and a "no" is a
