@@ -11,6 +11,7 @@ import TodaysEntriesCard from "@/components/TodaysEntriesCard";
 import CaptureTrainingCard from "@/components/CaptureTrainingCard";
 import PhotoField from "@/components/PhotoField";
 import DirectHubEmail from "@/components/DirectHubEmail";
+import { confirmUseExisting, findPersonByName } from "@/lib/findOrCreate";
 import {
   BUCKETS,
   Bucket,
@@ -252,6 +253,22 @@ export default function CaptureScreen() {
     // name into a calendar entry's people picker -- no permanent record.
     if (newChildKind === "other") {
       tagAddedName(name, name);
+      setNewChildName("");
+      setNewChildBornMonth("");
+      setNewChildBornYear("");
+      setNewChildFamily("");
+      setAddFor(null);
+      return;
+    }
+
+    // The same person can already be on file in either table -- About Us has
+    // separate "add household child" and "add visiting child" forms that
+    // write to different tables, so a name-only check has to cover both,
+    // not just the one this "household"/"visiting" toggle would insert into.
+    const existing =
+      (await findPersonByName(supabase, "children", name)) ?? (await findPersonByName(supabase, "household_children", name));
+    if (existing && confirmUseExisting(existing.name)) {
+      tagAddedName(existing.name, name);
       setNewChildName("");
       setNewChildBornMonth("");
       setNewChildBornYear("");

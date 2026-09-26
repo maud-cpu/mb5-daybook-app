@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
 import { HUB_SUPPORT_TYPES } from "@/lib/types";
+import { confirmUseExisting, findPersonByName } from "@/lib/findOrCreate";
 
 const SUPPORT_TYPES = HUB_SUPPORT_TYPES;
 
@@ -71,6 +72,11 @@ export default function HubLogTab() {
   async function addVisitor() {
     const name = newVisitorName.trim();
     if (!name) return;
+    const match = await findPersonByName(supabase, "household_visitors", name);
+    if (match && confirmUseExisting(match.name)) {
+      setNewVisitorName("");
+      return;
+    }
     await supabase.from("household_visitors").insert({ name, role: "Mockingbird hub carer" });
     setNewVisitorName("");
     load();
@@ -84,6 +90,15 @@ export default function HubLogTab() {
   async function addChildFor(visitorId: string) {
     const name = (newChildName[visitorId] || "").trim();
     if (!name) return;
+    const match = await findPersonByName(supabase, "children", name);
+    if (match && confirmUseExisting(match.name)) {
+      // Already on file, just not linked to this carer yet -- link the
+      // existing child instead of creating a second row for the same kid.
+      await supabase.from("children").update({ linked_visitor_id: visitorId }).eq("id", match.id);
+      setNewChildName((prev) => ({ ...prev, [visitorId]: "" }));
+      load();
+      return;
+    }
     await supabase.from("children").insert({ name, lives_here: false, category: "", linked_visitor_id: visitorId });
     setNewChildName((prev) => ({ ...prev, [visitorId]: "" }));
     load();
