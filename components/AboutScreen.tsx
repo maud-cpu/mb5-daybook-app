@@ -7,6 +7,7 @@ import { today } from "@/lib/domain";
 import { BASICS_SECTIONS, RepeatableSubfield } from "@/lib/basics";
 import { Child, GENDER_OPTIONS, LIVES_CATS, livesHereOf, MB_OPTIONS, VISITS_CATS } from "@/lib/types";
 import { personColor } from "@/lib/calendarHelpers";
+import { confirmUseExisting, findPersonByName } from "@/lib/findOrCreate";
 import ChildSchoolAdmin from "@/components/ChildSchoolAdmin";
 import ChildClubs from "@/components/ChildClubs";
 import ChildDocuments from "@/components/ChildDocuments";
@@ -345,6 +346,7 @@ export default function AboutScreen() {
   const [savedAt, setSavedAt] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [familyDraft, setFamilyDraft] = useState({ phone: "", email: "", role: VISITOR_ROLES[0], gender: "" });
+  const [familyNameDraft, setFamilyNameDraft] = useState("");
   const [visitorSearch, setVisitorSearch] = useState("");
 
   // A family hub on the Visitors wheel starts as nothing more than shared
@@ -356,6 +358,7 @@ export default function AboutScreen() {
   function selectVisitorsNode(id: string | null) {
     if (id && id.startsWith("family:") && id !== selected) {
       setFamilyDraft({ phone: "", email: "", role: VISITOR_ROLES[0], gender: "" });
+      setFamilyNameDraft(id.slice("family:".length));
     }
     setSelected(id);
   }
@@ -509,6 +512,12 @@ export default function AboutScreen() {
 
   async function addAdult() {
     if (!newAdult.name.trim()) return;
+    const match = await findPersonByName(supabase, "household_adults", newAdult.name);
+    if (match && confirmUseExisting(match.name)) {
+      setAdultError("");
+      setNewAdult({ name: "", phone: "", email: "", role: ADULT_ROLES[0], gender: "" });
+      return;
+    }
     const { error } = await supabase.from("household_adults").insert(newAdult);
     if (error) {
       setAdultError(error.message);
@@ -536,6 +545,12 @@ export default function AboutScreen() {
 
   async function addHouseholdChild() {
     if (!newHouseholdChild.name.trim()) return;
+    const match = await findPersonByName(supabase, "household_children", newHouseholdChild.name);
+    if (match && confirmUseExisting(match.name)) {
+      setNewHouseholdChild({ name: "", born: "", category: "", notes: "", gender: "" });
+      setSelected(`hh:${match.id}`);
+      return;
+    }
     await supabase.from("household_children").insert({ ...newHouseholdChild, born: newHouseholdChild.born || null });
     setNewHouseholdChild({ name: "", born: "", category: "", notes: "", gender: "" });
     setSelected(null);
@@ -561,6 +576,12 @@ export default function AboutScreen() {
 
   async function addVisitor() {
     if (!newVisitor.name.trim()) return;
+    const match = await findPersonByName(supabase, "household_visitors", newVisitor.name);
+    if (match && confirmUseExisting(match.name)) {
+      setNewVisitor({ name: "", phone: "", email: "", role: VISITOR_ROLES[0], gender: "" });
+      setSelected(`visitor:${match.id}`);
+      return;
+    }
     await supabase.from("household_visitors").insert(newVisitor);
     setNewVisitor({ name: "", phone: "", email: "", role: VISITOR_ROLES[0], gender: "" });
     setSelected(null);
@@ -608,8 +629,54 @@ export default function AboutScreen() {
     await load();
   }
 
+  // A family hub has no row of its own to delete or rename -- it's just
+  // shared text on some children's `family` field. "Delete" here means
+  // clearing that text so those children fall back to their own spoke
+  // (they're kept, not removed); "rename" bulk-updates the same field on
+  // every child currently grouped under it.
+  async function removeFamilyGroup(famName: string, kids: Child[]) {
+    if (
+      !confirm(
+        `Remove the "${famName}" grouping? ${kids.length === 1 ? "This child stays" : "These children stay"} on your list, just no longer grouped under this family name.`,
+      )
+    )
+      return;
+    setRemoveError("");
+    const ids = kids.map((c) => c.id);
+    setChildren((prev) => prev.map((c) => (ids.includes(c.id) ? { ...c, family: "" } : c)));
+    const { error, data } = await supabase.from("children").update({ family: "" }).in("id", ids).select();
+    if (error || !data?.length) {
+      await load();
+      setRemoveError(error?.message || "Couldn't remove that grouping — reload and try again.");
+      return;
+    }
+    setSelected(null);
+  }
+
+  async function renameFamilyGroup(famName: string, kids: Child[]) {
+    const next = familyNameDraft.trim();
+    if (!next || next === famName) return;
+    const ids = kids.map((c) => c.id);
+    setChildren((prev) => prev.map((c) => (ids.includes(c.id) ? { ...c, family: next } : c)));
+    const { error } = await supabase.from("children").update({ family: next }).in("id", ids);
+    if (error) {
+      await load();
+      setRemoveError(error.message);
+      return;
+    }
+    setSelected(`family:${next}`);
+  }
+
   async function addVisitingChild() {
     if (!newVisitingChild.name.trim()) return;
+    const match = await findPersonByName(supabase, "children", newVisitingChild.name);
+    if (match && confirmUseExisting(match.name)) {
+      setNewVisitingChild({ name: "", born: "", category: VISITS_CATS[0][0], gender: "" });
+      setImportText("");
+      setPendingImportBasics(null);
+      setSelected(`visit:${match.id}`);
+      return;
+    }
     const { data, error } = await supabase
       .from("children")
       .insert({
@@ -667,7 +734,12 @@ export default function AboutScreen() {
 
   const livingChildren = children.filter((c) => livesHereOf(c) !== false);
   const visitingChildren = children.filter((c) => livesHereOf(c) === false);
-  const carerAdults = adults.filter((a) => a.role === "Foster carer");
+  // The centre circle is "whoever runs this household" -- a partner who
+  // isn't themselves an approved foster carer used to only show up in the
+  // Adults list further down, not next to the primary carer here, because
+  // this only ever looked for role === "Foster carer". Every adult counts
+  // except a grown-up child still living at home, who isn't "the carer(s)".
+  const carerAdults = adults.filter((a) => a.role !== "Adult child");
 
   // Several children visiting from the same family/household (siblings on a
   // shared sleepover, a hub carer's own kids) used to each get their own
@@ -1021,11 +1093,30 @@ export default function AboutScreen() {
       const kids = visitingByFamily[famName] || [];
       return (
         <div className="card">
-          <h3>{famName}</h3>
+          <div className="row" style={{ alignItems: "center" }}>
+            <h3 style={{ flex: 1, margin: 0 }}>{famName}</h3>
+            <button className="x" onClick={() => removeFamilyGroup(famName, kids)}>
+              ×
+            </button>
+          </div>
+          {removeError && (
+            <p className="hint" style={{ color: "var(--danger)" }}>
+              Couldn&apos;t remove: {removeError}
+            </p>
+          )}
           <p className="hint">
             Not an adult on file yet — just a family name shared by {kids.length === 1 ? "this child" : "these children"}
-            {kids.length ? ": " + kids.map((c) => c.name || "?").join(", ") : ""}. Add their details below to turn{" "}
-            {famName} into a real, editable adult (like any other visitor).
+            {kids.length ? ": " + kids.map((c) => c.name || "?").join(", ") : ""}.
+          </p>
+          <label className="hint">Family name</label>
+          <div className="row">
+            <input value={familyNameDraft} onChange={(e) => setFamilyNameDraft(e.target.value)} placeholder="Family name" />
+            <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => renameFamilyGroup(famName, kids)}>
+              Rename
+            </button>
+          </div>
+          <p className="hint" style={{ marginTop: 10 }}>
+            Or add their details below to turn {famName} into a real, editable adult (like any other visitor):
           </p>
           <input placeholder="Phone" value={familyDraft.phone} onChange={(e) => setFamilyDraft({ ...familyDraft, phone: e.target.value })} />
           <div className="row" style={{ marginTop: 6 }}>
