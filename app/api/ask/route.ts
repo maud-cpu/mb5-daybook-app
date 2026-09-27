@@ -5,6 +5,7 @@ import { BASICS_SECTIONS } from "@/lib/basics";
 import { PROFILE_FIELDS } from "@/lib/handover";
 import { BUCKETS, FLAGS, FlagKey } from "@/lib/types";
 import { aiErrorMessage } from "@/lib/aiErrors";
+import { readChildDocument } from "@/lib/documentContent";
 
 // A big household history (a year or more of diary entries) takes the model
 // longer to read through and reason over than a normal request -- give it
@@ -134,9 +135,43 @@ export async function POST(req: NextRequest) {
     supabase.from("hub_support_log").select("date, carer_names, support_type, notes").order("date", { ascending: false }).limit(300),
   ]);
 
+  const { data: documents } = await supabase
+    .from("child_documents")
+    .select("child_id, title, category, file_path, file_name")
+    .order("uploaded_at", { ascending: false });
+
   type ChildRow = { id: string; name: string; basics: Record<string, string> | null };
   const allChildren: ChildRow[] = [...((children ?? []) as ChildRow[]), ...((householdChildren ?? []) as ChildRow[])];
   const nameById = new Map(allChildren.map((c) => [c.id, c.name]));
+
+  // Actual uploaded files (a handover doc, old diaries, an assessment) --
+  // not just the structured basics/handover forms above. Capped generously
+  // rather than really limited, same reasoning as the records cap: a real
+  // household's document library is small, this just stops one runaway
+  // request if it ever isn't.
+  type DocRow = { child_id: string; title: string; category: string; file_path: string; file_name: string };
+  const docRows = ((documents ?? []) as DocRow[]).slice(0, 12);
+  const docTextBlocks: string[] = [];
+  const docContentBlocks: Anthropic.ContentBlockParam[] = [];
+  const docListingLines: string[] = [];
+  await Promise.all(
+    docRows.map(async (d) => {
+      const childName = nameById.get(d.child_id) || "Unknown child";
+      const label = `${childName} — ${d.title || d.file_name}${d.category ? " (" + d.category + ")" : ""}`;
+      const result = await readChildDocument(supabase, d.file_path);
+      if (result.kind === "text") {
+        // Caps one huge document from crowding out everything else in the prompt.
+        const text = result.text.length > 8000 ? result.text.slice(0, 8000) + "…" : result.text;
+        docTextBlocks.push(`### ${label}\n${text}`);
+        docListingLines.push(`${label} — included below`);
+      } else if (result.kind === "block") {
+        docContentBlocks.push({ type: "text", text: `Document: ${label}` }, result.block);
+        docListingLines.push(`${label} — attached`);
+      } else {
+        docListingLines.push(`${label} — couldn't be read automatically`);
+      }
+    }),
+  );
 
   const childrenBlock =
     allChildren.map((c) => `### ${c.name}\n${formatBasics(c.basics) || "(no profile details filled in)"}`).join("\n\n") || "(none)";
@@ -196,17 +231,24 @@ export async function POST(req: NextRequest) {
     remindersBlock,
     "\n## Mockingbird hub log",
     hubLogBlock,
+    "\n## Attached documents (uploaded files, e.g. an old handover, meeting notes, an assessment)",
+    docListingLines.join("\n") || "(none uploaded)",
+    docTextBlocks.length ? "\n" + docTextBlocks.join("\n\n") : "",
   ].join("\n");
 
-  const sys = `You answer a UK foster carer's question using ONLY the household data given below. This concerns real children in foster care, so accuracy matters -- never guess, invent, or infer a specific fact (a time, date, name, allergy or number) that isn't actually present in the data. If the answer genuinely isn't in the data, say so plainly rather than guessing, and briefly suggest where it might be recorded instead (e.g. "not on file -- worth adding to their About Us profile"). Keep answers short and direct, a sentence or two, not a report. Give the specific detail asked for (the actual date, time or name) rather than just "it's recorded" when the data has it.`;
+  const sys = `You answer a UK foster carer's question using ONLY the household data given below (including any attached documents, some of which are provided as actual files rather than text). This concerns real children in foster care, so accuracy matters -- never guess, invent, or infer a specific fact (a time, date, name, allergy or number) that isn't actually present in the data. If the answer genuinely isn't in the data, say so plainly rather than guessing, and briefly suggest where it might be recorded instead (e.g. "not on file -- worth adding to their About Us profile"). Keep answers short and direct, a sentence or two, not a report. Give the specific detail asked for (the actual date, time or name) rather than just "it's recorded" when the data has it. If a document listed couldn't be read automatically, don't claim to know what's in it. Always write dates the UK way -- "26 September 2026" or 26/09/2026, day before month -- never the American month/day format.`;
 
   try {
     const anthropic = new Anthropic({ apiKey });
+    const messageContent: Anthropic.ContentBlockParam[] = [
+      { type: "text", text: `${context}\n\n## Question\n${question.trim()}` },
+      ...docContentBlocks,
+    ];
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-5",
       max_tokens: 1024,
       system: sys,
-      messages: [{ role: "user", content: `${context}\n\n## Question\n${question.trim()}` }],
+      messages: [{ role: "user", content: messageContent }],
     });
     if (msg.stop_reason === "refusal") throw new Error("Couldn't work out an answer to that.");
     const textBlock = msg.content.find((b): b is Anthropic.TextBlock => b.type === "text");

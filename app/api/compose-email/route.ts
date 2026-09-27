@@ -33,7 +33,7 @@ Source material — use only what's given, never invent details:
 ${(entries ?? []).length ? (entries ?? []).map((r: { date: string; bucket: string; text: string }) => `- ${r.date} (${BUCKETS[r.bucket as keyof typeof BUCKETS] || r.bucket}): ${r.text}`).join("\n") : "(no specific entries selected)"}
 ${otherNote?.trim() ? `- Also: ${otherNote.trim()}` : ""}
 ${note?.trim() ? `The carer's own rough note on what they want to say: "${note.trim()}"` : ""}
-Write a complete, ready-to-send email in the requested tone, in British English, weaving in the source material naturally rather than listing it. Keep it warm but professional regardless of tone chosen, appropriate for someone communicating about a child in their care. Do not sign off with a name, since the carer will add their own. The body is plain text, not HTML.`;
+Write a complete, ready-to-send email in the requested tone, in British English, weaving in the source material naturally rather than listing it. Keep it warm but professional regardless of tone chosen, appropriate for someone communicating about a child in their care. Do not sign off with a name, since the carer will add their own. The body is plain text, not HTML. Write any date the UK way (day before month, e.g. "26 September") -- never the American month/day order.`;
 
   try {
     const anthropic = new Anthropic({ apiKey });
