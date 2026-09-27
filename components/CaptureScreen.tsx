@@ -74,6 +74,14 @@ export default function CaptureScreen() {
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<PendingItem[]>([]);
   const [warning, setWarning] = useState("");
+  // A question typed into the same box ("what time does Eli go to bed?")
+  // gets answered from everything on file instead of being sorted into a
+  // diary entry -- askedQuestion is captured separately from the live `cap`
+  // textarea so the answer's heading doesn't change under it if the box is
+  // reused for something else while the answer is still showing.
+  const [askedQuestion, setAskedQuestion] = useState("");
+  const [askAnswer, setAskAnswer] = useState("");
+  const [askError, setAskError] = useState("");
   // Things To Do and the training-suggestion card each load once on mount
   // and otherwise only refresh on a tab focus/visibility change -- while
   // staying on this same Capture page for a whole session (which is the
@@ -325,6 +333,35 @@ export default function CaptureScreen() {
       showToast("Couldn't reach the sorting service — try again in a moment.");
     }
     setBusy(false);
+  }
+
+  // A question ("who has an allergy to peanuts?") gets answered from
+  // everything on file, not sorted into a diary entry -- see isQuestion().
+  async function askQuestion() {
+    const question = cap.trim();
+    if (!question) return;
+    setBusy(true);
+    setAskError("");
+    setAskAnswer("");
+    setAskedQuestion(question);
+    try {
+      const res = await fetch("/api/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question }),
+      });
+      const data = await res.json();
+      if (data.error) setAskError(data.error);
+      else setAskAnswer(data.answer || "Couldn't find an answer to that.");
+    } catch {
+      setAskError("Couldn't reach the answering service — try again in a moment.");
+    }
+    setCap("");
+    setBusy(false);
+  }
+
+  function isQuestion(text: string): boolean {
+    return text.trim().endsWith("?");
   }
 
   function updatePending(i: number, patch: Partial<PendingItem>) {
@@ -838,14 +875,34 @@ export default function CaptureScreen() {
         <div className="card" style={{ display: "flex", flexDirection: "column" }}>
           <h3>Tell me anything</h3>
           <textarea
-            placeholder="A note, or a command — 'diary', 'supervision', 'expenses', 'social worker', 'incident', 'just record', or 'add parents evening to the calendar on the 12th'. Mileage and hours of day care get costed automatically."
+            placeholder="A note, a command — 'diary', 'supervision', 'expenses', 'social worker', 'incident', 'just record', or 'add parents evening to the calendar on the 12th' — or ask a question, e.g. 'what time does Eli go to bed?'"
             value={cap}
             onChange={(e) => setCap(e.target.value)}
             style={{ flex: 1, minHeight: 200 }}
           />
-          <button className="btn" disabled={busy || !cap.trim()} onClick={sortIt}>
-            {busy ? "Sorting…" : "Sort it"}
+          <button className="btn" disabled={busy || !cap.trim()} onClick={isQuestion(cap) ? askQuestion : sortIt}>
+            {busy ? (isQuestion(cap) ? "Thinking…" : "Sorting…") : isQuestion(cap) ? "❓ Answer" : "Sort it"}
           </button>
+          {(askAnswer || askError) && (
+            <div className="note" style={{ marginTop: 10 }}>
+              <b>❓ {askedQuestion}</b>
+              {askAnswer && <p style={{ margin: "6px 0 0" }}>{askAnswer}</p>}
+              {askError && (
+                <p style={{ margin: "6px 0 0", color: "var(--danger)" }}>{askError}</p>
+              )}
+              <button
+                className="chip"
+                style={{ marginTop: 8 }}
+                onClick={() => {
+                  setAskAnswer("");
+                  setAskError("");
+                  setAskedQuestion("");
+                }}
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
           <p className="hint">
             Children: {names.join(", ") || "none yet"}{" "}
             <button className="chip add" onClick={() => (addFor === "top" ? setAddFor(null) : openAddChild("top"))}>
