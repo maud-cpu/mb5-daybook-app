@@ -14,7 +14,14 @@ import ChildDocuments from "@/components/ChildDocuments";
 import RadialWheel, { WheelNode } from "@/components/RadialWheel";
 
 const ADULT_ROLES = ["Foster carer", "Respite carer", "Short breaks carer", "Adult child", "Live-in grandparent", "Other"];
-const VISITOR_ROLES = ["Mockingbird hub carer", "Respite support worker", "Family friend / helper", "Other"];
+const VISITOR_ROLES = [
+  "Mockingbird hub carer",
+  "Mockingbird satellite carer",
+  "Foster carer",
+  "Respite support worker",
+  "Family friend / helper",
+  "Other",
+];
 
 function firstName(name: string): string {
   return (name || "").trim().split(/\s+/)[0] || "?";
