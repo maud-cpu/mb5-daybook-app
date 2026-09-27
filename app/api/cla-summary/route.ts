@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     .map((r) => `[${r.date}]${r.flag ? ` [flag: ${r.flag}${r.flag_done ? ", resolved" : ", still open"}]` : ""} ${r.text}${r.flag_note ? ` -- ${r.flag_note}` : ""}`)
     .join("\n");
 
-  const sys = `You write a short summary paragraph of ${childName}'s recent notes for a UK foster carer to read out at a Child Looked After (CLA) review meeting. 3-6 sentences, plain factual British English, third person, roughly chronological. Cover what's happened (incidents, things logged to raise) and clearly flag anything still open or unresolved that needs following up -- that's the single most important thing the meeting needs to hear. Use only what's in the notes below; never invent or assume anything. Don't pad it with pleasantries or a heading, just the summary itself.`;
+  const sys = `You write a short summary paragraph of ${childName}'s recent notes for a UK foster carer to read out at a Child Looked After (CLA) review meeting. 3-6 sentences, plain factual British English, third person, roughly chronological. Cover what's happened (incidents, things logged to raise) and clearly flag anything still open or unresolved that needs following up -- that's the single most important thing the meeting needs to hear. Use only what's in the notes below; never invent or assume anything. Don't pad it with pleasantries or a heading, just the summary itself. Write any date the UK way (day before month, e.g. "26 September") -- never the American month/day order.`;
 
   try {
     const anthropic = new Anthropic({ apiKey });
