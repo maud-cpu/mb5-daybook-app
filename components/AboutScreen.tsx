@@ -1657,9 +1657,17 @@ export default function AboutScreen() {
                   {kids.length > 0 && (
                     <div className="chips" style={{ marginTop: 6 }}>
                       {kids.map((c) => (
-                        <span key={c.id} className="chip" style={{ pointerEvents: "none" }}>
+                        <button
+                          key={c.id}
+                          type="button"
+                          className={`chip${selected === `visit:${c.id}` ? " on" : ""}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            selectVisitorsNode(`visit:${c.id}`);
+                          }}
+                        >
                           {c.name}
-                        </span>
+                        </button>
                       ))}
                     </div>
                   )}
@@ -1690,9 +1698,17 @@ export default function AboutScreen() {
                 <b>{fam}</b>
                 <div className="chips" style={{ marginTop: 6 }}>
                   {kids.map((c) => (
-                    <span key={c.id} className="chip" style={{ pointerEvents: "none" }}>
+                    <button
+                      key={c.id}
+                      type="button"
+                      className={`chip${selected === `visit:${c.id}` ? " on" : ""}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        selectVisitorsNode(`visit:${c.id}`);
+                      }}
+                    >
                       {c.name}
-                    </span>
+                    </button>
                   ))}
                 </div>
               </div>
