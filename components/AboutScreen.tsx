@@ -602,6 +602,13 @@ export default function AboutScreen() {
     setAddNotice("");
     const match = await findPersonByName(supabase, "household_visitors", newVisitor.name);
     if (match && confirmUseExisting(match.name)) {
+      // Reusing the existing person shouldn't also throw away a "Partner of"
+      // choice already made on this form -- apply it to the existing row
+      // instead of silently dropping it, so linking someone who happens to
+      // already be on file works in one step.
+      if (newVisitor.linked_visitor_id) {
+        await updateVisitor(match.id, { linked_visitor_id: newVisitor.linked_visitor_id });
+      }
       setNewVisitor({ name: "", phone: "", email: "", role: VISITOR_ROLES[0], gender: "", linked_visitor_id: null });
       setAddNotice(`Already had ${match.name} on your list — showing them below instead of adding a second one.`);
       setSelected(`visitor:${match.id}`);
@@ -915,8 +922,8 @@ export default function AboutScreen() {
                     <option key={r}>{r}</option>
                   ))}
                 </select>
-                <button className="x" onClick={() => removeAdult(a.id)}>
-                  ×
+                <button className="delete-btn" onClick={() => removeAdult(a.id)}>
+                  🗑 Delete
                 </button>
               </div>
               <div className="row">
@@ -1176,8 +1183,8 @@ export default function AboutScreen() {
         <div className="card">
           <div className="row" style={{ alignItems: "center" }}>
             <h3 style={{ flex: 1, margin: 0 }}>{famName}</h3>
-            <button className="x" onClick={() => removeFamilyGroup(famName, kids)}>
-              ×
+            <button className="delete-btn" onClick={() => removeFamilyGroup(famName, kids)}>
+              🗑 Delete
             </button>
           </div>
           {removeError && (
@@ -1231,8 +1238,8 @@ export default function AboutScreen() {
         <div className="card">
           <div className="row" style={{ alignItems: "center" }}>
             <h3 style={{ flex: 1, margin: 0 }}>{v.name || "Visitor"}</h3>
-            <button className="x" onClick={() => removeVisitor(v.id)}>
-              ×
+            <button className="delete-btn" onClick={() => removeVisitor(v.id)}>
+              🗑 Delete
             </button>
           </div>
           {removeError && (
@@ -1286,8 +1293,8 @@ export default function AboutScreen() {
         <div className="card">
           <div className="row" style={{ alignItems: "center" }}>
             <h3 style={{ flex: 1, margin: 0 }}>{c.name || "Child"}</h3>
-            <button className="x" onClick={() => removeHouseholdChild(c.id)}>
-              ×
+            <button className="delete-btn" onClick={() => removeHouseholdChild(c.id)}>
+              🗑 Delete
             </button>
           </div>
           {removeError && (
@@ -1372,8 +1379,8 @@ export default function AboutScreen() {
         <div className="card">
           <div className="row" style={{ alignItems: "center" }}>
             <h3 style={{ flex: 1, margin: 0 }}>{c.name || "Child"}</h3>
-            <button className="x" onClick={() => removeChild(c.id, c.name)}>
-              ×
+            <button className="delete-btn" onClick={() => removeChild(c.id, c.name)}>
+              🗑 Delete
             </button>
           </div>
           {removeError && (
@@ -1469,8 +1476,8 @@ export default function AboutScreen() {
         <div className="card">
           <div className="row" style={{ alignItems: "center" }}>
             <h3 style={{ flex: 1, margin: 0 }}>{c.name}</h3>
-            <button className="x" onClick={() => removeChild(c.id, c.name)}>
-              ×
+            <button className="delete-btn" onClick={() => removeChild(c.id, c.name)}>
+              🗑 Delete
             </button>
           </div>
           <div className="muted">

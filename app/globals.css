@@ -678,6 +678,26 @@ details table td {
   color: #fff;
 }
 
+/* A plain "×" here easily reads as decoration and gets missed -- this is
+   specifically for removing a person/entry, so it says so and looks like
+   the one deliberately destructive action on the card, not a stray glyph. */
+.delete-btn {
+  flex: 0 0 auto;
+  border: 1.5px solid var(--danger);
+  background: transparent;
+  color: var(--danger);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.delete-btn:hover {
+  background: var(--danger-soft);
+}
+
 .badge-author {
   display: inline-block;
   background: var(--accent);
