@@ -279,7 +279,7 @@ function ChildBasicsPanel({
     </>
   );
 }
-type Visitor = { id: string; name: string; phone: string; email: string; role: string; gender: string; linked_visitor_id: string | null };
+type Visitor = { id: string; name: string; phone: string; email: string; role: string; gender: string };
 
 type Household = {
   ssw_name: string;
@@ -339,14 +339,7 @@ export default function AboutScreen() {
   const [householdChildren, setHouseholdChildren] = useState<HouseholdChild[]>([]);
   const [newHouseholdChild, setNewHouseholdChild] = useState({ name: "", born: "", category: "", notes: "", gender: "" });
   const [visitors, setVisitors] = useState<Visitor[]>([]);
-  const [newVisitor, setNewVisitor] = useState<{ name: string; phone: string; email: string; role: string; gender: string; linked_visitor_id: string | null }>({
-    name: "",
-    phone: "",
-    email: "",
-    role: VISITOR_ROLES[0],
-    gender: "",
-    linked_visitor_id: null,
-  });
+  const [newVisitor, setNewVisitor] = useState({ name: "", phone: "", email: "", role: VISITOR_ROLES[0], gender: "" });
   const [newVisitingChild, setNewVisitingChild] = useState({ name: "", born: "", category: VISITS_CATS[0][0] as string, gender: "" });
   const [importText, setImportText] = useState("");
   const [importing, setImporting] = useState(false);
@@ -594,13 +587,13 @@ export default function AboutScreen() {
     setAddNotice("");
     const match = await findPersonByName(supabase, "household_visitors", newVisitor.name);
     if (match && confirmUseExisting(match.name)) {
-      setNewVisitor({ name: "", phone: "", email: "", role: VISITOR_ROLES[0], gender: "", linked_visitor_id: null });
+      setNewVisitor({ name: "", phone: "", email: "", role: VISITOR_ROLES[0], gender: "" });
       setAddNotice(`Already had ${match.name} on your list — showing them below instead of adding a second one.`);
       setSelected(`visitor:${match.id}`);
       return;
     }
     await supabase.from("household_visitors").insert(newVisitor);
-    setNewVisitor({ name: "", phone: "", email: "", role: VISITOR_ROLES[0], gender: "", linked_visitor_id: null });
+    setNewVisitor({ name: "", phone: "", email: "", role: VISITOR_ROLES[0], gender: "" });
     setSelected(null);
     await load();
   }
@@ -825,23 +818,9 @@ export default function AboutScreen() {
   const sswLabel = household.ssw_name ? household.ssw_name : "SSW";
   const visitorSearchQ = visitorSearch.trim().toLowerCase();
   const matchesSearch = (name: string) => !visitorSearchQ || name.toLowerCase().includes(visitorSearchQ);
-
-  // A hub carer's partner is its own household_visitors row too (they need
-  // their own phone/email/role), but shows on the SAME line as the person
-  // they're linked to instead of as a separate card -- "primary" here just
-  // means "not itself linked to someone else in this list".
-  const primaryVisitors = visitors.filter((v) => !v.linked_visitor_id || !validVisitorIds.has(v.linked_visitor_id));
-  const partnersByPrimaryId: Record<string, Visitor[]> = {};
-  visitors.forEach((v) => {
-    if (v.linked_visitor_id && validVisitorIds.has(v.linked_visitor_id)) {
-      (partnersByPrimaryId[v.linked_visitor_id] ||= []).push(v);
-    }
-  });
   const visitorGroups = VISITOR_ROLES.map((role) => ({
     role,
-    items: primaryVisitors.filter(
-      (v) => v.role === role && (matchesSearch(v.name) || (partnersByPrimaryId[v.id] || []).some((p) => matchesSearch(p.name))),
-    ),
+    items: visitors.filter((v) => v.role === role && matchesSearch(v.name)),
   })).filter((g) => g.items.length > 0);
   const visibleFamilyGroups = Object.entries(visitingByFamily).filter(([fam]) => matchesSearch(fam));
   const visibleUngrouped = visitingUngrouped.filter((c) => matchesSearch(c.name));
@@ -1138,24 +1117,10 @@ export default function AboutScreen() {
               ))}
             </select>
             <GenderSelect value={newVisitor.gender} onChange={(v) => setNewVisitor({ ...newVisitor, gender: v })} />
+            <button className="chip" style={{ flex: "0 0 auto" }} onClick={addVisitor}>
+              + Add
+            </button>
           </div>
-          {visitors.length > 0 && (
-            <select
-              style={{ marginTop: 6 }}
-              value={newVisitor.linked_visitor_id || ""}
-              onChange={(e) => setNewVisitor({ ...newVisitor, linked_visitor_id: e.target.value || null })}
-            >
-              <option value="">Partner / same household as… (optional)</option>
-              {visitors.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                </option>
-              ))}
-            </select>
-          )}
-          <button className="chip" style={{ marginTop: 6 }} onClick={addVisitor}>
-            + Add
-          </button>
           {closeButton()}
         </div>
       );
@@ -1246,19 +1211,6 @@ export default function AboutScreen() {
             <input placeholder="Email" value={v.email} onChange={(e) => updateVisitor(v.id, { email: e.target.value })} />
             <GenderSelect value={v.gender} onChange={(val) => updateVisitor(v.id, { gender: val })} />
           </div>
-          <select
-            value={v.linked_visitor_id || ""}
-            onChange={(e) => updateVisitor(v.id, { linked_visitor_id: e.target.value || null })}
-          >
-            <option value="">Partner / same household as… (none)</option>
-            {visitors
-              .filter((other) => other.id !== v.id && !other.linked_visitor_id)
-              .map((other) => (
-                <option key={other.id} value={other.id}>
-                  {other.name}
-                </option>
-              ))}
-          </select>
           <button className="chip" style={{ marginTop: 8 }} onClick={() => promoteVisitorToAdult(v)}>
             🏠 They actually live here — move to household
           </button>
@@ -1608,9 +1560,7 @@ export default function AboutScreen() {
               {g.role}
             </small>
             {g.items.map((v) => {
-              const partners = partnersByPrimaryId[v.id] || [];
-              const kids = [...(childrenByVisitorId[v.id] || []), ...partners.flatMap((p) => childrenByVisitorId[p.id] || [])];
-              const isOpen = selected === `visitor:${v.id}` || partners.some((p) => selected === `visitor:${p.id}`);
+              const kids = childrenByVisitorId[v.id] || [];
               return (
                 <div
                   key={v.id}
@@ -1619,26 +1569,12 @@ export default function AboutScreen() {
                     cursor: "pointer",
                     marginTop: 8,
                     borderLeft: `4px solid ${personColor(v.name)}`,
-                    background: isOpen ? "var(--pine-soft)" : undefined,
-                    boxShadow: isOpen ? "0 0 0 2px var(--pine)" : undefined,
+                    background: selected === `visitor:${v.id}` ? "var(--pine-soft)" : undefined,
+                    boxShadow: selected === `visitor:${v.id}` ? "0 0 0 2px var(--pine)" : undefined,
                   }}
                   onClick={() => selectVisitorsNode(`visitor:${v.id}`)}
                 >
                   <b>{v.name}</b>
-                  {partners.map((p) => (
-                    <b key={p.id}>
-                      {" & "}
-                      <span
-                        style={{ textDecoration: "underline", textUnderlineOffset: 2 }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          selectVisitorsNode(`visitor:${p.id}`);
-                        }}
-                      >
-                        {p.name}
-                      </span>
-                    </b>
-                  ))}
                   {kids.length > 0 && (
                     <div className="chips" style={{ marginTop: 6 }}>
                       {kids.map((c) => (

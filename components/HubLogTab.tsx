@@ -25,7 +25,7 @@ type LogEntry = {
 // same adults shown on the About Us Visitors wheel) and the visiting
 // children linked to them -- not a separate list, so adding someone here
 // shows up there too and vice versa. See migration 0065.
-type HubVisitor = { id: string; name: string; role: string; linked_visitor_id: string | null };
+type HubVisitor = { id: string; name: string; role: string };
 type HubChild = { id: string; name: string; linked_visitor_id: string | null };
 
 type Draft = { date: string; carer_names: string; support_type: string; amount: string; notes: string };
@@ -54,7 +54,7 @@ export default function HubLogTab() {
   async function load() {
     const [{ data }, { data: visitorRows }, { data: childRows }] = await Promise.all([
       supabase.from("hub_support_log").select("*").order("date", { ascending: false }),
-      supabase.from("household_visitors").select("id, name, role, linked_visitor_id").order("name"),
+      supabase.from("household_visitors").select("id, name, role").order("name"),
       supabase.from("children").select("id, name, linked_visitor_id").eq("lives_here", false),
     ]);
     setEntries((data as LogEntry[]) ?? []);
@@ -184,44 +184,34 @@ export default function HubLogTab() {
           hub news. Anyone here gets picked up automatically when you mention them in Capture. Prune anything you
           don&apos;t want once you&apos;re doing your spreadsheet, easier than checking beforehand.
         </p>
-        {visitors
-          .filter((v) => !v.linked_visitor_id || !visitors.some((o) => o.id === v.linked_visitor_id))
-          .map((v) => {
-            const partners = visitors.filter((o) => o.linked_visitor_id === v.id);
-            const kids = hubChildren.filter(
-              (c) => c.linked_visitor_id === v.id || partners.some((p) => p.id === c.linked_visitor_id),
-            );
-            return (
-              <div key={v.id} style={{ marginTop: 8 }}>
-                <div className="chips">
-                  <button className="chip on" onClick={() => removeVisitor(v.id)} title="Remove">
-                    {v.name} ×
+        {visitors.map((v) => {
+          const kids = hubChildren.filter((c) => c.linked_visitor_id === v.id);
+          return (
+            <div key={v.id} style={{ marginTop: 8 }}>
+              <div className="chips">
+                <button className="chip on" onClick={() => removeVisitor(v.id)} title="Remove">
+                  {v.name} ×
+                </button>
+                {kids.map((c) => (
+                  <button key={c.id} className="chip" onClick={() => removeHubChild(c.id)} title="Remove">
+                    {c.name} ×
                   </button>
-                  {partners.map((p) => (
-                    <button key={p.id} className="chip on" onClick={() => removeVisitor(p.id)} title="Remove">
-                      {p.name} ×
-                    </button>
-                  ))}
-                  {kids.map((c) => (
-                    <button key={c.id} className="chip" onClick={() => removeHubChild(c.id)} title="Remove">
-                      {c.name} ×
-                    </button>
-                  ))}
-                </div>
-                <div className="row" style={{ marginTop: 4 }}>
-                  <input
-                    placeholder={`Add ${v.name.split(" ")[0]}'s child…`}
-                    value={newChildName[v.id] || ""}
-                    onChange={(e) => setNewChildName((prev) => ({ ...prev, [v.id]: e.target.value }))}
-                    onKeyDown={(e) => e.key === "Enter" && addChildFor(v.id)}
-                  />
-                  <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => addChildFor(v.id)}>
-                    + Add
-                  </button>
-                </div>
+                ))}
               </div>
-            );
-          })}
+              <div className="row" style={{ marginTop: 4 }}>
+                <input
+                  placeholder={`Add ${v.name.split(" ")[0]}'s child…`}
+                  value={newChildName[v.id] || ""}
+                  onChange={(e) => setNewChildName((prev) => ({ ...prev, [v.id]: e.target.value }))}
+                  onKeyDown={(e) => e.key === "Enter" && addChildFor(v.id)}
+                />
+                <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => addChildFor(v.id)}>
+                  + Add
+                </button>
+              </div>
+            </div>
+          );
+        })}
         <div className="row" style={{ marginTop: 8 }}>
           <input
             placeholder="Add a hub carer (e.g. Sophie)"
