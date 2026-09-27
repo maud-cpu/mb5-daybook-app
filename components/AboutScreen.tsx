@@ -399,9 +399,9 @@ export default function AboutScreen() {
         )
         .order("created_at"),
       supabase.from("household").select("*").maybeSingle(),
-      supabase.from("household_adults").select("*").order("created_at"),
+      supabase.from("household_adults").select("*").order("name"),
       supabase.from("household_children").select("*").order("created_at"),
-      supabase.from("household_visitors").select("*").order("created_at"),
+      supabase.from("household_visitors").select("*").order("name"),
     ]);
     setHouseholdChildren((householdChildRows as HouseholdChild[]) ?? []);
     setVisitors((visitorRows as Visitor[]) ?? []);
