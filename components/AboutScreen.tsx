@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
@@ -350,6 +350,14 @@ export default function AboutScreen() {
   const [openDocuments, setOpenDocuments] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
+  // The circles and Visitors list can run long once a lot of people are
+  // added -- tapping someone whose edit panel then renders below all of
+  // that, off the bottom of the screen with no visible change at the tap
+  // point, looked exactly like tapping had stopped working at all.
+  const selectedPanelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (selected) selectedPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [selected]);
   const [familyDraft, setFamilyDraft] = useState({ phone: "", email: "", role: VISITOR_ROLES[0], gender: "" });
   const [familyNameDraft, setFamilyNameDraft] = useState("");
   const [visitorSearch, setVisitorSearch] = useState("");
@@ -1658,7 +1666,7 @@ export default function AboutScreen() {
         </div>
       )}
 
-      {renderSelected()}
+      <div ref={selectedPanelRef}>{renderSelected()}</div>
     </div>
   );
 }
