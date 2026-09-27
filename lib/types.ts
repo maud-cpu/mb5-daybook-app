@@ -158,6 +158,9 @@ export const VISITS_CATS = [
   ["sleepover", "Sleepover"],
   ["daycare", "Daycare"],
   ["short_break", "Short break"],
+  ["regular_contact", "Regular contact / day visits"],
+  ["emergency", "Emergency / one-off cover"],
+  ["varies", "Varies (daycare, sleepovers, etc)"],
 ] as const;
 
 export const MB_OPTIONS = [
