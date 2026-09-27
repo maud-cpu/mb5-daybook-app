@@ -14,7 +14,7 @@ import HubLogTab from "@/components/HubLogTab";
 
 type Tab = "month" | "supervision" | "cla" | "expenses" | "meds" | "diary" | "handover" | "hub";
 type ChildWithBasics = Child & { basics: Record<string, string> };
-type TrainingCompletion = { title: string; completedOn: string };
+type TrainingCompletion = { title: string; completedOn: string; url: string; length: string; platform: string };
 
 function fmtDate(iso: string): string {
   return new Date(iso + "T12:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
@@ -56,7 +56,7 @@ export default function PaperworkScreen() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: recs }, { data: kids }, { data: hhKids }, { data: r }, { data: training }] = await Promise.all([
+      const [{ data: recs }, { data: kids }, { data: hhKids }, { data: r }, { data: training }, { data: catalog }] = await Promise.all([
         supabase.from("records").select("*").order("date", { ascending: false }),
         supabase.from("children").select("id, name, born, family, lives_here, category, basics"),
         // A child in "Children in your household" can be an actual foster
@@ -65,6 +65,11 @@ export default function PaperworkScreen() {
         supabase.from("household_children").select("id, name, born, category, basics"),
         supabase.from("shared_rates").select("*").single(),
         supabase.from("training_progress").select("course_title, completed_on").not("completed_on", "is", null),
+        // training_progress only ever stored the plain course title, no id --
+        // matching it back to the catalog by title is the only way to bring
+        // the link/length along for a completed course in the supervision
+        // report, so it's not just a title someone has to search for again.
+        supabase.from("shared_training_catalog").select("title, url, length, platform"),
       ]);
       setRecords((recs as EntryRecord[]) ?? []);
       setChildren([
@@ -74,11 +79,23 @@ export default function PaperworkScreen() {
         )),
       ]);
       setRates(r as Rates);
+      const catalogByTitle = new Map(
+        ((catalog as { title: string; url: string; length: string; platform: string }[] | null) ?? []).map((c) => [
+          c.title.trim().toLowerCase(),
+          c,
+        ]),
+      );
       setTrainingDone(
-        ((training as { course_title: string; completed_on: string }[] | null) ?? []).map((t) => ({
-          title: t.course_title,
-          completedOn: t.completed_on,
-        })),
+        ((training as { course_title: string; completed_on: string }[] | null) ?? []).map((t) => {
+          const match = catalogByTitle.get(t.course_title.trim().toLowerCase());
+          return {
+            title: t.course_title,
+            completedOn: t.completed_on,
+            url: match?.url || "",
+            length: match?.length || "",
+            platform: match?.platform || "",
+          };
+        }),
       );
     }
     load();
@@ -381,7 +398,9 @@ function SupervisionReport({ records, training }: { records: EntryRecord[]; trai
     toRaise.forEach((r) => (out += `  ${fmtDate(r.date)}${r.child ? ` (${r.child})` : ""}: ${r.text}\n`));
     if (trainingDone.length) {
       out += `\nTRAINING COMPLETED\n`;
-      trainingDone.forEach((t) => (out += `  ${fmtDate(t.completedOn)}: ${t.title}\n`));
+      trainingDone.forEach(
+        (t) => (out += `  ${fmtDate(t.completedOn)}: ${t.title}${t.length ? ` (${t.length})` : ""}${t.url ? ` — ${t.url}` : ""}\n`),
+      );
     }
     return out;
   })();
@@ -417,6 +436,32 @@ function SupervisionReport({ records, training }: { records: EntryRecord[]; trai
         Copy report
       </button>
       {copyMsg && <span className="hint"> {copyMsg}</span>}
+      {trainingDone.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <p className="hint" style={{ marginBottom: 4 }}>
+            Training completed — tap to open and refresh your memory
+          </p>
+          {trainingDone.map((t, i) => (
+            <div key={t.title + t.completedOn + i} className="rec">
+              <b>{t.title}</b>
+              {t.url ? (
+                <>
+                  {" — "}
+                  <a href={t.url} target="_blank" rel="noopener noreferrer">
+                    Open ↗
+                  </a>
+                </>
+              ) : (
+                " — no link on file for this one"
+              )}
+              <br />
+              <small className="muted">
+                {[fmtDate(t.completedOn), t.length, t.platform].filter(Boolean).join(" · ")}
+              </small>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
