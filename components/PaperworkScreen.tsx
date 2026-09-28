@@ -312,6 +312,12 @@ export default function PaperworkScreen() {
         <div className="card">
           <h3>Expenses — {fmtMonthLabel(thisMonth)}</h3>
 
+          <p>
+            <a href="https://cfportal.surreycc.gov.uk/" target="_blank" rel="noopener noreferrer">
+              🔗 Surrey carer portal — claim expenses here
+            </a>
+          </p>
+
           <button className="chip add" onClick={() => setAddingExpense(!addingExpense)}>
             {addingExpense ? "Cancel" : "+ Add expense"}
           </button>
