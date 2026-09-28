@@ -147,6 +147,10 @@ export default function HandoverTab() {
   const [savedAt, setSavedAt] = useState("");
   const [draftingFor, setDraftingFor] = useState<string | null>(null);
   const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
+  const [noteOpenFor, setNoteOpenFor] = useState<string | null>(null);
+  const [noteFor, setNoteFor] = useState<Record<string, string>>({});
+  const [noteError, setNoteError] = useState<Record<string, string>>({});
+  const [rewritingFor, setRewritingFor] = useState<string | null>(null);
 
   async function load() {
     const [kidsRes, hhKidsRes, profilesRes, householdRes, schoolAdminRes, clubsRes, docsRes] = await Promise.all([
@@ -298,6 +302,41 @@ export default function HandoverTab() {
       setDraftErrors((prev) => ({ ...prev, [childId]: "Couldn't reach the drafting service — try again in a moment." }));
     }
     setDraftingFor(null);
+  }
+
+  async function addNoteAndRewrite(childId: string, childName: string, k: string, label: string, hint: string) {
+    const noteKey = `${childId}:${k}`;
+    const note = (noteFor[noteKey] || "").trim();
+    if (!note) return;
+    setRewritingFor(noteKey);
+    setNoteError((prev) => ({ ...prev, [noteKey]: "" }));
+    // Save the carer's own words as a real record on the child's timeline
+    // first -- the rewrite below only ever touches this profile box's text,
+    // so without this the note would otherwise only ever exist rephrased.
+    const recRes = await fetch("/api/records", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: [{ bucket: "diary", date: today(), text: note, kids: [childName], child: childName }] }),
+    });
+    if (!recRes.ok) {
+      setNoteError((prev) => ({ ...prev, [noteKey]: "Couldn't save that note" }));
+      setRewritingFor(null);
+      return;
+    }
+    const res = await fetch("/api/rewrite-box", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ childLabel: childName, label, hint, existingText: profileOf(childId)[k], note, voice: "handover" }),
+    });
+    const data = await res.json();
+    setRewritingFor(null);
+    if (data.error) {
+      setNoteError((prev) => ({ ...prev, [noteKey]: `${data.error} — but your note is saved on the record.` }));
+      return;
+    }
+    await saveProfileField(childId, k, data.text);
+    setNoteFor((prev) => ({ ...prev, [noteKey]: "" }));
+    setNoteOpenFor(null);
   }
 
   async function saveHouseholdField(key: string, value: string) {
@@ -511,6 +550,34 @@ ${sortedSelected
                       if (e.target.value !== e.target.dataset.initial) saveProfileField(child.id, k, e.target.value);
                     }}
                   />
+                  {noteOpenFor === `${child.id}:${k}` ? (
+                    <div style={{ marginTop: 8, padding: 8, background: "#fbfaf6", borderRadius: "var(--radius-sm)" }}>
+                      <textarea
+                        rows={2}
+                        placeholder="Add something extra and I'll weave it into the box above"
+                        value={noteFor[`${child.id}:${k}`] || ""}
+                        onChange={(e) => setNoteFor((prev) => ({ ...prev, [`${child.id}:${k}`]: e.target.value }))}
+                      />
+                      {noteError[`${child.id}:${k}`] && <p style={{ color: "var(--danger)", fontSize: 14 }}>{noteError[`${child.id}:${k}`]}</p>}
+                      <div className="row">
+                        <button
+                          className="btn"
+                          onClick={() => addNoteAndRewrite(child.id, n, k, label, hint)}
+                          disabled={rewritingFor === `${child.id}:${k}` || !noteFor[`${child.id}:${k}`]?.trim()}
+                        >
+                          {rewritingFor === `${child.id}:${k}` ? "Rewriting…" : "Add & rewrite"}
+                        </button>
+                        <button className="chip" onClick={() => setNoteOpenFor(null)}>
+                          Cancel
+                        </button>
+                      </div>
+                      <p className="note">This also gets saved to {n}&apos;s record.</p>
+                    </div>
+                  ) : (
+                    <button className="chip" onClick={() => setNoteOpenFor(`${child.id}:${k}`)}>
+                      + Add a note &amp; rewrite
+                    </button>
+                  )}
                 </div>
               );
             })}

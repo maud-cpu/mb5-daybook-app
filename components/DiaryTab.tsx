@@ -26,6 +26,10 @@ export default function DiaryTab() {
   const [error, setError] = useState("");
   const [savedAt, setSavedAt] = useState("");
   const [lastTouchedBy, setLastTouchedBy] = useState<string | null>(null);
+  const [noteOpenFor, setNoteOpenFor] = useState<string | null>(null);
+  const [noteFor, setNoteFor] = useState<Record<string, string>>({});
+  const [noteError, setNoteError] = useState<Record<string, string>>({});
+  const [rewritingFor, setRewritingFor] = useState<string | null>(null);
   const { authorOf, myId } = useHouseholdNames();
 
   useEffect(() => {
@@ -109,6 +113,42 @@ export default function DiaryTab() {
     save(patch);
   }
 
+  async function addNoteAndRewrite(k: string, label: string, hint: string) {
+    const note = (noteFor[k] || "").trim();
+    if (!note || !sortedSelected.length) return;
+    setRewritingFor(k);
+    setNoteError((prev) => ({ ...prev, [k]: "" }));
+    // Save the carer's own words as a real record on the child's timeline
+    // first -- the rewrite below only ever touches this diary box's text,
+    // so without this the note would otherwise only ever exist rephrased.
+    const recRes = await fetch("/api/records", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [{ bucket: "diary", date: today(), text: note, kids: sortedSelected, child: sortedSelected.length === 1 ? sortedSelected[0] : "" }],
+      }),
+    });
+    if (!recRes.ok) {
+      setNoteError((prev) => ({ ...prev, [k]: "Couldn't save that note" }));
+      setRewritingFor(null);
+      return;
+    }
+    const res = await fetch("/api/rewrite-box", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ childLabel: sortedSelected.join(" & "), label, hint, existingText: sections[k], note, voice: "diary" }),
+    });
+    const data = await res.json();
+    setRewritingFor(null);
+    if (data.error) {
+      setNoteError((prev) => ({ ...prev, [k]: `${data.error} — but your note is saved on the record.` }));
+      return;
+    }
+    save({ [k]: data.text });
+    setNoteFor((prev) => ({ ...prev, [k]: "" }));
+    setNoteOpenFor(null);
+  }
+
   function exportWord() {
     const esc = (s: string) => (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>");
     const label = sortedSelected.join(" & ") || "child";
@@ -169,6 +209,32 @@ ${DIARY_SECTIONS.map(([k, h, hint]) => `<tr class="h"><td colspan="3">${h}<br><s
             onChange={(e) => setSections((prev) => ({ ...prev, [k]: e.target.value }))}
             onBlur={() => save({})}
           />
+          {noteOpenFor === k ? (
+            <div style={{ marginTop: 8, padding: 8, background: "#fbfaf6", borderRadius: "var(--radius-sm)" }}>
+              <textarea
+                rows={2}
+                placeholder="Add something extra and I'll weave it into the box above"
+                value={noteFor[k] || ""}
+                onChange={(e) => setNoteFor((prev) => ({ ...prev, [k]: e.target.value }))}
+              />
+              {noteError[k] && <p style={{ color: "var(--danger)", fontSize: 14 }}>{noteError[k]}</p>}
+              <div className="row">
+                <button className="btn" onClick={() => addNoteAndRewrite(k, h, hint)} disabled={rewritingFor === k || !noteFor[k]?.trim()}>
+                  {rewritingFor === k ? "Rewriting…" : "Add & rewrite"}
+                </button>
+                <button className="chip" onClick={() => setNoteOpenFor(null)}>
+                  Cancel
+                </button>
+              </div>
+              <p className="note">This also gets saved to {sortedSelected.join(" & ") || "the child's"} record.</p>
+            </div>
+          ) : (
+            sortedSelected.length > 0 && (
+              <button className="chip" onClick={() => setNoteOpenFor(k)}>
+                + Add a note &amp; rewrite
+              </button>
+            )
+          )}
         </div>
       ))}
 
