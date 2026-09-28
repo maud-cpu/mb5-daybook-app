@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { encryptFieldsForWrite, lazyMigrateRows } from "@/lib/encryptedTable";
 
-// Phase 3 of application-level encryption (see 0068_encrypt_children_identity.sql).
-// Same dual-write reasoning as /api/children -- basics (jsonb) stays
-// untouched (Phase 4).
+// Phase 3+4 of application-level encryption (see 0068_encrypt_children_identity.sql,
+// 0069_encrypt_basics.sql). Same dual-write reasoning as /api/children.
 const ENC_FIELDS = ["name", "hub_carer_name", "hub_carer_phone", "hub_carer_email", "surrey_contact", "notes"];
+const JSON_FIELDS = ["basics"];
 
 export async function GET() {
   const supabase = await createClient();
@@ -17,7 +17,7 @@ export async function GET() {
   const { data, error } = await supabase.from("household_children").select("*").order("created_at");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const children = await lazyMigrateRows(supabase, "household_children", "id", data ?? [], ENC_FIELDS);
+  const children = await lazyMigrateRows(supabase, "household_children", "id", data ?? [], ENC_FIELDS, JSON_FIELDS);
   return NextResponse.json({ children });
 }
 
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
   const body = await req.json();
-  const insert = encryptFieldsForWrite(body, ENC_FIELDS);
+  const insert = encryptFieldsForWrite(body, ENC_FIELDS, JSON_FIELDS);
   const { data, error } = await supabase
     .from("household_children")
     .insert(insert)
@@ -50,7 +50,7 @@ export async function PATCH(req: NextRequest) {
 
   const { id, patch } = await req.json();
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
-  const update = encryptFieldsForWrite(patch, ENC_FIELDS);
+  const update = encryptFieldsForWrite(patch, ENC_FIELDS, JSON_FIELDS);
   const { error } = await supabase.from("household_children").update(update).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
