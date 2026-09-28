@@ -6,6 +6,23 @@ import { PROFILE_FIELDS } from "@/lib/handover";
 import { BUCKETS, FLAGS, FlagKey } from "@/lib/types";
 import { aiErrorMessage } from "@/lib/aiErrors";
 import { readChildDocument } from "@/lib/documentContent";
+import { lazyMigrateRows } from "@/lib/encryptedTable";
+
+const PROFILE_ENC_FIELDS = [
+  "about",
+  "routine",
+  "food",
+  "school",
+  "toilet",
+  "sleep",
+  "health",
+  "emotions",
+  "contact",
+  "screens",
+  "told",
+  "nogo",
+  "pack",
+];
 
 // A big household history (a year or more of diary entries) takes the model
 // longer to read through and reason over than a normal request -- give it
@@ -109,7 +126,7 @@ export async function POST(req: NextRequest) {
     { data: adults },
     { data: visitors },
     { data: household },
-    { data: profiles },
+    { data: profilesRaw },
     { data: records },
     { data: reminders },
     { data: hubLog },
@@ -123,7 +140,9 @@ export async function POST(req: NextRequest) {
     supabase.from("household").select("*").maybeSingle(),
     supabase
       .from("handover_child_profiles")
-      .select("child_id, about, routine, food, school, toilet, sleep, health, emotions, contact, screens, told, nogo, pack"),
+      .select(
+        "id, child_id, about, about_enc, routine, routine_enc, food, food_enc, school, school_enc, toilet, toilet_enc, sleep, sleep_enc, health, health_enc, emotions, emotions_enc, contact, contact_enc, screens, screens_enc, told, told_enc, nogo, nogo_enc, pack, pack_enc",
+      ),
     // A generous cap, not a real one for normal use at this app's scale --
     // same reasoning as the search panel's own cap on the same table.
     supabase
@@ -134,6 +153,7 @@ export async function POST(req: NextRequest) {
     supabase.from("reminders").select("date, text, people, done").order("date", { ascending: false }).limit(500),
     supabase.from("hub_support_log").select("date, carer_names, support_type, notes").order("date", { ascending: false }).limit(300),
   ]);
+  const profiles = await lazyMigrateRows(supabase, "handover_child_profiles", "id", profilesRaw ?? [], PROFILE_ENC_FIELDS);
 
   const { data: documents } = await supabase
     .from("child_documents")
