@@ -151,19 +151,17 @@ export default function HandoverTab() {
   const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
 
   async function load() {
-    const [{ data: kids }, { data: hhKids }, { data: profileRows }, { data: hh }, { data: schoolAdminRows }, { data: clubRows }, { data: docRows }] =
+    const [{ data: kids }, { data: hhKids }, { data: profileRows }, householdRes, { data: schoolAdminRows }, { data: clubRows }, { data: docRows }] =
       await Promise.all([
         supabase.from("children").select("id, name, basics, hub_carer_name, hub_carer_phone").order("created_at"),
         supabase.from("household_children").select("id, name, basics, hub_carer_name, hub_carer_phone").order("created_at"),
         supabase.from("handover_child_profiles").select("*"),
-        supabase
-          .from("household")
-          .select("ssw_name, ssw_phone, ssw_email, csw, edt, gp, hub, school_contact, delegated, carseat")
-          .maybeSingle(),
+        fetch("/api/household").then((r) => r.json()),
         supabase.from("child_school_admin").select("*"),
         supabase.from("child_clubs").select("*").order("weekday"),
         supabase.from("child_documents").select("id, child_id, title, category, file_name").order("uploaded_at"),
       ]);
+    const hh = householdRes.household;
     const normalise = (rows: (ChildRow & { basics: Record<string, string> | null })[] | null) =>
       (rows ?? []).map((c) => ({ ...c, basics: c.basics || {} }));
     setFosteredChildren(normalise(kids as (ChildRow & { basics: Record<string, string> | null })[] | null));
@@ -290,9 +288,11 @@ export default function HandoverTab() {
 
   async function saveHouseholdField(key: string, value: string) {
     setHousehold((prev) => ({ ...prev, [key]: value }));
-    await supabase
-      .from("household")
-      .upsert({ [key]: value, updated_at: new Date().toISOString() }, { onConflict: "household_owner_id" });
+    await fetch("/api/household", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [key]: value }),
+    });
     flashSaved();
   }
 

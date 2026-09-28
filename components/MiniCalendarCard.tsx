@@ -54,7 +54,7 @@ export default function MiniCalendarCard() {
     const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
     const from = days[0];
     const to = days[6];
-    const [{ data: rem }, { data: kids }, { data: hhKids }, { data: adults }, { data: clubs }] = await Promise.all([
+    const [{ data: rem }, { data: kids }, { data: hhKids }, adultsRes, { data: clubs }] = await Promise.all([
       supabase
         .from("reminders")
         .select("id, date, text, people, category")
@@ -64,9 +64,10 @@ export default function MiniCalendarCard() {
         .eq("todo_only", false),
       supabase.from("children").select("id, name"),
       supabase.from("household_children").select("id, name"),
-      supabase.from("household_adults").select("name"),
+      fetch("/api/household-adults").then((r) => r.json()),
       supabase.from("child_clubs").select("id, child_id, club_name, weekday, time_from, time_to"),
     ]);
+    const adults = adultsRes.adults;
 
     const childNameById: Record<string, string> = {};
     ((kids as { id: string; name: string }[] | null) ?? []).forEach((c) => (childNameById[c.id] = c.name));

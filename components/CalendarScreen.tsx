@@ -133,16 +133,17 @@ export default function CalendarScreen() {
   async function load() {
     const from = isoOf(year, month, 1);
     const to = isoOf(year, month, daysInMonth(year, month));
-    const [{ data: rem }, { data: kids }, { data: hhKids }, { data: adults }, { data: f2fCourses }, { data: f2fProgress }, { data: clubs }] =
+    const [{ data: rem }, { data: kids }, { data: hhKids }, adultsRes, { data: f2fCourses }, { data: f2fProgress }, { data: clubs }] =
       await Promise.all([
         supabase.from("reminders").select("*").gte("date", from).lte("date", to).eq("todo_only", false).order("date"),
         supabase.from("children").select("id, name").order("name"),
         supabase.from("household_children").select("id, name").order("name"),
-        supabase.from("household_adults").select("name").order("name"),
+        fetch("/api/household-adults").then((r) => r.json()),
         supabase.from("shared_training_catalog").select("id, title, session_date").eq("is_face_to_face", true).eq("archived", false),
         supabase.from("training_progress").select("course_title, session_date").not("session_date", "is", null),
         supabase.from("child_clubs").select("id, child_id, club_name, weekday, time_from, time_to"),
       ]);
+    const adults = adultsRes.adults;
     const myDateByTitle: Record<string, string> = {};
     (f2fProgress ?? []).forEach((p: { course_title: string; session_date: string | null }) => {
       if (p.session_date) myDateByTitle[p.course_title] = p.session_date;
