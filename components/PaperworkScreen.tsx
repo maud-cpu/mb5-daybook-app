@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { daycareAmount, describeExpense, describeMeds, expenseTotals, gbp, sortChildren, today } from "@/lib/domain";
 import { addDays } from "@/lib/calendarHelpers";
 import { unreportedIncidentItems } from "@/lib/thingsToDo";
-import { BUCKETS, Bucket, Child, DAYCARE_REASONS, EntryRecord, FLAGS, FlagKey, Rates } from "@/lib/types";
+import { BUCKETS, Bucket, Child, DAYCARE_REASONS, EntryRecord, FLAGS, FlagKey, HUB_SUPPORT_TYPES, Rates } from "@/lib/types";
 import { BASICS_SECTIONS } from "@/lib/basics";
 import DiaryTab from "@/components/DiaryTab";
 import HandoverTab from "@/components/HandoverTab";
@@ -306,7 +306,12 @@ export default function PaperworkScreen() {
 
       {tab === "month" && rates && <MonthReport records={monthRecs} kids={children} rates={rates} thisMonth={thisMonth} />}
 
-      {tab === "supervision" && <SupervisionReport records={supervisionRecs} training={trainingDone} allChildren={children} />}
+      {tab === "supervision" && (
+        <>
+          <SupervisionReport records={supervisionRecs} training={trainingDone} allChildren={children} />
+          <MockingbirdSummary />
+        </>
+      )}
 
       {tab === "cla" && <ClaPrepReport childList={claChildren} records={records} />}
 
@@ -803,6 +808,206 @@ function SupervisionReport({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// A hub carer/satellite carer is just a household_visitors row with one of
+// these two roles (see migration 0065) -- a partner links to them via
+// linked_visitor_id, same grouping HubLogTab and About Us's Visitors wheel
+// already use.
+const HUB_ROLES = ["Mockingbird hub carer", "Mockingbird satellite carer"];
+
+type HubVisitorRow = { id: string; name: string; phone: string; email: string; role: string; linked_visitor_id: string | null };
+type HubLogEntry = { id: string; date: string; carer_names: string; support_type: string; amount: number | null; notes: string };
+
+function hubTypeLabel(key: string): string {
+  return HUB_SUPPORT_TYPES.find(([k]) => k === key)?.[1] || key;
+}
+
+// A tidy, read-only roll-up for bringing to supervision -- not another
+// place to edit the roster or log (that's the Hub tab) -- so nothing here
+// gets left half-done mid-supervision by accident.
+function MockingbirdSummary() {
+  const [household, setHousehold] = useState<{
+    is_mockingbird: boolean | null;
+    hub_leader_name: string;
+    hub_leader_phone: string;
+    hub_leader_email: string;
+  } | null>(null);
+  const [visitors, setVisitors] = useState<HubVisitorRow[]>([]);
+  const [hubChildren, setHubChildren] = useState<Child[]>([]);
+  const [logs, setLogs] = useState<HubLogEntry[]>([]);
+  const [sinceDate, setSinceDate] = useState(addDays(today(), -90));
+  const [loaded, setLoaded] = useState(false);
+  const [copyMsg, setCopyMsg] = useState("");
+
+  useEffect(() => {
+    async function load() {
+      const supabase = createClient();
+      const [hhRes, visitorsRes, kidsRes, hhKidsRes, { data: logRows }] = await Promise.all([
+        fetch("/api/household").then((r) => r.json()),
+        fetch("/api/household-visitors").then((r) => r.json()),
+        fetch("/api/children").then((r) => r.json()),
+        fetch("/api/household-children").then((r) => r.json()),
+        supabase.from("hub_support_log").select("*").order("date", { ascending: false }),
+      ]);
+      setHousehold(hhRes.household ?? null);
+      setVisitors((visitorsRes.visitors as HubVisitorRow[]) ?? []);
+      const kids = (kidsRes.children as Child[]) ?? [];
+      const hhKids = ((hhKidsRes.children as Child[]) ?? []).map((c) => ({ ...c, family: "", lives_here: true }) as Child);
+      setHubChildren(sortChildren([...kids, ...hhKids]));
+      setLogs((logRows as HubLogEntry[]) ?? []);
+      setLoaded(true);
+    }
+    load();
+  }, []);
+
+  if (!loaded) return <p className="muted">Loading…</p>;
+
+  const hubVisitors = visitors.filter((v) => HUB_ROLES.includes(v.role));
+  const hubVisitorIds = new Set(hubVisitors.map((v) => v.id));
+  const primaries = hubVisitors.filter((v) => !v.linked_visitor_id || !hubVisitorIds.has(v.linked_visitor_id));
+  const partnersOf = (id: string) => hubVisitors.filter((v) => v.linked_visitor_id === id);
+  const linkedKids = hubChildren.filter((c) => c.linked_visitor_id && hubVisitorIds.has(c.linked_visitor_id));
+  const taggedKids = hubChildren.filter(
+    (c) => (c.mockingbird === "mb5" || c.mockingbird === "another") && !linkedKids.some((k) => k.id === c.id),
+  );
+  const allHubKids = [...linkedKids, ...taggedKids];
+
+  const events = logs.filter((l) => l.date >= sinceDate);
+  const tally: Record<string, { count: number; total: number; hasAmount: boolean }> = {};
+  events.forEach((e) => {
+    const s = (tally[e.support_type] ||= { count: 0, total: 0, hasAmount: false });
+    s.count += 1;
+    if (e.amount != null) {
+      s.total += e.amount;
+      s.hasAmount = true;
+    }
+  });
+
+  if (!household?.is_mockingbird && !hubVisitors.length && !allHubKids.length && !logs.length) return null;
+
+  const text = (() => {
+    let out = "Mockingbird — summary\n\n";
+    out +=
+      household?.is_mockingbird === true
+        ? "Part of Mockingbird"
+        : household?.is_mockingbird === false
+          ? "Not part of Mockingbird"
+          : "Mockingbird status not set";
+    if (household?.hub_leader_name) {
+      out += ` — hub leader ${household.hub_leader_name}${household.hub_leader_phone ? ", " + household.hub_leader_phone : ""}${household.hub_leader_email ? ", " + household.hub_leader_email : ""}`;
+    }
+    out += "\n\nADULTS\n";
+    if (!primaries.length) out += "  None on file.\n";
+    primaries.forEach((v) => {
+      const partners = partnersOf(v.id);
+      const names = [v, ...partners].map((p) => p.name).join(" & ");
+      out += `  ${names}${v.phone ? " — " + v.phone : ""}${v.email ? " — " + v.email : ""}\n`;
+    });
+    out += "\nCHILDREN\n";
+    if (!allHubKids.length) out += "  None on file.\n";
+    allHubKids.forEach((c) => {
+      const via = c.linked_visitor_id ? hubVisitors.find((v) => v.id === c.linked_visitor_id)?.name : "";
+      out += `  ${c.name}${via ? ` (${via}'s)` : ""}\n`;
+    });
+    out += `\nEVENTS since ${fmtDate(sinceDate)}\n`;
+    if (!events.length) out += "  Nothing logged in this period.\n";
+    events.forEach(
+      (e) =>
+        (out += `  ${fmtDate(e.date)}: ${hubTypeLabel(e.support_type)}${e.carer_names ? " — " + e.carer_names : ""}${e.notes ? " — " + e.notes : ""}\n`),
+    );
+    return out;
+  })();
+
+  function copy() {
+    navigator.clipboard.writeText(text).then(
+      () => setCopyMsg("Copied"),
+      () => setCopyMsg("Couldn't copy"),
+    );
+    setTimeout(() => setCopyMsg(""), 2000);
+  }
+
+  return (
+    <div className="card">
+      <h3>Mockingbird</h3>
+      <p className="note">
+        Everything Mockingbird worth mentioning at supervision — your hub&apos;s adults and children, and what&apos;s
+        happened since the date below. Add or edit the roster and log itself from the Hub tab.
+      </p>
+      <div className="row" style={{ alignItems: "center", marginTop: 6 }}>
+        <label className="hint" style={{ flex: "0 0 auto" }}>
+          Events since
+        </label>
+        <input type="date" style={{ flex: "0 0 170px" }} value={sinceDate} onChange={(e) => setSinceDate(e.target.value)} />
+      </div>
+
+      <h4 style={{ marginTop: 14 }}>Adults</h4>
+      {!primaries.length && <p className="muted">None on file yet.</p>}
+      {primaries.map((v) => {
+        const partners = partnersOf(v.id);
+        const kids = allHubKids.filter((c) => c.linked_visitor_id === v.id || partners.some((p) => p.id === c.linked_visitor_id));
+        return (
+          <div key={v.id} className="rec">
+            <b>{[v, ...partners].map((p) => p.name).join(" & ")}</b>
+            {(v.phone || v.email) && (
+              <>
+                <br />
+                <small className="muted">{[v.phone, v.email].filter(Boolean).join(" · ")}</small>
+              </>
+            )}
+            {kids.length > 0 && (
+              <>
+                <br />
+                <small className="muted">Children: {kids.map((c) => c.name).join(", ")}</small>
+              </>
+            )}
+          </div>
+        );
+      })}
+      {taggedKids.length > 0 && (
+        <p className="hint" style={{ marginTop: 8 }}>
+          Also linked to Mockingbird, not tied to a specific carer above: {taggedKids.map((c) => c.name).join(", ")}
+        </p>
+      )}
+
+      <h4 style={{ marginTop: 14 }}>Events</h4>
+      {Object.keys(tally).length > 0 && (
+        <div className="note" style={{ marginBottom: 10 }}>
+          <b>Totals</b>
+          {HUB_SUPPORT_TYPES.filter(([k]) => tally[k]).map(([k, l]) => {
+            const s = tally[k];
+            return (
+              <div key={k} style={{ marginTop: 4 }}>
+                {l}: {s.count} entr{s.count === 1 ? "y" : "ies"}
+                {s.hasAmount ? ` — ${s.total}` : ""}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {!events.length && <p className="muted">Nothing logged in this period.</p>}
+      {events.map((e) => (
+        <div key={e.id} className="rec">
+          {e.notes || hubTypeLabel(e.support_type)}
+          <br />
+          <small className="muted">
+            {fmtDate(e.date)} · {hubTypeLabel(e.support_type)}
+            {e.carer_names ? " · " + e.carer_names : ""}
+            {e.amount != null ? " · " + e.amount : ""}
+          </small>
+        </div>
+      ))}
+
+      <details style={{ marginTop: 14 }}>
+        <summary className="hint">Copy as plain text</summary>
+        <pre id="rep">{text}</pre>
+        <button className="btn" onClick={copy}>
+          Copy report
+        </button>
+        {copyMsg && <span className="hint"> {copyMsg}</span>}
+      </details>
     </div>
   );
 }
