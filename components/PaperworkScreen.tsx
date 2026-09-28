@@ -306,7 +306,7 @@ export default function PaperworkScreen() {
 
       {tab === "month" && rates && <MonthReport records={monthRecs} kids={children} rates={rates} thisMonth={thisMonth} />}
 
-      {tab === "supervision" && <SupervisionReport records={supervisionRecs} training={trainingDone} />}
+      {tab === "supervision" && <SupervisionReport records={supervisionRecs} training={trainingDone} allChildren={children} />}
 
       {tab === "cla" && <ClaPrepReport childList={claChildren} records={records} />}
 
@@ -594,7 +594,54 @@ function MonthReport({
   );
 }
 
-function SupervisionReport({ records, training }: { records: EntryRecord[]; training: TrainingCompletion[] }) {
+function namesOf(r: EntryRecord): string[] {
+  return r.kids.length ? r.kids : r.child ? [r.child] : [];
+}
+
+type ChildSupervisionGroup = {
+  name: string;
+  openFollowUps: EntryRecord[];
+  unreported: { key: string; text: string }[];
+  toRaise: EntryRecord[];
+};
+
+function GroupCard({ g }: { g: ChildSupervisionGroup }) {
+  return (
+    <div style={{ marginTop: 10 }}>
+      <h4 style={{ margin: "0 0 4px" }}>{g.name}</h4>
+      {g.openFollowUps.map((r) => (
+        <div key={r.id} className="rec" style={{ borderLeft: "3px solid var(--danger)" }}>
+          <b>Still open:</b> {FLAGS[r.flag as FlagKey]?.label || r.flag}
+          {r.flag_note ? ` — ${r.flag_note}` : ""}
+          <br />
+          <small className="muted">{fmtDate(r.date)}</small>
+        </div>
+      ))}
+      {g.unreported.map((u) => (
+        <div key={u.key} className="rec" style={{ borderLeft: "3px solid var(--danger)" }}>
+          {u.text}
+        </div>
+      ))}
+      {g.toRaise.map((r) => (
+        <div key={r.id} className="rec">
+          {r.text}
+          <br />
+          <small className="muted">{fmtDate(r.date)}</small>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SupervisionReport({
+  records,
+  training,
+  allChildren,
+}: {
+  records: EntryRecord[];
+  training: TrainingCompletion[];
+  allChildren: Child[];
+}) {
   const [sinceDate, setSinceDate] = useState(addDays(today(), -30));
   const [copyMsg, setCopyMsg] = useState("");
 
@@ -605,30 +652,71 @@ function SupervisionReport({ records, training }: { records: EntryRecord[]; trai
   const openFollowUps = [...records]
     .filter((r) => r.flag && !r.flag_done)
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const incidentRecords = records.filter((r) => r.bucket === "incident");
   const unreported = unreportedIncidentItems(
-    records.filter((r) => r.bucket === "incident").map((r) => ({ id: r.id, text: r.text, created_at: r.created_at, reported: r.reported })),
+    incidentRecords.map((r) => ({ id: r.id, text: r.text, created_at: r.created_at, reported: r.reported })),
   );
   const toRaise = records
     .filter((r) => (r.bucket === "supervision" || r.also_in.includes("supervision")) && r.date >= sinceDate)
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
   const trainingDone = [...training].filter((t) => t.completedOn >= sinceDate).sort((a, b) => b.completedOn.localeCompare(a.completedOn));
 
-  const text = (() => {
-    let out = `Supervision — items since ${fmtDate(sinceDate)}\n`;
-    if (openFollowUps.length) {
-      out += `\nSTILL OPEN -- FOLLOW UP\n`;
-      openFollowUps.forEach((r) => {
+  // Grouped per child, in the same order children appear everywhere else in
+  // the app, so a busy supervision session is easy to work through child by
+  // child rather than hunting through one long flat list for what matters.
+  const allNames = new Set<string>();
+  [...openFollowUps, ...incidentRecords, ...toRaise].forEach((r) => namesOf(r).forEach((n) => allNames.add(n)));
+  const knownOrder = sortChildren(allChildren.filter((c) => allNames.has(c.name))).map((c) => c.name);
+  const extraNames = [...allNames].filter((n) => !knownOrder.includes(n)).sort((a, b) => a.localeCompare(b));
+  const childOrder = [...knownOrder, ...extraNames];
+
+  const childGroups: ChildSupervisionGroup[] = childOrder
+    .map((name) => {
+      const myIncidents = incidentRecords.filter((r) => namesOf(r).includes(name));
+      return {
+        name,
+        openFollowUps: openFollowUps.filter((r) => namesOf(r).includes(name)),
+        unreported: unreportedIncidentItems(myIncidents.map((r) => ({ id: r.id, text: r.text, created_at: r.created_at, reported: r.reported }))),
+        toRaise: toRaise.filter((r) => namesOf(r).includes(name)),
+      };
+    })
+    .filter((g) => g.openFollowUps.length || g.unreported.length || g.toRaise.length);
+
+  const generalGroup: ChildSupervisionGroup = {
+    name: "General",
+    openFollowUps: openFollowUps.filter((r) => !namesOf(r).length),
+    unreported: unreportedIncidentItems(
+      incidentRecords.filter((r) => !namesOf(r).length).map((r) => ({ id: r.id, text: r.text, created_at: r.created_at, reported: r.reported })),
+    ),
+    toRaise: toRaise.filter((r) => !namesOf(r).length),
+  };
+  const hasGeneral = generalGroup.openFollowUps.length > 0 || generalGroup.unreported.length > 0 || generalGroup.toRaise.length > 0;
+
+  function groupText(g: ChildSupervisionGroup): string {
+    let out = "";
+    if (g.openFollowUps.length) {
+      out += `  Still open — follow up:\n`;
+      g.openFollowUps.forEach((r) => {
         const label = FLAGS[r.flag as FlagKey]?.label || r.flag;
-        out += `  ${fmtDate(r.date)}${r.child ? ` (${r.child})` : ""}: ${label}${r.flag_note ? ` -- ${r.flag_note}` : ""}\n`;
+        out += `    ${fmtDate(r.date)}: ${label}${r.flag_note ? ` -- ${r.flag_note}` : ""}\n`;
       });
     }
-    if (unreported.length) {
-      out += `\nINCIDENTS NOT YET REPORTED\n`;
-      unreported.forEach((u) => (out += `  ${u.text}\n`));
+    if (g.unreported.length) {
+      out += `  Incidents not yet reported:\n`;
+      g.unreported.forEach((u) => (out += `    ${u.text}\n`));
     }
-    out += `\nTO RAISE\n`;
-    if (!toRaise.length) out += `  Nothing logged under Supervision in this period.\n`;
-    toRaise.forEach((r) => (out += `  ${fmtDate(r.date)}${r.child ? ` (${r.child})` : ""}: ${r.text}\n`));
+    if (g.toRaise.length) {
+      out += `  To raise:\n`;
+      g.toRaise.forEach((r) => (out += `    ${fmtDate(r.date)}: ${r.text}\n`));
+    }
+    return out;
+  }
+
+  const text = (() => {
+    let out = `Supervision — items since ${fmtDate(sinceDate)}\n`;
+    if (!childGroups.length && !hasGeneral) out += `\nNothing outstanding for any child in this period.\n`;
+    childGroups.forEach((g) => (out += `\n${g.name.toUpperCase()}\n${groupText(g)}`));
+    if (hasGeneral) out += `\nGENERAL (not about a specific child)\n${groupText(generalGroup)}`;
     if (trainingDone.length) {
       out += `\nTRAINING COMPLETED\n`;
       trainingDone.forEach(
@@ -650,9 +738,9 @@ function SupervisionReport({ records, training }: { records: EntryRecord[]; trai
     <div className="card">
       <h3>Supervision</h3>
       <p className="note">
-        Everything worth mentioning at your next supervision, pulled together automatically — open follow-ups you
-        haven&apos;t resolved yet, anything you&apos;ve logged to raise, unreported incidents, and training
-        you&apos;ve completed.
+        Everything worth mentioning at your next supervision, grouped per child so it&apos;s easy to work through —
+        open follow-ups you haven&apos;t resolved yet, anything you&apos;ve logged to raise, unreported incidents,
+        and training you&apos;ve completed.
       </p>
       <div className="row" style={{ alignItems: "center", marginTop: 6 }}>
         <label className="hint" style={{ flex: "0 0 auto" }}>
@@ -664,11 +752,22 @@ function SupervisionReport({ records, training }: { records: EntryRecord[]; trai
         {openFollowUps.length} still open · {unreported.length} unreported incident{unreported.length === 1 ? "" : "s"} · {toRaise.length}{" "}
         logged to raise · {trainingDone.length} training completed
       </p>
-      <pre id="rep">{text}</pre>
-      <button className="btn" onClick={copy}>
-        Copy report
-      </button>
-      {copyMsg && <span className="hint"> {copyMsg}</span>}
+
+      {!childGroups.length && !hasGeneral && <p className="note">Nothing outstanding for any child in this period.</p>}
+      {childGroups.map((g) => (
+        <GroupCard key={g.name} g={g} />
+      ))}
+      {hasGeneral && <GroupCard g={generalGroup} />}
+
+      <details style={{ marginTop: 14 }}>
+        <summary className="hint">Copy as plain text</summary>
+        <pre id="rep">{text}</pre>
+        <button className="btn" onClick={copy}>
+          Copy report
+        </button>
+        {copyMsg && <span className="hint"> {copyMsg}</span>}
+      </details>
+
       {trainingDone.length > 0 && (
         <div style={{ marginTop: 14 }}>
           <p className="hint" style={{ marginBottom: 4 }}>
