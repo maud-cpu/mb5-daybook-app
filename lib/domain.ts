@@ -204,6 +204,12 @@ export function gbp(n: number | null | undefined): string {
   return "£" + Number(n || 0).toFixed(2);
 }
 
+// Postgres "time" columns come back as "HH:MM:SS" -- nobody needs the
+// seconds on a daycare start/end time.
+function fmtTime(t: string): string {
+  return t.slice(0, 5);
+}
+
 export function describeExpense(rates: Rates, children: Child[], r: EntryRecord): string {
   if (r.kind === "mileage") return `${r.miles} miles — ${r.text}`;
   if (r.kind === "daycare") {
@@ -211,7 +217,7 @@ export function describeExpense(rates: Rates, children: Child[], r: EntryRecord)
     const when = r.overnight
       ? "overnight"
       : r.time_from && r.time_to
-        ? `${r.time_from}–${r.time_to} (${hoursOf(r)} hrs)`
+        ? `${fmtTime(r.time_from)}–${fmtTime(r.time_to)} (${hoursOf(r)} hrs)`
         : `${Number(r.hours)} hrs`;
     return `${who} ${when} — ${gbp(daycareAmount(rates, children, r))}${r.reason ? " — " + r.reason : " — ⚠ no reason given"}${r.text ? " — " + r.text : ""}`;
   }

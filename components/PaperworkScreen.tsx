@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { describeExpense, describeMeds, expenseTotals, gbp, today } from "@/lib/domain";
+import { daycareAmount, describeExpense, describeMeds, expenseTotals, gbp, today } from "@/lib/domain";
 import { addDays } from "@/lib/calendarHelpers";
 import { unreportedIncidentItems } from "@/lib/thingsToDo";
-import { BUCKETS, Bucket, Child, EntryRecord, FLAGS, FlagKey, Rates } from "@/lib/types";
+import { BUCKETS, Bucket, Child, DAYCARE_REASONS, EntryRecord, FLAGS, FlagKey, Rates } from "@/lib/types";
 import { BASICS_SECTIONS } from "@/lib/basics";
 import DiaryTab from "@/components/DiaryTab";
 import HandoverTab from "@/components/HandoverTab";
@@ -15,6 +15,35 @@ import HubLogTab from "@/components/HubLogTab";
 type Tab = "month" | "supervision" | "cla" | "expenses" | "meds" | "diary" | "handover" | "hub";
 type ChildWithBasics = Child & { basics: Record<string, string> };
 type TrainingCompletion = { title: string; completedOn: string; url: string; length: string; platform: string };
+type NewExpenseDraft = {
+  date: string;
+  kind: "purchase" | "mileage" | "daycare";
+  amount: string;
+  miles: string;
+  kids: string[];
+  time_from: string;
+  time_to: string;
+  hours: string;
+  overnight: boolean;
+  reason: string;
+  text: string;
+};
+
+function blankExpenseDraft(): NewExpenseDraft {
+  return {
+    date: today(),
+    kind: "purchase",
+    amount: "",
+    miles: "",
+    kids: [],
+    time_from: "",
+    time_to: "",
+    hours: "",
+    overnight: false,
+    reason: "",
+    text: "",
+  };
+}
 
 function fmtDate(iso: string): string {
   return new Date(iso + "T12:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
@@ -35,6 +64,9 @@ export default function PaperworkScreen() {
   const [childFilterOpen, setChildFilterOpen] = useState(false);
   const [childSearch, setChildSearch] = useState("");
   const [trainingDone, setTrainingDone] = useState<TrainingCompletion[]>([]);
+  const [addingExpense, setAddingExpense] = useState(false);
+  const [newExpense, setNewExpense] = useState<NewExpenseDraft>(blankExpenseDraft());
+  const [addExpenseError, setAddExpenseError] = useState("");
 
   function toggleChildFilter(name: string) {
     setChildFilter((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
@@ -42,6 +74,50 @@ export default function PaperworkScreen() {
 
   function patchRecord(id: string, patch: Partial<EntryRecord>) {
     setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  }
+
+  function toggleNewExpenseKid(name: string) {
+    setNewExpense((prev) => ({
+      ...prev,
+      kids: prev.kids.includes(name) ? prev.kids.filter((k) => k !== name) : [...prev.kids, name],
+    }));
+  }
+
+  // Writes a real records row -- the same table Capture/Entries use -- so an
+  // expense added here shows up everywhere else too (the child's own
+  // history, Entries, the month total), not just in this one report.
+  async function saveNewExpense() {
+    setAddExpenseError("");
+    const e = newExpense;
+    const row = {
+      bucket: "expenses" as const,
+      date: e.date,
+      kind: e.kind,
+      text: e.text.trim(),
+      kids: e.kind === "daycare" ? e.kids : [],
+      child: e.kind === "daycare" ? e.kids[0] || "" : "",
+      amount: e.kind === "purchase" ? (e.amount ? Number(e.amount) : null) : null,
+      miles: e.kind === "mileage" ? (e.miles ? Number(e.miles) : null) : null,
+      time_from: e.kind === "daycare" ? e.time_from || null : null,
+      time_to: e.kind === "daycare" ? e.time_to || null : null,
+      hours: e.kind === "daycare" ? (e.hours ? Number(e.hours) : null) : null,
+      overnight: e.kind === "daycare" ? e.overnight : false,
+      reason: e.kind === "daycare" ? e.reason : "",
+    };
+    const res = await fetch("/api/records", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: [row] }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setAddExpenseError(data.error || "Couldn't save that expense");
+      return;
+    }
+    const { records: recs } = await fetch("/api/records").then((r) => r.json());
+    setRecords((recs as EntryRecord[]) ?? []);
+    setNewExpense(blankExpenseDraft());
+    setAddingExpense(false);
   }
 
   async function setClaimed(id: string, claimed: boolean) {
@@ -235,6 +311,126 @@ export default function PaperworkScreen() {
       {tab === "expenses" && rates && (
         <div className="card">
           <h3>Expenses — {fmtMonthLabel(thisMonth)}</h3>
+
+          <button className="chip add" onClick={() => setAddingExpense(!addingExpense)}>
+            {addingExpense ? "Cancel" : "+ Add expense"}
+          </button>
+
+          {addingExpense && (
+            <div style={{ marginTop: 8, padding: 8, background: "#fbfaf6", borderRadius: "var(--radius-sm)" }}>
+              <div className="row">
+                <input
+                  type="date"
+                  style={{ flex: "0 0 150px" }}
+                  value={newExpense.date}
+                  onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })}
+                />
+                <select value={newExpense.kind} onChange={(e) => setNewExpense({ ...newExpense, kind: e.target.value as NewExpenseDraft["kind"] })}>
+                  <option value="purchase">Purchase</option>
+                  <option value="mileage">Mileage</option>
+                  <option value="daycare">Day care</option>
+                </select>
+              </div>
+
+              {newExpense.kind === "purchase" && (
+                <input
+                  type="number"
+                  step="0.01"
+                  inputMode="decimal"
+                  placeholder="£"
+                  value={newExpense.amount}
+                  onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
+                />
+              )}
+
+              {newExpense.kind === "mileage" && (
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  placeholder="miles"
+                  value={newExpense.miles}
+                  onChange={(e) => setNewExpense({ ...newExpense, miles: e.target.value })}
+                />
+              )}
+
+              {newExpense.kind === "daycare" && (
+                <>
+                  <div className="row" style={{ flexWrap: "wrap" }}>
+                    {children.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className={`chip${newExpense.kids.includes(c.name) ? " on" : ""}`}
+                        style={{ flex: "0 0 auto" }}
+                        onClick={() => toggleNewExpenseKid(c.name)}
+                      >
+                        {c.name}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="row">
+                    <input
+                      type="time"
+                      value={newExpense.time_from}
+                      onChange={(e) => setNewExpense({ ...newExpense, time_from: e.target.value })}
+                    />
+                    <input type="time" value={newExpense.time_to} onChange={(e) => setNewExpense({ ...newExpense, time_to: e.target.value })} />
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.25"
+                      placeholder="or hrs"
+                      style={{ flex: "0 0 70px" }}
+                      value={newExpense.hours}
+                      onChange={(e) => setNewExpense({ ...newExpense, hours: e.target.value })}
+                    />
+                    <label style={{ margin: 0, display: "flex", alignItems: "center", gap: 6 }}>
+                      <input
+                        type="checkbox"
+                        style={{ width: "auto" }}
+                        checked={newExpense.overnight}
+                        onChange={(e) => setNewExpense({ ...newExpense, overnight: e.target.checked })}
+                      />
+                      overnight
+                    </label>
+                  </div>
+                  <select value={newExpense.reason} onChange={(e) => setNewExpense({ ...newExpense, reason: e.target.value })}>
+                    <option value="">Reason for day care…</option>
+                    {DAYCARE_REASONS.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                  {rates && (
+                    <div className="calc">
+                      {gbp(
+                        daycareAmount(rates, children, {
+                          kids: newExpense.kids,
+                          overnight: newExpense.overnight,
+                          time_from: newExpense.time_from || null,
+                          time_to: newExpense.time_to || null,
+                          hours: newExpense.hours ? Number(newExpense.hours) : null,
+                        }),
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
+              <textarea
+                rows={2}
+                placeholder="What was this for?"
+                value={newExpense.text}
+                onChange={(e) => setNewExpense({ ...newExpense, text: e.target.value })}
+              />
+              {addExpenseError && <p style={{ color: "var(--danger)", fontSize: 14, marginTop: 4 }}>{addExpenseError}</p>}
+              <button className="chip" style={{ marginTop: 6 }} onClick={saveNewExpense}>
+                Save
+              </button>
+            </div>
+          )}
+
           {(() => {
             const all = monthRecs.filter((r) => r.bucket === "expenses");
             const unclaimed = all.filter((r) => !r.claimed);
