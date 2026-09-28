@@ -127,12 +127,12 @@ export default function TrainingScreen() {
   const [manualDate, setManualDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   async function load() {
-    const [{ data: c }, { data: pl }, { data: pr }, { data: notes }, { data: fb }, { data: userData }, { data: dis }, { data: saved }] =
+    const [{ data: c }, { data: pl }, { data: pr }, recordsRes, { data: fb }, { data: userData }, { data: dis }, { data: saved }] =
       await Promise.all([
         supabase.from("shared_training_catalog").select("*").eq("archived", false).order("sort_order"),
         supabase.from("shared_training_platforms").select("*"),
         supabase.from("training_progress").select("course_title, completed_on, session_date"),
-        supabase.from("records").select("training_note, date").neq("training_note", ""),
+        fetch("/api/records").then((r) => r.json()),
         supabase.from("training_feedback").select("course_id, user_id, rating, comment"),
         supabase.auth.getUser(),
         supabase.from("dismissed_training_suggestions").select("title, dismissed_at").order("dismissed_at", { ascending: false }),
@@ -164,7 +164,10 @@ export default function TrainingScreen() {
     setSessionDates(sessionMap);
 
     const personalMap: Record<string, PersonalSuggestion> = {};
-    (notes ?? []).forEach((r: { training_note: string; date: string }) => {
+    const notes: { training_note: string; date: string }[] = (recordsRes.records ?? []).filter(
+      (r: { training_note: string }) => r.training_note,
+    );
+    notes.forEach((r) => {
       // training_note can hold more than one suggestion, one per line --
       // read every line rather than just the first so a note with several
       // suggested courses surfaces all of them, not only the first.

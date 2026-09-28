@@ -45,19 +45,19 @@ export default function PaperworkScreen() {
   async function setClaimed(id: string, claimed: boolean) {
     const patch = { claimed, claimed_at: claimed ? new Date().toISOString() : null };
     patchRecord(id, patch);
-    await supabase.from("records").update(patch).eq("id", id);
+    await fetch("/api/records", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, patch }) });
   }
 
   async function setPaid(id: string, paid: boolean) {
     const patch = { paid, paid_at: paid ? new Date().toISOString() : null };
     patchRecord(id, patch);
-    await supabase.from("records").update(patch).eq("id", id);
+    await fetch("/api/records", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, patch }) });
   }
 
   useEffect(() => {
     async function load() {
-      const [{ data: recs }, kidsRes, hhKidsRes, { data: r }, { data: training }, { data: catalog }] = await Promise.all([
-        supabase.from("records").select("*").order("date", { ascending: false }),
+      const [recordsRes, kidsRes, hhKidsRes, { data: r }, { data: training }, { data: catalog }] = await Promise.all([
+        fetch("/api/records").then((res) => res.json()),
         fetch("/api/children").then((res) => res.json()),
         // A child in "Children in your household" can be an actual foster
         // placement too, not just the carer's own/adopted/kinship child --
@@ -73,7 +73,7 @@ export default function PaperworkScreen() {
       ]);
       const kids = kidsRes.children;
       const hhKids = hhKidsRes.children;
-      setRecords((recs as EntryRecord[]) ?? []);
+      setRecords((recordsRes.records as EntryRecord[]) ?? []);
       setChildren([
         ...((kids as ChildWithBasics[]) ?? []).map((c) => ({ ...c, basics: c.basics || {} })),
         ...(((hhKids as (Pick<Child, "id" | "name" | "born" | "category"> & { basics: Record<string, string> })[]) ?? []).map(

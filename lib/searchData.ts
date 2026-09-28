@@ -16,18 +16,21 @@ export type SearchResult = {
 };
 
 export async function loadSearchData(supabase: ReturnType<typeof createClient>): Promise<SearchData> {
-  const [childrenRes, householdChildrenRes, { data: records }, { data: reminders }, { data: courses }] = await Promise.all([
+  const [childrenRes, householdChildrenRes, recordsRes, { data: reminders }, { data: courses }] = await Promise.all([
     fetch("/api/children").then((r) => r.json()),
     fetch("/api/household-children").then((r) => r.json()),
-    // 500 is generous headroom for a note-a-day diary, not a real cap for
-    // normal use -- kept only so one runaway query can't pull the whole
-    // table on every search-panel open.
-    supabase.from("records").select("id, bucket, text, date").order("date", { ascending: false }).limit(500),
+    fetch("/api/records").then((r) => r.json()),
     supabase.from("reminders").select("id, text, date").eq("done", false),
     supabase.from("shared_training_catalog").select("id, title, url, description").eq("archived", false),
   ]);
   const kids = childrenRes.children;
   const hhKids = householdChildrenRes.children;
+  // 500 is generous headroom for a note-a-day diary, not a real cap for
+  // normal use -- kept only so a runaway history doesn't bloat what the
+  // search panel holds in memory.
+  const records = ((recordsRes.records as { id: string; bucket: string; text: string; date: string }[] | null) ?? [])
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 500);
   return {
     people: [
       ...((kids as { name: string }[] | null) ?? []).map((c) => ({

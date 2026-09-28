@@ -15,7 +15,7 @@ import {
   recurringCheckItems,
   unreportedIncidentItems,
 } from "@/lib/thingsToDo";
-import { FLAGS, Reminder, relatedFormFor } from "@/lib/types";
+import { EntryRecord, FLAGS, Reminder, relatedFormFor } from "@/lib/types";
 import { linkify } from "@/lib/linkify";
 
 type FollowUp = {
@@ -75,7 +75,7 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
 
   async function load() {
     const [
-      { data: incidents },
+      recordsRes,
       childrenRes,
       householdChildrenRes,
       householdRes,
@@ -83,11 +83,9 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
       { data: courses },
       { data: progress },
       { data: reminders },
-      { data: openRecords },
-      { data: closedRecords },
       { data: dismissed },
     ] = await Promise.all([
-      supabase.from("records").select("id, text, created_at, reported").eq("bucket", "incident"),
+      fetch("/api/records").then((r) => r.json()),
       fetch("/api/children").then((r) => r.json()),
       // A child in "Children in your household" can be an actual foster
       // placement too, not just the carer's own/adopted/kinship child --
@@ -98,27 +96,18 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
       supabase.from("shared_training_catalog").select("title").eq("group_key", "3yr").eq("archived", false),
       supabase.from("training_progress").select("course_title, completed_on"),
       supabase.from("reminders").select("*").order("date"),
-      supabase
-        .from("records")
-        .select("id, bucket, child, text, flag, flag_note, training_note, created_at")
-        .eq("flag_done", false),
-      supabase
-        .from("records")
-        .select("id, bucket, child, text, flag, flag_note, training_note, created_at, flag_done_at, flag_dismissed")
-        .eq("flag_done", true)
-        .order("flag_done_at", { ascending: false })
-        .limit(20),
       supabase.from("dismissed_todos").select("key, text, dismissed_at").order("dismissed_at", { ascending: false }).limit(20),
     ]);
     const children = childrenRes.children;
     const householdChildren = householdChildrenRes.children;
-    const { data: unpaidClaimed } = await supabase
-      .from("records")
-      .select("id")
-      .eq("bucket", "expenses")
-      .eq("claimed", true)
-      .eq("paid", false)
-      .limit(1);
+    const allRecords: EntryRecord[] = recordsRes.records ?? [];
+    const incidents = allRecords.filter((r) => r.bucket === "incident");
+    const openRecords = allRecords.filter((r) => !r.flag_done);
+    const closedRecords = allRecords
+      .filter((r) => r.flag_done)
+      .sort((a, b) => (b.flag_done_at || "").localeCompare(a.flag_done_at || ""))
+      .slice(0, 20);
+    const unpaidClaimed = allRecords.filter((r) => r.bucket === "expenses" && r.claimed && !r.paid);
 
     const progressMap: Record<string, string> = {};
     (progress ?? []).forEach((p: { course_title: string; completed_on: string }) => (progressMap[p.course_title] = p.completed_on));
@@ -138,8 +127,8 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
     });
     setGpByChildName(gpMap);
     const dueList = [
-      ...unreportedIncidentItems(incidents ?? []),
-      ...invoiceMonthItems(settings?.invoice_day ?? 1, settings?.pay_day ?? 28, !!unpaidClaimed?.length),
+      ...unreportedIncidentItems(incidents),
+      ...invoiceMonthItems(settings?.invoice_day ?? 1, settings?.pay_day ?? 28, !!unpaidClaimed.length),
       ...bandChangeItems(allChildren),
       ...trainingItems,
       ...missingNumbersItems(allChildren),
@@ -170,11 +159,9 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
       setFirstSeen({});
     }
     setAllReminders(remindersList.filter((r) => !r.done));
-    setFollowUps(
-      ((openRecords as FollowUp[] | null) ?? []).filter((r) => (r.flag && r.flag !== "reminder") || r.training_note),
-    );
+    setFollowUps(openRecords.filter((r) => (r.flag && r.flag !== "reminder") || r.training_note));
     setDoneFollowUps(
-      ((closedRecords as DoneFollowUp[] | null) ?? []).filter((r) => (r.flag && r.flag !== "reminder") || r.training_note),
+      closedRecords.filter((r) => (r.flag && r.flag !== "reminder") || r.training_note) as DoneFollowUp[],
     );
     setDoneReminders(
       remindersList.filter((r) => r.done).sort((a, b) => (b.done_at || "").localeCompare(a.done_at || "")).slice(0, 20),
@@ -234,25 +221,25 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
     a.remove();
   }
 
-  async function markFollowUpDone(id: string) {
-    await supabase
-      .from("records")
-      .update({ flag_done: true, flag_done_at: new Date().toISOString(), flag_dismissed: false })
-      .eq("id", id);
+  async function patchRecord(id: string, patch: Record<string, unknown>) {
+    await fetch("/api/records", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, patch }),
+    });
     load();
+  }
+
+  async function markFollowUpDone(id: string) {
+    await patchRecord(id, { flag_done: true, flag_done_at: new Date().toISOString(), flag_dismissed: false });
   }
 
   async function dismissFollowUp(id: string) {
-    await supabase
-      .from("records")
-      .update({ flag_done: true, flag_done_at: new Date().toISOString(), flag_dismissed: true })
-      .eq("id", id);
-    load();
+    await patchRecord(id, { flag_done: true, flag_done_at: new Date().toISOString(), flag_dismissed: true });
   }
 
   async function reopenFollowUp(id: string) {
-    await supabase.from("records").update({ flag_done: false, flag_done_at: null, flag_dismissed: false }).eq("id", id);
-    load();
+    await patchRecord(id, { flag_done: false, flag_done_at: null, flag_dismissed: false });
   }
 
   async function reopenReminder(id: string) {

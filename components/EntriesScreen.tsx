@@ -55,8 +55,8 @@ export default function EntriesScreen() {
 
   async function load() {
     setLoading(true);
-    const [{ data: recs }, kidsRes, hhKidsRes, { data: r }] = await Promise.all([
-      supabase.from("records").select("*").order("created_at", { ascending: false }),
+    const [recordsRes, kidsRes, hhKidsRes, { data: r }] = await Promise.all([
+      fetch("/api/records").then((res) => res.json()),
       fetch("/api/children").then((res) => res.json()),
       // A child in "Children in your household" can be an actual foster
       // placement too, not just the carer's own/adopted/kinship child --
@@ -67,7 +67,7 @@ export default function EntriesScreen() {
     ]);
     const kids = kidsRes.children;
     const hhKids = hhKidsRes.children;
-    setRecords((recs as EntryRecord[]) ?? []);
+    setRecords((recordsRes.records as EntryRecord[]) ?? []);
     setChildren([
       ...((kids as Child[]) ?? []),
       ...(((hhKids as Pick<Child, "id" | "name" | "born" | "category">[]) ?? []).map((h) => ({ ...h, family: "", lives_here: true }) as Child)),
@@ -117,7 +117,7 @@ export default function EntriesScreen() {
 
   async function del(id: string) {
     if (!confirm("Delete this entry?")) return;
-    await supabase.from("records").delete().eq("id", id);
+    await fetch(`/api/records?id=${id}`, { method: "DELETE" });
     setRecords((prev) => prev.filter((r) => r.id !== id));
   }
 
@@ -138,9 +138,10 @@ export default function EntriesScreen() {
     if (!selected.size) return;
     if (!confirm(`Delete ${selected.size} entr${selected.size > 1 ? "ies" : "y"}? This can't be undone.`)) return;
     const ids = [...selected];
-    const { error } = await supabase.from("records").delete().in("id", ids);
-    if (error) {
-      alert("Couldn't delete: " + error.message);
+    const res = await fetch(`/api/records?ids=${ids.join(",")}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert("Couldn't delete: " + (data.error || "unknown error"));
       return;
     }
     setRecords((prev) => prev.filter((r) => !selected.has(r.id)));
@@ -150,10 +151,11 @@ export default function EntriesScreen() {
 
   async function saveEdit(r: EntryRecord) {
     const { id, ...patch } = r;
-    await supabase
-      .from("records")
-      .update({ ...patch, edited: new Date().toISOString(), edited_by: myId })
-      .eq("id", id);
+    await fetch("/api/records", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, patch: { ...patch, edited: new Date().toISOString(), edited_by: myId } }),
+    });
     setEditId(null);
     load();
   }

@@ -40,9 +40,9 @@ export default function CaptureTrainingCard({ refreshKey }: { refreshKey?: numbe
   const [randomSeed] = useState(() => Math.random());
 
   async function load() {
-    const [{ data: notes }, { data: dismissed }, { data: courses }, { data: platforms }, { data: fb }, { data: userData }, { data: saved }] =
+    const [recordsRes, { data: dismissed }, { data: courses }, { data: platforms }, { data: fb }, { data: userData }, { data: saved }] =
       await Promise.all([
-        supabase.from("records").select("training_note").neq("training_note", ""),
+        fetch("/api/records").then((r) => r.json()),
         supabase.from("dismissed_training_suggestions").select("title"),
         supabase
           .from("shared_training_catalog")
@@ -85,8 +85,11 @@ export default function CaptureTrainingCard({ refreshKey }: { refreshKey?: numbe
     );
     const dismissedTitles = new Set(((dismissed as { title: string }[] | null) ?? []).map((d) => d.title.trim().toLowerCase()));
 
+    const notes: { training_note: string }[] = (recordsRes.records ?? []).filter(
+      (r: { training_note: string }) => r.training_note,
+    );
     const map: Record<string, { reasons: string[] }> = {};
-    ((notes as { training_note: string }[] | null) ?? []).forEach((r) => {
+    notes.forEach((r) => {
       r.training_note.split("\n").forEach((line) => {
         const idx = line.indexOf(" — ");
         if (idx === -1) return;
