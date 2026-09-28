@@ -138,10 +138,12 @@ export default function CaptureScreen() {
   }
 
   async function loadChildren() {
-    const [{ data: visiting }, { data: household }] = await Promise.all([
-      supabase.from("children").select("id, name, born, family, lives_here, hub_carer_name, hub_carer_email, basics").order("created_at"),
-      supabase.from("household_children").select("id, name, born, hub_carer_name, hub_carer_email, basics").order("created_at"),
+    const [childrenRes, householdChildrenRes] = await Promise.all([
+      fetch("/api/children").then((r) => r.json()),
+      fetch("/api/household-children").then((r) => r.json()),
     ]);
+    const visiting = childrenRes.children;
+    const household = householdChildrenRes.children;
     // A child in the household (household_children) is sometimes an actual
     // foster placement too, not just the carer's own/adopted/kinship child --
     // they need to show up here to be tagged on entries the same as any
@@ -291,17 +293,19 @@ export default function CaptureScreen() {
       return;
     }
     const born = newChildBornMonth && newChildBornYear ? `${newChildBornYear}-${newChildBornMonth}-01` : null;
-    const { data, error } = await supabase
-      .from("children")
-      .insert({ user_id: user.id, name, born, family: newChildFamily.trim(), lives_here: newChildKind === "household" })
-      .select("id, name, born, family")
-      .single();
-    if (error) {
-      showToast("Couldn't add child: " + error.message);
+    const res = await fetch("/api/children", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, born, family: newChildFamily.trim(), lives_here: newChildKind === "household" }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      showToast("Couldn't add child: " + (data.error || "unknown error"));
       return;
     }
+    const { child } = await res.json();
     await loadChildren();
-    if (data) tagAddedName((data as Child).name, name);
+    if (child) tagAddedName((child as Child).name, name);
     setNewChildName("");
     setNewChildBornMonth("");
     setNewChildBornYear("");

@@ -31,15 +31,14 @@ export default function DiaryTab() {
   const { authorOf, myId } = useHouseholdNames();
 
   useEffect(() => {
-    Promise.all([supabase.from("children").select("name"), supabase.from("household_children").select("name")]).then(
-      ([{ data: kids }, { data: hhKids }]) =>
+    Promise.all([fetch("/api/children").then((r) => r.json()), fetch("/api/household-children").then((r) => r.json())]).then(
+      ([kidsRes, hhKidsRes]) =>
         // A child in "Children in your household" can be an actual foster
         // placement too, not just the carer's own/adopted/kinship child --
         // they need to be selectable for a statutory diary the same as
         // any other child.
-        setNames([...(kids ?? []), ...(hhKids ?? [])].map((c: { name: string }) => c.name)),
+        setNames([...(kidsRes.children ?? []), ...(hhKidsRes.children ?? [])].map((c: { name: string }) => c.name)),
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const sortedSelected = [...selected].sort();

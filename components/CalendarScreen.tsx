@@ -133,16 +133,17 @@ export default function CalendarScreen() {
   async function load() {
     const from = isoOf(year, month, 1);
     const to = isoOf(year, month, daysInMonth(year, month));
-    const [{ data: rem }, { data: kids }, { data: hhKids }, adultsRes, { data: f2fCourses }, { data: f2fProgress }, { data: clubs }] =
-      await Promise.all([
-        supabase.from("reminders").select("*").gte("date", from).lte("date", to).eq("todo_only", false).order("date"),
-        supabase.from("children").select("id, name").order("name"),
-        supabase.from("household_children").select("id, name").order("name"),
-        fetch("/api/household-adults").then((r) => r.json()),
-        supabase.from("shared_training_catalog").select("id, title, session_date").eq("is_face_to_face", true).eq("archived", false),
-        supabase.from("training_progress").select("course_title, session_date").not("session_date", "is", null),
-        supabase.from("child_clubs").select("id, child_id, club_name, weekday, time_from, time_to"),
-      ]);
+    const [{ data: rem }, kidsRes, hhKidsRes, adultsRes, { data: f2fCourses }, { data: f2fProgress }, { data: clubs }] = await Promise.all([
+      supabase.from("reminders").select("*").gte("date", from).lte("date", to).eq("todo_only", false).order("date"),
+      fetch("/api/children").then((r) => r.json()),
+      fetch("/api/household-children").then((r) => r.json()),
+      fetch("/api/household-adults").then((r) => r.json()),
+      supabase.from("shared_training_catalog").select("id, title, session_date").eq("is_face_to_face", true).eq("archived", false),
+      supabase.from("training_progress").select("course_title, session_date").not("session_date", "is", null),
+      supabase.from("child_clubs").select("id, child_id, club_name, weekday, time_from, time_to"),
+    ]);
+    const kids = kidsRes.children;
+    const hhKids = hhKidsRes.children;
     const adults = adultsRes.adults;
     const myDateByTitle: Record<string, string> = {};
     (f2fProgress ?? []).forEach((p: { course_title: string; session_date: string | null }) => {
@@ -169,11 +170,13 @@ export default function CalendarScreen() {
     });
 
     setReminders([...((rem as Reminder[]) ?? []), ...f2fReminders, ...clubReminders]);
-    setPersonOptions([
-      ...((kids as { name: string }[] | null) ?? []).map((c) => ({ name: c.name, kind: "child" as const })),
-      ...((hhKids as { name: string }[] | null) ?? []).map((c) => ({ name: c.name, kind: "child" as const })),
-      ...((adults as { name: string }[] | null) ?? []).map((a) => ({ name: a.name, kind: "adult" as const })),
-    ]);
+    setPersonOptions(
+      [
+        ...((kids as { name: string }[] | null) ?? []).map((c) => ({ name: c.name, kind: "child" as const })),
+        ...((hhKids as { name: string }[] | null) ?? []).map((c) => ({ name: c.name, kind: "child" as const })),
+        ...((adults as { name: string }[] | null) ?? []).map((a) => ({ name: a.name, kind: "adult" as const })),
+      ].sort((a, b) => a.name.localeCompare(b.name)),
+    );
     setLoaded(true);
   }
 

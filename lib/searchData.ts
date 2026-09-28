@@ -16,9 +16,9 @@ export type SearchResult = {
 };
 
 export async function loadSearchData(supabase: ReturnType<typeof createClient>): Promise<SearchData> {
-  const [{ data: kids }, { data: hhKids }, { data: records }, { data: reminders }, { data: courses }] = await Promise.all([
-    supabase.from("children").select("name"),
-    supabase.from("household_children").select("name"),
+  const [childrenRes, householdChildrenRes, { data: records }, { data: reminders }, { data: courses }] = await Promise.all([
+    fetch("/api/children").then((r) => r.json()),
+    fetch("/api/household-children").then((r) => r.json()),
     // 500 is generous headroom for a note-a-day diary, not a real cap for
     // normal use -- kept only so one runaway query can't pull the whole
     // table on every search-panel open.
@@ -26,6 +26,8 @@ export async function loadSearchData(supabase: ReturnType<typeof createClient>):
     supabase.from("reminders").select("id, text, date").eq("done", false),
     supabase.from("shared_training_catalog").select("id, title, url, description").eq("archived", false),
   ]);
+  const kids = childrenRes.children;
+  const hhKids = householdChildrenRes.children;
   return {
     people: [
       ...((kids as { name: string }[] | null) ?? []).map((c) => ({

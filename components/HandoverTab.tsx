@@ -151,16 +151,18 @@ export default function HandoverTab() {
   const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
 
   async function load() {
-    const [{ data: kids }, { data: hhKids }, { data: profileRows }, householdRes, { data: schoolAdminRows }, { data: clubRows }, { data: docRows }] =
+    const [kidsRes, hhKidsRes, { data: profileRows }, householdRes, { data: schoolAdminRows }, { data: clubRows }, { data: docRows }] =
       await Promise.all([
-        supabase.from("children").select("id, name, basics, hub_carer_name, hub_carer_phone").order("created_at"),
-        supabase.from("household_children").select("id, name, basics, hub_carer_name, hub_carer_phone").order("created_at"),
+        fetch("/api/children").then((r) => r.json()),
+        fetch("/api/household-children").then((r) => r.json()),
         supabase.from("handover_child_profiles").select("*"),
         fetch("/api/household").then((r) => r.json()),
         supabase.from("child_school_admin").select("*"),
         supabase.from("child_clubs").select("*").order("weekday"),
         supabase.from("child_documents").select("id, child_id, title, category, file_name").order("uploaded_at"),
       ]);
+    const kids = kidsRes.children;
+    const hhKids = hhKidsRes.children;
     const hh = householdRes.household;
     const normalise = (rows: (ChildRow & { basics: Record<string, string> | null })[] | null) =>
       (rows ?? []).map((c) => ({ ...c, basics: c.basics || {} }));

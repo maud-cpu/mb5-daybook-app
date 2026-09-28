@@ -39,14 +39,14 @@ export default function ComposeEmail({
 
   useEffect(() => {
     async function load() {
-      const [contactsRes, householdRes, { data: kids }, { data: hhKids }, visitorsRes, { data: recs }] = await Promise.all([
+      const [contactsRes, householdRes, kidsRes, hhKidsRes, visitorsRes, { data: recs }] = await Promise.all([
         fetch("/api/contacts").then((r) => r.json()),
         fetch("/api/household").then((r) => r.json()),
-        supabase.from("children").select("name, basics, hub_carer_name, hub_carer_email, linked_visitor_id"),
+        fetch("/api/children").then((r) => r.json()),
         // "Children in your household" (own/adopted/kinship/SGO) don't have
         // an allocated CSW or an external Mockingbird hub carer -- only
         // selectable as who an email is about, never a CSW/carer source.
-        supabase.from("household_children").select("name"),
+        fetch("/api/household-children").then((r) => r.json()),
         // Looked up separately (not as a Postgres embed off linked_visitor_id)
         // and matched by hand below -- a fresh foreign key isn't always
         // picked up for auto-embedding straight away, and this is the exact
@@ -56,6 +56,8 @@ export default function ComposeEmail({
       ]);
       const contacts = contactsRes.contacts;
       const household = householdRes.household;
+      const kids = kidsRes.children;
+      const hhKids = hhKidsRes.children;
       const visitors = visitorsRes.visitors;
       // Show everyone possible, even without an email on file yet -- a name
       // is enough to appear in the draft ("Dear Rhodri...") and be reminded
