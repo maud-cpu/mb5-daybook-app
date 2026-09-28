@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { daycareAmount, gbp, today } from "@/lib/domain";
+import { daycareAmount, gbp, sortChildren, today } from "@/lib/domain";
 import { withAmazonAffiliateTag } from "@/lib/amazon";
 import ThingsToDoCard from "@/components/ThingsToDoCard";
 import NewsCard from "@/components/NewsCard";
@@ -153,7 +153,7 @@ export default function CaptureScreen() {
     // definition of which table they're in.
     const visitingRows = (visiting as (Child & { basics: Record<string, string> })[]) ?? [];
     const householdRows = (household as (Child & { basics: Record<string, string> })[]) ?? [];
-    setChildren([...visitingRows, ...householdRows.map((h) => ({ ...h, family: "", lives_here: true }))]);
+    setChildren(sortChildren([...visitingRows, ...householdRows.map((h) => ({ ...h, family: "", lives_here: true }))]));
     const basicsMap: Record<string, Record<string, string>> = {};
     const tableMap: Record<string, "children" | "household_children"> = {};
     visitingRows.forEach((c) => {

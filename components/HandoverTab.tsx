@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { today } from "@/lib/domain";
+import { sortChildren, today } from "@/lib/domain";
 import { HOUSEHOLD_FIELDS, PROFILE_FIELDS } from "@/lib/handover";
 import { clubText } from "@/lib/calendarHelpers";
 import { useHouseholdNames } from "@/lib/useHouseholdNames";
@@ -128,7 +128,7 @@ export default function HandoverTab() {
   const [householdChildren, setHouseholdChildren] = useState<ChildRow[]>([]);
   // A sleepover/handover plan can include a household child (own/adopted/SGO/
   // kinship) alongside a fostered one -- everywhere below just reads `children`.
-  const children = [...fosteredChildren, ...householdChildren];
+  const children = sortChildren([...fosteredChildren, ...householdChildren.map((c) => ({ ...c, lives_here: true }))]);
   const [selected, setSelected] = useState<string[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [profileTouchedBy, setProfileTouchedBy] = useState<Record<string, string | null>>({});

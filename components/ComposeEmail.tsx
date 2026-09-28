@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { extractEmail } from "@/lib/domain";
+import { extractEmail, sortChildren } from "@/lib/domain";
 import { BUCKETS, Contact, EntryRecord, TONE_OPTIONS } from "@/lib/types";
 
 type Recipient = { key: string; label: string; name: string; email: string };
@@ -96,7 +96,12 @@ export default function ComposeEmail({
       }
       if (presetHub && household?.is_mockingbird && household.hub_leader_name) setSelectedRecipients(["h:hub"]);
       if (presetEntryId) setSelectedEntries([presetEntryId]);
-      setChildNames([...kidRows.map((k) => k.name), ...((hhKids as { name: string }[] | null)?.map((k) => k.name) ?? [])]);
+      setChildNames(
+        sortChildren([
+          ...(kids as { name: string; family?: string; lives_here?: boolean | null }[]),
+          ...((hhKids as { name: string }[] | null) ?? []).map((k) => ({ ...k, lives_here: true })),
+        ]).map((k) => k.name),
+      );
       setRecords((recordsRes.records as EntryRecord[]) ?? []);
     }
 

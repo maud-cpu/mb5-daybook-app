@@ -101,11 +101,13 @@ export default function MiniCalendarCard() {
       });
     });
     setByDate(map);
-    setPersonOptions([
-      ...((kids as { name: string }[] | null) ?? []).map((c) => ({ name: c.name, kind: "child" as const })),
-      ...((hhKids as { name: string }[] | null) ?? []).map((c) => ({ name: c.name, kind: "child" as const })),
-      ...((adults as { name: string }[] | null) ?? []).map((a) => ({ name: a.name, kind: "adult" as const })),
-    ]);
+    setPersonOptions(
+      [
+        ...((kids as { name: string }[] | null) ?? []).map((c) => ({ name: c.name, kind: "child" as const })),
+        ...((hhKids as { name: string }[] | null) ?? []).map((c) => ({ name: c.name, kind: "child" as const })),
+        ...((adults as { name: string }[] | null) ?? []).map((a) => ({ name: a.name, kind: "adult" as const })),
+      ].sort((a, b) => a.name.localeCompare(b.name)),
+    );
     setLoaded(true);
   }
 

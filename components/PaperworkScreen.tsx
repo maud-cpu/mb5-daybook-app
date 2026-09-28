@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { daycareAmount, describeExpense, describeMeds, expenseTotals, gbp, today } from "@/lib/domain";
+import { daycareAmount, describeExpense, describeMeds, expenseTotals, gbp, sortChildren, today } from "@/lib/domain";
 import { addDays } from "@/lib/calendarHelpers";
 import { unreportedIncidentItems } from "@/lib/thingsToDo";
 import { BUCKETS, Bucket, Child, DAYCARE_REASONS, EntryRecord, FLAGS, FlagKey, Rates } from "@/lib/types";
@@ -152,12 +152,14 @@ export default function PaperworkScreen() {
       const kids = kidsRes.children;
       const hhKids = hhKidsRes.children;
       setRecords((recordsRes.records as EntryRecord[]) ?? []);
-      setChildren([
-        ...((kids as ChildWithBasics[]) ?? []).map((c) => ({ ...c, basics: c.basics || {} })),
-        ...(((hhKids as (Pick<Child, "id" | "name" | "born" | "category"> & { basics: Record<string, string> })[]) ?? []).map(
-          (h) => ({ ...h, family: "", lives_here: true, basics: h.basics || {} }) as ChildWithBasics,
-        )),
-      ]);
+      setChildren(
+        sortChildren([
+          ...((kids as ChildWithBasics[]) ?? []).map((c) => ({ ...c, basics: c.basics || {} })),
+          ...(((hhKids as (Pick<Child, "id" | "name" | "born" | "category"> & { basics: Record<string, string> })[]) ?? []).map(
+            (h) => ({ ...h, family: "", lives_here: true, basics: h.basics || {} }) as ChildWithBasics,
+          )),
+        ]),
+      );
       setRates(r as Rates);
       const catalogByTitle = new Map(
         ((catalog as { title: string; url: string; length: string; platform: string }[] | null) ?? []).map((c) => [
