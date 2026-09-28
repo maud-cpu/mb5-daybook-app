@@ -82,7 +82,7 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
       { data: settings },
       { data: courses },
       { data: progress },
-      { data: reminders },
+      remindersRes,
       { data: dismissed },
     ] = await Promise.all([
       fetch("/api/records").then((r) => r.json()),
@@ -95,9 +95,10 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
       supabase.from("carer_settings").select("invoice_day, pay_day").maybeSingle(),
       supabase.from("shared_training_catalog").select("title").eq("group_key", "3yr").eq("archived", false),
       supabase.from("training_progress").select("course_title, completed_on"),
-      supabase.from("reminders").select("*").order("date"),
+      fetch("/api/reminders").then((r) => r.json()),
       supabase.from("dismissed_todos").select("key, text, dismissed_at").order("dismissed_at", { ascending: false }).limit(20),
     ]);
+    const reminders = ((remindersRes.reminders as { date: string }[]) ?? []).sort((a, b) => a.date.localeCompare(b.date));
     const children = childrenRes.children;
     const householdChildren = householdChildrenRes.children;
     const allRecords: EntryRecord[] = recordsRes.records ?? [];
@@ -187,7 +188,11 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
   async function dismissDue(item: DueItem) {
     if (item.key.startsWith("rem-")) {
       const id = item.key.slice(4);
-      await supabase.from("reminders").update({ done: true, done_at: new Date().toISOString() }).eq("id", id);
+      await fetch("/api/reminders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, patch: { done: true, done_at: new Date().toISOString() } }),
+      });
     } else {
       await supabase
         .from("dismissed_todos")
@@ -243,7 +248,11 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
   }
 
   async function reopenReminder(id: string) {
-    await supabase.from("reminders").update({ done: false, done_at: null }).eq("id", id);
+    await fetch("/api/reminders", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, patch: { done: false, done_at: null } }),
+    });
     load();
   }
 

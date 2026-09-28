@@ -139,12 +139,16 @@ export default function QuickAccessButtons() {
     }
     setOpen("today");
     setLoading(true);
-    const [{ data }, { data: clubs }, kidsRes, hhKidsRes] = await Promise.all([
-      supabase.from("reminders").select("*").eq("done", false).eq("date", today()),
-      supabase.from("child_clubs").select("id, child_id, club_name, weekday, time_from, time_to"),
+    const [remindersRes, clubsRes, kidsRes, hhKidsRes] = await Promise.all([
+      fetch("/api/reminders").then((r) => r.json()),
+      fetch("/api/child-clubs").then((r) => r.json()),
       fetch("/api/children").then((r) => r.json()),
       fetch("/api/household-children").then((r) => r.json()),
     ]);
+    const data = ((remindersRes.reminders as { done: boolean; date: string }[]) ?? []).filter(
+      (r) => !r.done && r.date === today(),
+    );
+    const clubs = clubsRes.clubs;
     const kids = kidsRes.children;
     const hhKids = hhKidsRes.children;
     const childNameById: Record<string, string> = {};

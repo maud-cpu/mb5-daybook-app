@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 
 type SchoolAdmin = {
   lunch_payment: string;
@@ -54,29 +53,29 @@ const FIELDS: [keyof SchoolAdmin, string, string, "input" | "textarea"][] = [
 ];
 
 export default function ChildSchoolAdmin({ childId }: { childId: string }) {
-  const supabase = createClient();
   const [data, setData] = useState<SchoolAdmin>(BLANK);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- load this child's row on mount / when childId changes
     setLoaded(false);
-    supabase
-      .from("child_school_admin")
-      .select("*")
-      .eq("child_id", childId)
-      .maybeSingle()
-      .then(({ data: row }) => {
-        setData({ ...BLANK, ...(row as Partial<SchoolAdmin> | null) });
+    fetch("/api/child-school-admin")
+      .then((r) => r.json())
+      .then(({ rows }) => {
+        const row = ((rows as (Partial<SchoolAdmin> & { child_id: string })[]) ?? []).find((r) => r.child_id === childId);
+        setData({ ...BLANK, ...row });
         setLoaded(true);
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [childId]);
 
   function save(key: keyof SchoolAdmin, value: string) {
     const next = { ...data, [key]: value };
     setData(next);
-    supabase.from("child_school_admin").upsert({ child_id: childId, ...next }, { onConflict: "child_id" });
+    fetch("/api/child-school-admin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ child_id: childId, ...next }),
+    });
   }
 
   if (!loaded) return <p className="hint">Loading…</p>;

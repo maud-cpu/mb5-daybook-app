@@ -130,11 +130,19 @@ export default function NewsCard() {
   }
 
   async function addToCalendar(n: NewsItem) {
-    await supabase.from("reminders").insert({
-      text: n.title,
-      date: n.expires_on || today(),
-      category: n.category === "training" ? "training" : "surrey",
-      source_text: bodyWithLink(n),
+    await fetch("/api/reminders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [
+          {
+            text: n.title,
+            date: n.expires_on || today(),
+            category: n.category === "training" ? "training" : "surrey",
+            source_text: bodyWithLink(n),
+          },
+        ],
+      }),
     });
     // A date on the calendar isn't the same as an actual place at the
     // thing -- most training/events with a link need a separate form
@@ -150,12 +158,20 @@ export default function NewsCard() {
   }
 
   async function addToTodo(n: NewsItem) {
-    await supabase.from("reminders").insert({
-      text: n.title,
-      date: today(),
-      category: n.category === "training" ? "training" : "surrey",
-      source_text: bodyWithLink(n),
-      todo_only: true,
+    await fetch("/api/reminders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [
+          {
+            text: n.title,
+            date: today(),
+            category: n.category === "training" ? "training" : "surrey",
+            source_text: bodyWithLink(n),
+            todo_only: true,
+          },
+        ],
+      }),
     });
     flashSaved(n.id, "Added to Up next");
     recordAction(n.id, "todo");

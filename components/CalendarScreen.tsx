@@ -133,18 +133,22 @@ export default function CalendarScreen() {
   async function load() {
     const from = isoOf(year, month, 1);
     const to = isoOf(year, month, daysInMonth(year, month));
-    const [{ data: rem }, kidsRes, hhKidsRes, adultsRes, { data: f2fCourses }, { data: f2fProgress }, { data: clubs }] = await Promise.all([
-      supabase.from("reminders").select("*").gte("date", from).lte("date", to).eq("todo_only", false).order("date"),
+    const [remindersRes, kidsRes, hhKidsRes, adultsRes, { data: f2fCourses }, { data: f2fProgress }, clubsRes] = await Promise.all([
+      fetch("/api/reminders").then((r) => r.json()),
       fetch("/api/children").then((r) => r.json()),
       fetch("/api/household-children").then((r) => r.json()),
       fetch("/api/household-adults").then((r) => r.json()),
       supabase.from("shared_training_catalog").select("id, title, session_date").eq("is_face_to_face", true).eq("archived", false),
       supabase.from("training_progress").select("course_title, session_date").not("session_date", "is", null),
-      supabase.from("child_clubs").select("id, child_id, club_name, weekday, time_from, time_to"),
+      fetch("/api/child-clubs").then((r) => r.json()),
     ]);
     const kids = kidsRes.children;
     const hhKids = hhKidsRes.children;
     const adults = adultsRes.adults;
+    const rem = ((remindersRes.reminders as { date: string; todo_only: boolean }[]) ?? [])
+      .filter((r) => r.date >= from && r.date <= to && !r.todo_only)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const clubs = clubsRes.clubs;
     const myDateByTitle: Record<string, string> = {};
     (f2fProgress ?? []).forEach((p: { course_title: string; session_date: string | null }) => {
       if (p.session_date) myDateByTitle[p.course_title] = p.session_date;
@@ -225,13 +229,14 @@ export default function CalendarScreen() {
   async function addReminder() {
     if (!draft.text.trim() || !draft.date) return;
     const base = { text: draft.text.trim(), category: draft.category, people: draft.people, amount: draft.amount ? Number(draft.amount) : null };
+    let rows: Record<string, unknown>[];
     if (repeat === "none") {
-      await supabase.from("reminders").insert({ ...base, date: draft.date });
+      rows = [{ ...base, date: draft.date }];
     } else {
-      const dates = occurrenceDates(draft.date, until, repeat);
       const seriesId = crypto.randomUUID();
-      await supabase.from("reminders").insert(dates.map((d) => ({ ...base, date: d, series_id: seriesId })));
+      rows = occurrenceDates(draft.date, until, repeat).map((d) => ({ ...base, date: d, series_id: seriesId }));
     }
+    await fetch("/api/reminders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows }) });
     setAdding(false);
     setRepeat("none");
     load();
@@ -275,16 +280,17 @@ export default function CalendarScreen() {
   }
 
   async function commitExtracted(items: ExtractedItem[]) {
+    const rows: Record<string, unknown>[] = [];
     for (const it of items) {
       const base = { text: it.text, category: it.category, people: it.people, amount: it.amount, source_text: it.source };
       if (it.repeat === "none" || !it.until) {
-        await supabase.from("reminders").insert({ ...base, date: it.date });
+        rows.push({ ...base, date: it.date });
       } else {
-        const dates = occurrenceDates(it.date, it.until, it.repeat);
         const seriesId = crypto.randomUUID();
-        await supabase.from("reminders").insert(dates.map((d) => ({ ...base, date: d, series_id: seriesId })));
+        occurrenceDates(it.date, it.until, it.repeat).forEach((d) => rows.push({ ...base, date: d, series_id: seriesId }));
       }
     }
+    await fetch("/api/reminders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows }) });
     setExtracted((prev) => prev.filter((it) => !items.includes(it)));
     load();
   }
@@ -292,7 +298,11 @@ export default function CalendarScreen() {
   async function toggleDone(r: Reminder) {
     const done = !r.done;
     setReminders((prev) => prev.map((x) => (x.id === r.id ? { ...x, done, done_at: done ? new Date().toISOString() : null } : x)));
-    await supabase.from("reminders").update({ done, done_at: done ? new Date().toISOString() : null }).eq("id", r.id);
+    await fetch("/api/reminders", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: r.id, patch: { done, done_at: done ? new Date().toISOString() : null } }),
+    });
   }
 
   function draftFrom(r: Reminder): Draft {
@@ -317,14 +327,18 @@ export default function CalendarScreen() {
     };
     setEditingId(null);
     setEditDraft(null);
-    await supabase.from("reminders").update(patch).eq("id", id);
+    await fetch("/api/reminders", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, patch }),
+    });
     load();
   }
 
   async function deleteOne(r: Reminder) {
     if (!confirm(`Remove "${r.text}"?`)) return;
     setEditingId(null);
-    await supabase.from("reminders").delete().eq("id", r.id);
+    await fetch(`/api/reminders?id=${r.id}`, { method: "DELETE" });
     load();
   }
 
@@ -332,7 +346,11 @@ export default function CalendarScreen() {
     if (!r.series_id) return;
     if (!confirm(`Remove "${r.text}" and every future occurrence? Past/done ones are kept.`)) return;
     setEditingId(null);
-    await supabase.from("reminders").delete().eq("series_id", r.series_id).eq("done", false).gte("date", r.date);
+    const { reminders: all } = await fetch("/api/reminders").then((res) => res.json());
+    const ids = ((all as Reminder[]) ?? [])
+      .filter((x) => x.series_id === r.series_id && !x.done && x.date >= r.date)
+      .map((x) => x.id);
+    if (ids.length) await fetch(`/api/reminders?ids=${ids.join(",")}`, { method: "DELETE" });
     load();
   }
 

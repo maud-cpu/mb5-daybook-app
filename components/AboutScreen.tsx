@@ -448,22 +448,28 @@ export default function AboutScreen() {
     if (key !== "review_next" && key !== "visit_next") return;
     const sourceKey = `${key === "review_next" ? "review" : "visit"}:${childId}`;
     if (!value) {
-      await supabase.from("reminders").delete().eq("source_key", sourceKey);
+      await fetch(`/api/reminders?sourceKey=${encodeURIComponent(sourceKey)}`, { method: "DELETE" });
       return;
     }
     const label = key === "review_next" ? "CLA review" : "SW statutory visit";
-    await supabase.from("reminders").upsert(
-      {
-        source_key: sourceKey,
-        text: `${childName ? childName + "'s " : ""}${label}`,
-        date: value,
-        category: "surrey",
-        people: childName ? [childName] : [],
-        done: false,
-        done_at: null,
-      },
-      { onConflict: "household_owner_id,source_key" },
-    );
+    await fetch("/api/reminders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [
+          {
+            source_key: sourceKey,
+            text: `${childName ? childName + "'s " : ""}${label}`,
+            date: value,
+            category: "surrey",
+            people: childName ? [childName] : [],
+            done: false,
+            done_at: null,
+          },
+        ],
+        onConflict: "household_owner_id,source_key",
+      }),
+    });
   }
 
   async function saveChildBasics(childId: string, key: string, value: string) {
