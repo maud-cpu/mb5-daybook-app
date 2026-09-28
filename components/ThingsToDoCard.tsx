@@ -76,8 +76,8 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
   async function load() {
     const [
       { data: incidents },
-      { data: children },
-      { data: householdChildren },
+      childrenRes,
+      householdChildrenRes,
       householdRes,
       { data: settings },
       { data: courses },
@@ -88,11 +88,11 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
       { data: dismissed },
     ] = await Promise.all([
       supabase.from("records").select("id, text, created_at, reported").eq("bucket", "incident"),
-      supabase.from("children").select("id, name, born, family, basics, placement_end_date"),
+      fetch("/api/children").then((r) => r.json()),
       // A child in "Children in your household" can be an actual foster
       // placement too, not just the carer's own/adopted/kinship child --
       // they need the same missing-CSW/GP/duty-line nudges as any other.
-      supabase.from("household_children").select("id, name, born, basics"),
+      fetch("/api/household-children").then((r) => r.json()),
       fetch("/api/household").then((r) => r.json()),
       supabase.from("carer_settings").select("invoice_day, pay_day").maybeSingle(),
       supabase.from("shared_training_catalog").select("title").eq("group_key", "3yr").eq("archived", false),
@@ -110,6 +110,8 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
         .limit(20),
       supabase.from("dismissed_todos").select("key, text, dismissed_at").order("dismissed_at", { ascending: false }).limit(20),
     ]);
+    const children = childrenRes.children;
+    const householdChildren = householdChildrenRes.children;
     const { data: unpaidClaimed } = await supabase
       .from("records")
       .select("id")

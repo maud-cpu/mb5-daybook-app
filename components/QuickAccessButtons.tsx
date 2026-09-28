@@ -57,15 +57,17 @@ export default function QuickAccessButtons() {
 
   async function load(kind: "phone" | "email") {
     setLoading(true);
-    const [{ data: rota }, { data: rotaHours }, householdRes, { data: children }, { data: householdChildren }, contactsRes] = await Promise.all([
+    const [{ data: rota }, { data: rotaHours }, householdRes, childrenRes, householdChildrenRes, contactsRes] = await Promise.all([
       kind === "phone" ? supabase.from("shared_rota").select("name, phone").eq("date", today()).maybeSingle() : Promise.resolve({ data: null }),
       kind === "phone" ? supabase.from("shared_rota_hours").select("weekday_hours, weekend_hours").maybeSingle() : Promise.resolve({ data: null }),
       fetch("/api/household").then((r) => r.json()),
-      supabase.from("children").select("name, basics"),
-      supabase.from("household_children").select("name, basics"),
+      fetch("/api/children").then((r) => r.json()),
+      fetch("/api/household-children").then((r) => r.json()),
       fetch("/api/contacts").then((r) => r.json()),
     ]);
     const household = householdRes.household;
+    const children = childrenRes.children;
+    const householdChildren = householdChildrenRes.children;
     const contacts = contactsRes.contacts;
 
     const allKids = [
@@ -137,12 +139,14 @@ export default function QuickAccessButtons() {
     }
     setOpen("today");
     setLoading(true);
-    const [{ data }, { data: clubs }, { data: kids }, { data: hhKids }] = await Promise.all([
+    const [{ data }, { data: clubs }, kidsRes, hhKidsRes] = await Promise.all([
       supabase.from("reminders").select("*").eq("done", false).eq("date", today()),
       supabase.from("child_clubs").select("id, child_id, club_name, weekday, time_from, time_to"),
-      supabase.from("children").select("id, name"),
-      supabase.from("household_children").select("id, name"),
+      fetch("/api/children").then((r) => r.json()),
+      fetch("/api/household-children").then((r) => r.json()),
     ]);
+    const kids = kidsRes.children;
+    const hhKids = hhKidsRes.children;
     const childNameById: Record<string, string> = {};
     ((kids as { id: string; name: string }[] | null) ?? []).forEach((c) => (childNameById[c.id] = c.name));
     ((hhKids as { id: string; name: string }[] | null) ?? []).forEach((c) => (childNameById[c.id] = c.name));

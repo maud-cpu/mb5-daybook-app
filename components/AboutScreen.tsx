@@ -391,21 +391,16 @@ export default function AboutScreen() {
   }
 
   async function load() {
-    const [{ data: kids }, { data: householdChildRows }, householdRes, adultsRes, visitorsRes] = await Promise.all([
-      supabase
-        .from("children")
-        .select(
-          "id, name, born, family, basics, category, lives_here, mockingbird, hub_carer_name, hub_carer_phone, hub_carer_email, surrey_contact, gender, placement_end_date, linked_visitor_id",
-        )
-        .order("created_at"),
-      supabase.from("household_children").select("*").order("created_at"),
+    const [childrenRes, householdChildrenRes, householdRes, adultsRes, visitorsRes] = await Promise.all([
+      fetch("/api/children").then((r) => r.json()),
+      fetch("/api/household-children").then((r) => r.json()),
       fetch("/api/household").then((r) => r.json()),
       fetch("/api/household-adults").then((r) => r.json()),
       fetch("/api/household-visitors").then((r) => r.json()),
     ]);
-    setHouseholdChildren((householdChildRows as HouseholdChild[]) ?? []);
+    setHouseholdChildren((householdChildrenRes.children as HouseholdChild[]) ?? []);
     setVisitors((visitorsRes.visitors as Visitor[]) ?? []);
-    const list = (kids as (Child & { basics: Record<string, string> })[]) ?? [];
+    const list = (childrenRes.children as (Child & { basics: Record<string, string> })[]) ?? [];
     setChildren(list);
     const b: Record<string, Record<string, string>> = {};
     list.forEach((c) => (b[c.id] = c.basics || {}));
@@ -417,7 +412,6 @@ export default function AboutScreen() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data load on mount
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // A club entry on the Calendar page linked straight here rather than to
@@ -494,7 +488,11 @@ export default function AboutScreen() {
 
   async function saveChild(childId: string, patch: Partial<Child>) {
     setChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, ...patch } : c)));
-    await supabase.from("children").update(patch).eq("id", childId);
+    await fetch("/api/children", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: childId, patch }),
+    });
     flashSaved();
   }
 
@@ -502,10 +500,11 @@ export default function AboutScreen() {
     if (!confirm(`Remove ${name || "this child"}? Their diary entries and other records are kept, just no longer linked to a child in this list.`)) return;
     setRemoveError("");
     setChildren((prev) => prev.filter((c) => c.id !== childId));
-    const { error, data } = await supabase.from("children").delete().eq("id", childId).select();
-    if (error || !data?.length) {
+    const res = await fetch(`/api/children?id=${childId}`, { method: "DELETE" });
+    if (!res.ok) {
       await load();
-      setRemoveError(error?.message || "Couldn't remove them — reload and try again.");
+      const data = await res.json().catch(() => ({}));
+      setRemoveError(data.error || "Couldn't remove them — reload and try again.");
       return;
     }
     setSelected(null);
@@ -589,7 +588,11 @@ export default function AboutScreen() {
       setSelected(`hh:${match.id}`);
       return;
     }
-    await supabase.from("household_children").insert({ ...newHouseholdChild, born: newHouseholdChild.born || null });
+    await fetch("/api/household-children", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...newHouseholdChild, born: newHouseholdChild.born || null }),
+    });
     setNewHouseholdChild({ name: "", born: "", category: "", notes: "", gender: "" });
     setSelected(null);
     await load();
@@ -597,16 +600,21 @@ export default function AboutScreen() {
 
   async function updateHouseholdChild(id: string, patch: Partial<HouseholdChild>) {
     setHouseholdChildren((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-    await supabase.from("household_children").update(patch).eq("id", id);
+    await fetch("/api/household-children", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, patch }),
+    });
   }
 
   async function removeHouseholdChild(id: string) {
     setRemoveError("");
     setHouseholdChildren((prev) => prev.filter((c) => c.id !== id));
-    const { error, data } = await supabase.from("household_children").delete().eq("id", id).select();
-    if (error || !data?.length) {
+    const res = await fetch(`/api/household-children?id=${id}`, { method: "DELETE" });
+    if (!res.ok) {
       await load();
-      setRemoveError(error?.message || "Couldn't remove them — reload and try again.");
+      const data = await res.json().catch(() => ({}));
+      setRemoveError(data.error || "Couldn't remove them — reload and try again.");
       return;
     }
     setSelected(null);
@@ -725,10 +733,15 @@ export default function AboutScreen() {
     setRemoveError("");
     const ids = kids.map((c) => c.id);
     setChildren((prev) => prev.map((c) => (ids.includes(c.id) ? { ...c, family: "" } : c)));
-    const { error, data } = await supabase.from("children").update({ family: "" }).in("id", ids).select();
-    if (error || !data?.length) {
+    const res = await fetch("/api/children", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids, patch: { family: "" } }),
+    });
+    if (!res.ok) {
       await load();
-      setRemoveError(error?.message || "Couldn't remove that grouping — reload and try again.");
+      const data = await res.json().catch(() => ({}));
+      setRemoveError(data.error || "Couldn't remove that grouping — reload and try again.");
       return;
     }
     setSelected(null);
@@ -739,10 +752,15 @@ export default function AboutScreen() {
     if (!next || next === famName) return;
     const ids = kids.map((c) => c.id);
     setChildren((prev) => prev.map((c) => (ids.includes(c.id) ? { ...c, family: next } : c)));
-    const { error } = await supabase.from("children").update({ family: next }).in("id", ids);
-    if (error) {
+    const res = await fetch("/api/children", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids, patch: { family: next } }),
+    });
+    if (!res.ok) {
       await load();
-      setRemoveError(error.message);
+      const data = await res.json().catch(() => ({}));
+      setRemoveError(data.error || "Couldn't rename that grouping — reload and try again.");
       return;
     }
     setSelected(`family:${next}`);
@@ -760,22 +778,23 @@ export default function AboutScreen() {
       setSelected(`visit:${match.id}`);
       return;
     }
-    const { data, error } = await supabase
-      .from("children")
-      .insert({
+    const res = await fetch("/api/children", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         name: newVisitingChild.name.trim(),
         born: newVisitingChild.born || null,
         category: newVisitingChild.category,
         lives_here: false,
         gender: newVisitingChild.gender,
-      })
-      .select("id")
-      .single();
+      }),
+    });
     // Anything pulled from a pasted handover document goes straight into
     // this new child's basics -- otherwise it'd only ever have lived in the
     // now-cleared textarea, undoing the whole point of extracting it.
-    if (!error && data && pendingImportBasics) {
-      await supabase.from("children").update({ basics: pendingImportBasics }).eq("id", data.id);
+    if (res.ok && pendingImportBasics) {
+      const { child } = await res.json();
+      await supabase.from("children").update({ basics: pendingImportBasics }).eq("id", child.id);
     }
     setNewVisitingChild({ name: "", born: "", category: VISITS_CATS[0][0], gender: "" });
     setImportText("");

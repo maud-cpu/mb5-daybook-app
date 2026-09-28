@@ -56,13 +56,13 @@ export default function PaperworkScreen() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: recs }, { data: kids }, { data: hhKids }, { data: r }, { data: training }, { data: catalog }] = await Promise.all([
+      const [{ data: recs }, kidsRes, hhKidsRes, { data: r }, { data: training }, { data: catalog }] = await Promise.all([
         supabase.from("records").select("*").order("date", { ascending: false }),
-        supabase.from("children").select("id, name, born, family, lives_here, category, basics"),
+        fetch("/api/children").then((res) => res.json()),
         // A child in "Children in your household" can be an actual foster
         // placement too, not just the carer's own/adopted/kinship child --
         // include them so month reports and expense filters cover them too.
-        supabase.from("household_children").select("id, name, born, category, basics"),
+        fetch("/api/household-children").then((res) => res.json()),
         supabase.from("shared_rates").select("*").single(),
         supabase.from("training_progress").select("course_title, completed_on").not("completed_on", "is", null),
         // training_progress only ever stored the plain course title, no id --
@@ -71,6 +71,8 @@ export default function PaperworkScreen() {
         // report, so it's not just a title someone has to search for again.
         supabase.from("shared_training_catalog").select("title, url, length, platform"),
       ]);
+      const kids = kidsRes.children;
+      const hhKids = hhKidsRes.children;
       setRecords((recs as EntryRecord[]) ?? []);
       setChildren([
         ...((kids as ChildWithBasics[]) ?? []).map((c) => ({ ...c, basics: c.basics || {} })),

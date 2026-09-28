@@ -52,14 +52,15 @@ export default function HubLogTab() {
   const [range, setRange] = useState<"month" | "all">("month");
 
   async function load() {
-    const [{ data }, visitorsRes, { data: childRows }] = await Promise.all([
+    const [{ data }, visitorsRes, childrenRes] = await Promise.all([
       supabase.from("hub_support_log").select("*").order("date", { ascending: false }),
       fetch("/api/household-visitors").then((r) => r.json()),
-      supabase.from("children").select("id, name, linked_visitor_id").eq("lives_here", false),
+      fetch("/api/children").then((r) => r.json()),
     ]);
     setEntries((data as LogEntry[]) ?? []);
     setVisitors((visitorsRes.visitors as HubVisitor[]) ?? []);
-    setHubChildren((childRows as HubChild[]) ?? []);
+    const allChildren = (childrenRes.children as (HubChild & { lives_here: boolean })[]) ?? [];
+    setHubChildren(allChildren.filter((c) => c.lives_here === false));
     setLoaded(true);
   }
 
@@ -98,19 +99,27 @@ export default function HubLogTab() {
     if (match && confirmUseExisting(match.name)) {
       // Already on file, just not linked to this carer yet -- link the
       // existing child instead of creating a second row for the same kid.
-      await supabase.from("children").update({ linked_visitor_id: visitorId }).eq("id", match.id);
+      await fetch("/api/children", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: match.id, patch: { linked_visitor_id: visitorId } }),
+      });
       setNewChildName((prev) => ({ ...prev, [visitorId]: "" }));
       load();
       return;
     }
-    await supabase.from("children").insert({ name, lives_here: false, category: "", linked_visitor_id: visitorId });
+    await fetch("/api/children", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, lives_here: false, category: "", linked_visitor_id: visitorId }),
+    });
     setNewChildName((prev) => ({ ...prev, [visitorId]: "" }));
     load();
   }
 
   async function removeHubChild(id: string) {
     setHubChildren((prev) => prev.filter((c) => c.id !== id));
-    await supabase.from("children").delete().eq("id", id);
+    await fetch(`/api/children?id=${id}`, { method: "DELETE" });
   }
 
   const thisMonth = today().slice(0, 7);
