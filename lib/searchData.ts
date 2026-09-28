@@ -16,15 +16,18 @@ export type SearchResult = {
 };
 
 export async function loadSearchData(supabase: ReturnType<typeof createClient>): Promise<SearchData> {
-  const [childrenRes, householdChildrenRes, recordsRes, { data: reminders }, { data: courses }] = await Promise.all([
+  const [childrenRes, householdChildrenRes, recordsRes, remindersRes, { data: courses }] = await Promise.all([
     fetch("/api/children").then((r) => r.json()),
     fetch("/api/household-children").then((r) => r.json()),
     fetch("/api/records").then((r) => r.json()),
-    supabase.from("reminders").select("id, text, date").eq("done", false),
+    fetch("/api/reminders").then((r) => r.json()),
     supabase.from("shared_training_catalog").select("id, title, url, description").eq("archived", false),
   ]);
   const kids = childrenRes.children;
   const hhKids = householdChildrenRes.children;
+  const reminders = ((remindersRes.reminders as { id: string; text: string; date: string; done: boolean }[]) ?? []).filter(
+    (r) => !r.done,
+  );
   // 500 is generous headroom for a note-a-day diary, not a real cap for
   // normal use -- kept only so a runaway history doesn't bloat what the
   // search panel holds in memory.

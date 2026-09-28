@@ -120,18 +120,18 @@ export default function CaptureScreen() {
   const [firstName, setFirstName] = useState("");
 
   async function loadClubs() {
-    const { data } = await supabase.from("child_clubs").select("child_id, club_name");
+    const { clubs } = await fetch("/api/child-clubs").then((r) => r.json());
     const map: Record<string, { club_name: string }[]> = {};
-    (data ?? []).forEach((r: { child_id: string; club_name: string }) => {
+    (clubs ?? []).forEach((r: { child_id: string; club_name: string }) => {
       (map[r.child_id] ||= []).push({ club_name: r.club_name });
     });
     setClubsByChildId(map);
   }
 
   async function loadSchoolAdmin() {
-    const { data } = await supabase.from("child_school_admin").select("*");
+    const { rows } = await fetch("/api/child-school-admin").then((r) => r.json());
     const map: Record<string, Record<string, string>> = {};
-    (data as (Record<string, string> & { child_id: string })[] | null)?.forEach((r) => {
+    (rows as (Record<string, string> & { child_id: string })[] | null)?.forEach((r) => {
       map[r.child_id] = r;
     });
     setSchoolAdminByChildId(map);
@@ -448,22 +448,27 @@ export default function CaptureScreen() {
     const targets = childNames.map((n) => children.find((c) => c.name === n)).filter((c): c is Child => !!c);
     if (!targets.length) return;
     const weekday = Math.max(0, WEEKDAYS.indexOf(club.weekday));
-    const { error } = await supabase.from("child_clubs").insert(
-      targets.map((c) => ({
-        child_id: c.id,
-        club_name: club.name,
-        weekday,
-        time_from: club.timeFrom,
-        time_to: club.timeTo,
-        contact_name: club.provider,
-        contact_info: club.contactInfo,
-        cost: club.cost,
-        website: club.website,
-        notes: club.notes,
-      })),
-    );
-    if (error) {
-      showToast("Couldn't save: " + error.message);
+    const res = await fetch("/api/child-clubs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: targets.map((c) => ({
+          child_id: c.id,
+          club_name: club.name,
+          weekday,
+          time_from: club.timeFrom,
+          time_to: club.timeTo,
+          contact_name: club.provider,
+          contact_info: club.contactInfo,
+          cost: club.cost,
+          website: club.website,
+          notes: club.notes,
+        })),
+      }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      showToast("Couldn't save: " + (data.error || "unknown error"));
       return;
     }
     setClubsByChildId((prev) => {
@@ -528,9 +533,14 @@ export default function CaptureScreen() {
       const existingNotes = existing.notes || "";
       if (existingNotes.includes(note)) continue;
       const next = { ...existing, notes: [existingNotes, note].filter(Boolean).join("\n") };
-      const { error } = await supabase.from("child_school_admin").upsert({ child_id: c.id, ...next }, { onConflict: "child_id" });
-      if (error) {
-        showToast("Couldn't save: " + error.message);
+      const res = await fetch("/api/child-school-admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ child_id: c.id, ...next }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        showToast("Couldn't save: " + (data.error || "unknown error"));
         return;
       }
       setSchoolAdminByChildId((prev) => ({ ...prev, [c.id]: next }));
@@ -677,7 +687,13 @@ export default function CaptureScreen() {
         });
       });
     const reminderRows = reminderOrder.map((k) => reminderGroups.get(k)!);
-    if (reminderRows.length) await supabase.from("reminders").insert(reminderRows);
+    if (reminderRows.length) {
+      await fetch("/api/reminders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows: reminderRows }),
+      });
+    }
     // Training the carer says they themselves did goes straight onto their
     // training record (Training & Resources / the Supervision report both
     // read training_progress) -- even when it isn't one of the courses in

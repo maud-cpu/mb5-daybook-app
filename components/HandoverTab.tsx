@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
 import { HOUSEHOLD_FIELDS, PROFILE_FIELDS } from "@/lib/handover";
 import { clubText } from "@/lib/calendarHelpers";
@@ -125,7 +124,6 @@ function suggestHousehold(selectedChildren: ChildRow[], aboutHousehold: AboutHou
 }
 
 export default function HandoverTab() {
-  const supabase = createClient();
   const [fosteredChildren, setFosteredChildren] = useState<ChildRow[]>([]);
   const [householdChildren, setHouseholdChildren] = useState<ChildRow[]>([]);
   // A sleepover/handover plan can include a household child (own/adopted/SGO/
@@ -151,19 +149,21 @@ export default function HandoverTab() {
   const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
 
   async function load() {
-    const [kidsRes, hhKidsRes, profilesRes, householdRes, { data: schoolAdminRows }, { data: clubRows }, { data: docRows }] =
-      await Promise.all([
-        fetch("/api/children").then((r) => r.json()),
-        fetch("/api/household-children").then((r) => r.json()),
-        fetch("/api/handover-child-profiles").then((r) => r.json()),
-        fetch("/api/household").then((r) => r.json()),
-        supabase.from("child_school_admin").select("*"),
-        supabase.from("child_clubs").select("*").order("weekday"),
-        supabase.from("child_documents").select("id, child_id, title, category, file_name").order("uploaded_at"),
-      ]);
+    const [kidsRes, hhKidsRes, profilesRes, householdRes, schoolAdminRes, clubsRes, docsRes] = await Promise.all([
+      fetch("/api/children").then((r) => r.json()),
+      fetch("/api/household-children").then((r) => r.json()),
+      fetch("/api/handover-child-profiles").then((r) => r.json()),
+      fetch("/api/household").then((r) => r.json()),
+      fetch("/api/child-school-admin").then((r) => r.json()),
+      fetch("/api/child-clubs").then((r) => r.json()),
+      fetch("/api/child-documents").then((r) => r.json()),
+    ]);
     const kids = kidsRes.children;
     const hhKids = hhKidsRes.children;
     const hh = householdRes.household;
+    const schoolAdminRows = schoolAdminRes.rows;
+    const clubRows = clubsRes.clubs;
+    const docRows = docsRes.documents;
     const normalise = (rows: (ChildRow & { basics: Record<string, string> | null })[] | null) =>
       (rows ?? []).map((c) => ({ ...c, basics: c.basics || {} }));
     setFosteredChildren(normalise(kids as (ChildRow & { basics: Record<string, string> | null })[] | null));
@@ -196,7 +196,6 @@ export default function HandoverTab() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data load on mount
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const sortedSelected = [...selected].sort();

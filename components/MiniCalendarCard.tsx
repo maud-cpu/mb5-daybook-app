@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
 import { REMINDER_CATEGORIES, reminderCategoryLabel } from "@/lib/types";
 import { addDays, clubText, groupClubsByOccurrence, mondayStartWeekday, personColor } from "@/lib/calendarHelpers";
@@ -39,7 +38,6 @@ function fmtRange(start: string, end: string): string {
 }
 
 export default function MiniCalendarCard() {
-  const supabase = createClient();
   const t = today();
   const [weekStart, setWeekStart] = useState(weekStartOf(t));
   const [byDate, setByDate] = useState<Record<string, DayItem[]>>({});
@@ -54,29 +52,35 @@ export default function MiniCalendarCard() {
     const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
     const from = days[0];
     const to = days[6];
-    const [{ data: rem }, kidsRes, hhKidsRes, adultsRes, { data: clubs }] = await Promise.all([
-      supabase
-        .from("reminders")
-        .select("id, date, text, people, category")
-        .gte("date", from)
-        .lte("date", to)
-        .eq("done", false)
-        .eq("todo_only", false),
+    const [remindersRes, kidsRes, hhKidsRes, adultsRes, clubsRes] = await Promise.all([
+      fetch("/api/reminders").then((r) => r.json()),
       fetch("/api/children").then((r) => r.json()),
       fetch("/api/household-children").then((r) => r.json()),
       fetch("/api/household-adults").then((r) => r.json()),
-      supabase.from("child_clubs").select("id, child_id, club_name, weekday, time_from, time_to"),
+      fetch("/api/child-clubs").then((r) => r.json()),
     ]);
     const kids = kidsRes.children;
     const hhKids = hhKidsRes.children;
     const adults = adultsRes.adults;
+    const rem = (
+      (remindersRes.reminders as {
+        id: string;
+        date: string;
+        text: string;
+        people: string[];
+        category: string;
+        done: boolean;
+        todo_only: boolean;
+      }[]) ?? []
+    ).filter((r) => r.date >= from && r.date <= to && !r.done && !r.todo_only);
+    const clubs = clubsRes.clubs;
 
     const childNameById: Record<string, string> = {};
     ((kids as { id: string; name: string }[] | null) ?? []).forEach((c) => (childNameById[c.id] = c.name));
     ((hhKids as { id: string; name: string }[] | null) ?? []).forEach((c) => (childNameById[c.id] = c.name));
 
     const map: Record<string, DayItem[]> = {};
-    ((rem as { id: string; date: string; text: string; people: string[]; category: string }[] | null) ?? []).forEach((r) => {
+    rem.forEach((r) => {
       (map[r.date] ||= []).push({
         id: r.id,
         text: r.text,
@@ -148,17 +152,22 @@ export default function MiniCalendarCard() {
 
   async function saveAdd() {
     if (!draft.text.trim()) return;
-    await supabase.from("reminders").insert({ text: draft.text.trim(), date: selected, category: draft.category, people: draft.people });
+    await fetch("/api/reminders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: [{ text: draft.text.trim(), date: selected, category: draft.category, people: draft.people }] }),
+    });
     setAdding(false);
     load();
   }
 
   async function saveEdit() {
     if (!editingId || !draft.text.trim()) return;
-    await supabase
-      .from("reminders")
-      .update({ text: draft.text.trim(), category: draft.category, people: draft.people })
-      .eq("id", editingId);
+    await fetch("/api/reminders", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: editingId, patch: { text: draft.text.trim(), category: draft.category, people: draft.people } }),
+    });
     setEditingId(null);
     load();
   }
@@ -166,7 +175,7 @@ export default function MiniCalendarCard() {
   async function deleteEditing() {
     if (!editingId) return;
     if (!confirm("Remove this entry?")) return;
-    await supabase.from("reminders").delete().eq("id", editingId);
+    await fetch(`/api/reminders?id=${editingId}`, { method: "DELETE" });
     setEditingId(null);
     load();
   }

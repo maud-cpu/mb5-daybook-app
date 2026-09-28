@@ -7,6 +7,7 @@ import { BASICS_SECTIONS } from "@/lib/basics";
 
 type Doc = {
   id: string;
+  child_id: string;
   title: string;
   category: string;
   file_path: string;
@@ -50,13 +51,9 @@ export default function ChildDocuments({
 
   async function load() {
     setLoaded(false);
-    const { data, error: err } = await supabase
-      .from("child_documents")
-      .select("*")
-      .eq("child_id", childId)
-      .order("uploaded_at", { ascending: false });
-    if (err) setError(err.message);
-    setDocs((data as Doc[]) ?? []);
+    const { documents, error: err } = await fetch("/api/child-documents").then((r) => r.json());
+    if (err) setError(err);
+    setDocs(((documents as Doc[]) ?? []).filter((d) => d.child_id === childId));
     setLoaded(true);
   }
 
@@ -77,14 +74,21 @@ export default function ChildDocuments({
       } = await supabase.auth.getUser();
       if (!user) throw new Error("Not signed in");
       const path = await uploadChildDocument(supabase, user.id, file);
-      const { error: err } = await supabase.from("child_documents").insert({
-        child_id: childId,
-        title: title.trim() || file.name,
-        category: category.trim(),
-        file_path: path,
-        file_name: file.name,
+      const res = await fetch("/api/child-documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          child_id: childId,
+          title: title.trim() || file.name,
+          category: category.trim(),
+          file_path: path,
+          file_name: file.name,
+        }),
       });
-      if (err) throw err;
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Couldn't save that document");
+      }
       setTitle("");
       setCategory("");
       load();
@@ -109,7 +113,7 @@ export default function ChildDocuments({
   async function remove(doc: Doc) {
     if (!confirm(`Remove "${doc.title || doc.file_name}"? This can't be undone.`)) return;
     setDocs((prev) => prev.filter((d) => d.id !== doc.id));
-    await supabase.from("child_documents").delete().eq("id", doc.id);
+    await fetch(`/api/child-documents?id=${doc.id}`, { method: "DELETE" });
     await deleteChildDocumentFile(supabase, doc.file_path);
   }
 

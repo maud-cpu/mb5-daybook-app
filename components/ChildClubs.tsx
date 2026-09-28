@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 type Club = {
   id: string;
+  child_id: string;
   club_name: string;
   weekday: number;
   time_from: string;
@@ -19,16 +19,15 @@ type Club = {
 };
 
 export default function ChildClubs({ childId }: { childId: string }) {
-  const supabase = createClient();
   const [clubs, setClubs] = useState<Club[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
 
   async function load() {
     setLoaded(false);
-    const { data, error: err } = await supabase.from("child_clubs").select("*").eq("child_id", childId).order("weekday");
-    if (err) setError(err.message);
-    setClubs((data as Club[]) ?? []);
+    const { clubs: allClubs, error: err } = await fetch("/api/child-clubs").then((r) => r.json());
+    if (err) setError(err);
+    setClubs(((allClubs as Club[]) ?? []).filter((c) => c.child_id === childId));
     setLoaded(true);
   }
 
@@ -40,9 +39,14 @@ export default function ChildClubs({ childId }: { childId: string }) {
 
   async function addClub() {
     setError("");
-    const { error: err } = await supabase.from("child_clubs").insert({ child_id: childId, club_name: "", weekday: 0 });
-    if (err) {
-      setError(err.message);
+    const res = await fetch("/api/child-clubs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: [{ child_id: childId, club_name: "", weekday: 0 }] }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "unknown error");
       return;
     }
     load();
@@ -50,15 +54,25 @@ export default function ChildClubs({ childId }: { childId: string }) {
 
   async function updateClub(id: string, patch: Partial<Club>) {
     setClubs((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-    const { error: err } = await supabase.from("child_clubs").update(patch).eq("id", id);
-    if (err) setError(err.message);
+    const res = await fetch("/api/child-clubs", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, patch }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "unknown error");
+    }
   }
 
   async function removeClub(id: string) {
     if (!confirm("Remove this club?")) return;
     setClubs((prev) => prev.filter((c) => c.id !== id));
-    const { error: err } = await supabase.from("child_clubs").delete().eq("id", id);
-    if (err) setError(err.message);
+    const res = await fetch(`/api/child-clubs?id=${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "unknown error");
+    }
   }
 
   if (!loaded) return <p className="hint">Loading…</p>;
