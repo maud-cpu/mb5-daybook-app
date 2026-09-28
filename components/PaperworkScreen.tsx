@@ -649,8 +649,11 @@ function SupervisionReport({
   // month boundary until it's actually dealt with, so those two ignore
   // "since" entirely -- only the explicit "to raise" notes and training
   // completions are date-scoped.
+  // "reminder" is just a calendar nudge (a club day, lunch-money reminder),
+  // not something that's actually happened with a child worth raising at
+  // supervision -- same exclusion /api/cla-summary already makes.
   const openFollowUps = [...records]
-    .filter((r) => r.flag && !r.flag_done)
+    .filter((r) => r.flag && r.flag !== "reminder" && !r.flag_done)
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
   const incidentRecords = records.filter((r) => r.bucket === "incident");
   const unreported = unreportedIncidentItems(
