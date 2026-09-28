@@ -32,6 +32,8 @@ export default function PaperworkScreen() {
   const [rates, setRates] = useState<Rates | null>(null);
   const [claimedOpen, setClaimedOpen] = useState(false);
   const [childFilter, setChildFilter] = useState<string[]>([]);
+  const [childFilterOpen, setChildFilterOpen] = useState(false);
+  const [childSearch, setChildSearch] = useState("");
   const [trainingDone, setTrainingDone] = useState<TrainingCompletion[]>([]);
 
   function toggleChildFilter(name: string) {
@@ -114,10 +116,15 @@ export default function PaperworkScreen() {
   }, []);
 
   // The child-filter chips used to be one flat list -- fine for a handful of
-  // kids, unreadable once the visiting/hub roster grew. Household first
-  // (usually short) and Visiting second, same split as Capture's picker.
-  const householdFilterChildren = children.filter((c) => c.lives_here !== false);
-  const visitingFilterChildren = children.filter((c) => c.lives_here === false);
+  // kids, unreadable once the visiting/hub roster grew. Splitting into
+  // Household/Visiting groups wasn't enough once either group itself got
+  // long, so this is now collapsed behind a toggle (closed by default,
+  // showing what's currently selected) with a search box to narrow the
+  // chips shown, same pattern as the Visitors directory redesign.
+  const childSearchQ = childSearch.trim().toLowerCase();
+  const matchesChildSearch = (name: string) => !childSearchQ || name.toLowerCase().includes(childSearchQ);
+  const householdFilterChildren = children.filter((c) => c.lives_here !== false && matchesChildSearch(c.name));
+  const visitingFilterChildren = children.filter((c) => c.lives_here === false && matchesChildSearch(c.name));
 
   const thisMonth = today().slice(0, 7);
   const allMonthRecs = records.filter((r) => r.date.startsWith(thisMonth));
@@ -159,42 +166,60 @@ export default function PaperworkScreen() {
 
       {["month", "supervision", "cla", "expenses", "meds"].includes(tab) && children.length > 0 && (
         <div style={{ marginTop: 10 }}>
-          <div className="chips">
-            {householdFilterChildren.length > 0 && visitingFilterChildren.length > 0 && (
-              <small className="muted" style={{ flexBasis: "100%" }}>
-                Household
-              </small>
-            )}
-            {householdFilterChildren.map((c) => (
-              <button
-                key={c.id}
-                className={`chip${childFilter.includes(c.name) ? " on" : ""}`}
-                onClick={() => toggleChildFilter(c.name)}
-              >
-                {c.name}
-              </button>
-            ))}
-          </div>
-          {visitingFilterChildren.length > 0 && (
-            <div className="chips" style={{ marginTop: 4 }}>
-              <small className="muted" style={{ flexBasis: "100%" }}>
-                Visiting
-              </small>
-              {visitingFilterChildren.map((c) => (
-                <button
-                  key={c.id}
-                  className={`chip${childFilter.includes(c.name) ? " on" : ""}`}
-                  onClick={() => toggleChildFilter(c.name)}
-                >
-                  {c.name}
-                </button>
-              ))}
-            </div>
-          )}
+          <button
+            className="chip"
+            onClick={() => setChildFilterOpen(!childFilterOpen)}
+            style={{ display: "flex", alignItems: "center", gap: 6 }}
+          >
+            {childFilterOpen ? "▾" : "▸"} 👤{" "}
+            {childFilter.length === 0 ? "All children" : childFilter.length === 1 ? childFilter[0] : `${childFilter.length} children selected`}
+          </button>
           {childFilter.length > 0 && (
-            <button className="chip" style={{ marginTop: 4 }} onClick={() => setChildFilter([])}>
+            <button className="chip" style={{ marginLeft: 6 }} onClick={() => setChildFilter([])}>
               Clear
             </button>
+          )}
+          {childFilterOpen && (
+            <div style={{ marginTop: 8 }}>
+              <input placeholder="Search children…" value={childSearch} onChange={(e) => setChildSearch(e.target.value)} />
+              <div className="chips" style={{ marginTop: 6 }}>
+                {householdFilterChildren.length > 0 && visitingFilterChildren.length > 0 && (
+                  <small className="muted" style={{ flexBasis: "100%" }}>
+                    Household
+                  </small>
+                )}
+                {householdFilterChildren.map((c) => (
+                  <button
+                    key={c.id}
+                    className={`chip${childFilter.includes(c.name) ? " on" : ""}`}
+                    onClick={() => toggleChildFilter(c.name)}
+                  >
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+              {visitingFilterChildren.length > 0 && (
+                <div className="chips" style={{ marginTop: 4 }}>
+                  <small className="muted" style={{ flexBasis: "100%" }}>
+                    Visiting
+                  </small>
+                  {visitingFilterChildren.map((c) => (
+                    <button
+                      key={c.id}
+                      className={`chip${childFilter.includes(c.name) ? " on" : ""}`}
+                      onClick={() => toggleChildFilter(c.name)}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {householdFilterChildren.length === 0 && visitingFilterChildren.length === 0 && (
+                <p className="empty" style={{ marginTop: 6 }}>
+                  No one matches &quot;{childSearch.trim()}&quot;.
+                </p>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -219,7 +244,9 @@ export default function PaperworkScreen() {
                 {unclaimed.length === 0 && <p className="empty">Nothing unclaimed this month.</p>}
                 {unclaimed.map((r) => (
                   <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}>
-                    <span style={{ flex: 1 }}>{describeExpense(rates, children, r)}</span>
+                    <span style={{ flex: 1 }}>
+                      <b>{fmtDate(r.date)}</b> — {describeExpense(rates, children, r)}
+                    </span>
                     <Link className="chip" style={{ flex: "0 0 auto" }} href={`/dashboard/entries?edit=${r.id}`}>
                       ✏️ Edit
                     </Link>
@@ -244,7 +271,7 @@ export default function PaperworkScreen() {
                       claimed.map((r) => (
                         <div key={r.id} className="rec" style={{ opacity: 0.85, display: "flex", justifyContent: "space-between", gap: 8 }}>
                           <span>
-                            {describeExpense(rates, children, r)}
+                            <b>{fmtDate(r.date)}</b> — {describeExpense(rates, children, r)}
                             {r.paid ? " · Paid" : ""}
                           </span>
                           <span style={{ flex: "0 0 auto", whiteSpace: "nowrap" }}>
