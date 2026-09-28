@@ -196,11 +196,9 @@ export default function CaptureScreen() {
         .single()
         .then(({ data }) => setFirstName((data?.display_name || "").trim().split(/\s+/)[0] || ""));
     });
-    supabase
-      .from("household")
-      .select("is_mockingbird, hub_leader_name, hub_leader_email")
-      .maybeSingle()
-      .then(({ data }) => {
+    fetch("/api/household")
+      .then((r) => r.json())
+      .then(({ household: data }) => {
         if (data?.is_mockingbird && data.hub_leader_name) {
           setHubLeader({ name: data.hub_leader_name, email: data.hub_leader_email || "" });
         }

@@ -57,19 +57,16 @@ export default function QuickAccessButtons() {
 
   async function load(kind: "phone" | "email") {
     setLoading(true);
-    const [{ data: rota }, { data: rotaHours }, { data: household }, { data: children }, { data: householdChildren }, { data: contacts }] = await Promise.all([
+    const [{ data: rota }, { data: rotaHours }, householdRes, { data: children }, { data: householdChildren }, contactsRes] = await Promise.all([
       kind === "phone" ? supabase.from("shared_rota").select("name, phone").eq("date", today()).maybeSingle() : Promise.resolve({ data: null }),
       kind === "phone" ? supabase.from("shared_rota_hours").select("weekday_hours, weekend_hours").maybeSingle() : Promise.resolve({ data: null }),
-      supabase
-        .from("household")
-        .select(
-          "ssw_name, ssw_phone, ssw_email, ssw_manager_name, ssw_manager_phone, ssw_manager_email, edt, hub_leader_name, hub_leader_phone, hub_leader_email",
-        )
-        .maybeSingle(),
+      fetch("/api/household").then((r) => r.json()),
       supabase.from("children").select("name, basics"),
       supabase.from("household_children").select("name, basics"),
-      supabase.from("contacts").select("label, name, phone, email"),
+      fetch("/api/contacts").then((r) => r.json()),
     ]);
+    const household = householdRes.household;
+    const contacts = contactsRes.contacts;
 
     const allKids = [
       ...((children as { name: string; basics: Record<string, string> }[] | null) ?? []),

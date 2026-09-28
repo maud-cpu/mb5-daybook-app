@@ -39,12 +39,9 @@ export default function ComposeEmail({
 
   useEffect(() => {
     async function load() {
-      const [{ data: contacts }, { data: household }, { data: kids }, { data: hhKids }, { data: visitors }, { data: recs }] = await Promise.all([
-        supabase.from("contacts").select("id, label, name, phone, email"),
-        supabase
-          .from("household")
-          .select("ssw_name, ssw_email, ssw_manager_name, ssw_manager_email, is_mockingbird, hub_leader_name, hub_leader_email")
-          .maybeSingle(),
+      const [contactsRes, householdRes, { data: kids }, { data: hhKids }, visitorsRes, { data: recs }] = await Promise.all([
+        fetch("/api/contacts").then((r) => r.json()),
+        fetch("/api/household").then((r) => r.json()),
         supabase.from("children").select("name, basics, hub_carer_name, hub_carer_email, linked_visitor_id"),
         // "Children in your household" (own/adopted/kinship/SGO) don't have
         // an allocated CSW or an external Mockingbird hub carer -- only
@@ -54,9 +51,12 @@ export default function ComposeEmail({
         // and matched by hand below -- a fresh foreign key isn't always
         // picked up for auto-embedding straight away, and this is the exact
         // same plain-query pattern the Visitors wheel already relies on.
-        supabase.from("household_visitors").select("id, name, email"),
+        fetch("/api/household-visitors").then((r) => r.json()),
         supabase.from("records").select("*").order("created_at", { ascending: false }),
       ]);
+      const contacts = contactsRes.contacts;
+      const household = householdRes.household;
+      const visitors = visitorsRes.visitors;
       // Show everyone possible, even without an email on file yet -- a name
       // is enough to appear in the draft ("Dear Rhodri...") and be reminded
       // to fill the email in later.

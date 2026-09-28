@@ -52,13 +52,13 @@ export default function HubLogTab() {
   const [range, setRange] = useState<"month" | "all">("month");
 
   async function load() {
-    const [{ data }, { data: visitorRows }, { data: childRows }] = await Promise.all([
+    const [{ data }, visitorsRes, { data: childRows }] = await Promise.all([
       supabase.from("hub_support_log").select("*").order("date", { ascending: false }),
-      supabase.from("household_visitors").select("id, name, role, linked_visitor_id").order("name"),
+      fetch("/api/household-visitors").then((r) => r.json()),
       supabase.from("children").select("id, name, linked_visitor_id").eq("lives_here", false),
     ]);
     setEntries((data as LogEntry[]) ?? []);
-    setVisitors((visitorRows as HubVisitor[]) ?? []);
+    setVisitors((visitorsRes.visitors as HubVisitor[]) ?? []);
     setHubChildren((childRows as HubChild[]) ?? []);
     setLoaded(true);
   }
@@ -77,14 +77,18 @@ export default function HubLogTab() {
       setNewVisitorName("");
       return;
     }
-    await supabase.from("household_visitors").insert({ name, role: "Mockingbird hub carer" });
+    await fetch("/api/household-visitors", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, role: "Mockingbird hub carer" }),
+    });
     setNewVisitorName("");
     load();
   }
 
   async function removeVisitor(id: string) {
     setVisitors((prev) => prev.filter((v) => v.id !== id));
-    await supabase.from("household_visitors").delete().eq("id", id);
+    await fetch(`/api/household-visitors?id=${id}`, { method: "DELETE" });
   }
 
   async function addChildFor(visitorId: string) {

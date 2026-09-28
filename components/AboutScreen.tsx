@@ -391,27 +391,27 @@ export default function AboutScreen() {
   }
 
   async function load() {
-    const [{ data: kids }, { data: hh }, { data: adultRows }, { data: householdChildRows }, { data: visitorRows }] = await Promise.all([
+    const [{ data: kids }, { data: householdChildRows }, householdRes, adultsRes, visitorsRes] = await Promise.all([
       supabase
         .from("children")
         .select(
           "id, name, born, family, basics, category, lives_here, mockingbird, hub_carer_name, hub_carer_phone, hub_carer_email, surrey_contact, gender, placement_end_date, linked_visitor_id",
         )
         .order("created_at"),
-      supabase.from("household").select("*").maybeSingle(),
-      supabase.from("household_adults").select("*").order("name"),
       supabase.from("household_children").select("*").order("created_at"),
-      supabase.from("household_visitors").select("*").order("name"),
+      fetch("/api/household").then((r) => r.json()),
+      fetch("/api/household-adults").then((r) => r.json()),
+      fetch("/api/household-visitors").then((r) => r.json()),
     ]);
     setHouseholdChildren((householdChildRows as HouseholdChild[]) ?? []);
-    setVisitors((visitorRows as Visitor[]) ?? []);
+    setVisitors((visitorsRes.visitors as Visitor[]) ?? []);
     const list = (kids as (Child & { basics: Record<string, string> })[]) ?? [];
     setChildren(list);
     const b: Record<string, Record<string, string>> = {};
     list.forEach((c) => (b[c.id] = c.basics || {}));
     setBasics(b);
-    if (hh) setHousehold(hh as Household);
-    setAdults((adultRows as Adult[]) ?? []);
+    if (householdRes.household) setHousehold(householdRes.household as Household);
+    setAdults((adultsRes.adults as Adult[]) ?? []);
   }
 
   useEffect(() => {
@@ -443,9 +443,7 @@ export default function AboutScreen() {
   async function saveHousehold(patch: Partial<Household>) {
     const next = { ...household, ...patch };
     setHousehold(next);
-    await supabase
-      .from("household")
-      .upsert({ ...next, updated_at: new Date().toISOString() }, { onConflict: "household_owner_id" });
+    await fetch("/api/household", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(next) });
     flashSaved();
   }
 
@@ -547,9 +545,14 @@ export default function AboutScreen() {
       setAddNotice(`Already had ${match.name} on your list — didn't add a second one.`);
       return;
     }
-    const { error } = await supabase.from("household_adults").insert(newAdult);
-    if (error) {
-      setAdultError(error.message);
+    const res = await fetch("/api/household-adults", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newAdult),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setAdultError(data.error || "Couldn't add");
       return;
     }
     setNewAdult({ name: "", phone: "", email: "", role: ADULT_ROLES[0], gender: "" });
@@ -558,16 +561,21 @@ export default function AboutScreen() {
 
   async function updateAdult(id: string, patch: Partial<Adult>) {
     setAdults((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
-    await supabase.from("household_adults").update(patch).eq("id", id);
+    await fetch("/api/household-adults", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, patch }),
+    });
   }
 
   async function removeAdult(id: string) {
     setRemoveError("");
     setAdults((prev) => prev.filter((a) => a.id !== id));
-    const { error, data } = await supabase.from("household_adults").delete().eq("id", id).select();
-    if (error || !data?.length) {
+    const res = await fetch(`/api/household-adults?id=${id}`, { method: "DELETE" });
+    if (!res.ok) {
       await load();
-      setRemoveError(error?.message || "Couldn't remove them — reload and try again.");
+      const data = await res.json().catch(() => ({}));
+      setRemoveError(data.error || "Couldn't remove them — reload and try again.");
     }
   }
 
@@ -621,7 +629,11 @@ export default function AboutScreen() {
       setSelected(`visitor:${match.id}`);
       return;
     }
-    await supabase.from("household_visitors").insert(newVisitor);
+    await fetch("/api/household-visitors", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newVisitor),
+    });
     setNewVisitor({ name: "", phone: "", email: "", role: VISITOR_ROLES[0], gender: "", linked_visitor_id: null });
     setSelected(null);
     await load();
@@ -629,16 +641,21 @@ export default function AboutScreen() {
 
   async function updateVisitor(id: string, patch: Partial<Visitor>) {
     setVisitors((prev) => prev.map((v) => (v.id === id ? { ...v, ...patch } : v)));
-    await supabase.from("household_visitors").update(patch).eq("id", id);
+    await fetch("/api/household-visitors", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, patch }),
+    });
   }
 
   async function removeVisitor(id: string) {
     setRemoveError("");
     setVisitors((prev) => prev.filter((v) => v.id !== id));
-    const { error, data } = await supabase.from("household_visitors").delete().eq("id", id).select();
-    if (error || !data?.length) {
+    const res = await fetch(`/api/household-visitors?id=${id}`, { method: "DELETE" });
+    if (!res.ok) {
       await load();
-      setRemoveError(error?.message || "Couldn't remove them — reload and try again.");
+      const data = await res.json().catch(() => ({}));
+      setRemoveError(data.error || "Couldn't remove them — reload and try again.");
       return;
     }
     setSelected(null);
@@ -653,14 +670,17 @@ export default function AboutScreen() {
     if (!confirm(`Move ${v.name} into your household as an adult? They'll show next to you in the main circle instead of in Visitors.`))
       return;
     setRemoveError("");
-    const { error } = await supabase
-      .from("household_adults")
-      .insert({ name: v.name, phone: v.phone, email: v.email, gender: v.gender, role: ADULT_ROLES[0] });
-    if (error) {
-      setRemoveError(error.message);
+    const res = await fetch("/api/household-adults", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: v.name, phone: v.phone, email: v.email, gender: v.gender, role: ADULT_ROLES[0] }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setRemoveError(data.error || "Couldn't move them.");
       return;
     }
-    await supabase.from("household_visitors").delete().eq("id", v.id);
+    await fetch(`/api/household-visitors?id=${v.id}`, { method: "DELETE" });
     setSelected(CENTER_NODE);
     await load();
   }
@@ -670,12 +690,13 @@ export default function AboutScreen() {
   // currently grouped under that family text onto it via linked_visitor_id,
   // so they move from the name-matched fallback hub to the real adult.
   async function promoteFamilyToVisitor(famName: string, kids: Child[]) {
-    const { data, error } = await supabase
-      .from("household_visitors")
-      .insert({ name: famName, ...familyDraft })
-      .select("id")
-      .single();
-    if (error || !data) return;
+    const res = await fetch("/api/household-visitors", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: famName, ...familyDraft }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
     if (kids.length) {
       await supabase
         .from("children")

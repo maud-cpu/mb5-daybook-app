@@ -78,7 +78,7 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
       { data: incidents },
       { data: children },
       { data: householdChildren },
-      { data: household },
+      householdRes,
       { data: settings },
       { data: courses },
       { data: progress },
@@ -93,7 +93,7 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
       // placement too, not just the carer's own/adopted/kinship child --
       // they need the same missing-CSW/GP/duty-line nudges as any other.
       supabase.from("household_children").select("id, name, born, basics"),
-      supabase.from("household").select("edt").maybeSingle(),
+      fetch("/api/household").then((r) => r.json()),
       supabase.from("carer_settings").select("invoice_day, pay_day").maybeSingle(),
       supabase.from("shared_training_catalog").select("title").eq("group_key", "3yr").eq("archived", false),
       supabase.from("training_progress").select("course_title, completed_on"),
@@ -143,7 +143,7 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
       ...missingNumbersItems(allChildren),
       ...recurringCheckItems(allChildren),
       ...placementEndItems(children ?? []),
-      ...edtMissingItem(household?.edt ?? ""),
+      ...edtMissingItem(householdRes.household?.edt ?? ""),
       ...dueReminders(remindersList),
     ].filter((x) => !dismissedKeys.has(dismissKeyFor(x.key)));
     setDue(dueList);
