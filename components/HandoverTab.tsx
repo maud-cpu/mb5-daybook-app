@@ -151,11 +151,11 @@ export default function HandoverTab() {
   const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
 
   async function load() {
-    const [kidsRes, hhKidsRes, { data: profileRows }, householdRes, { data: schoolAdminRows }, { data: clubRows }, { data: docRows }] =
+    const [kidsRes, hhKidsRes, profilesRes, householdRes, { data: schoolAdminRows }, { data: clubRows }, { data: docRows }] =
       await Promise.all([
         fetch("/api/children").then((r) => r.json()),
         fetch("/api/household-children").then((r) => r.json()),
-        supabase.from("handover_child_profiles").select("*"),
+        fetch("/api/handover-child-profiles").then((r) => r.json()),
         fetch("/api/household").then((r) => r.json()),
         supabase.from("child_school_admin").select("*"),
         supabase.from("child_clubs").select("*").order("weekday"),
@@ -171,7 +171,7 @@ export default function HandoverTab() {
     if (hh) setAboutHousehold({ ssw_name: hh.ssw_name || "", ssw_phone: hh.ssw_phone || "", ssw_email: hh.ssw_email || "" });
     const byChild: Record<string, Profile> = {};
     const touchedByChild: Record<string, string | null> = {};
-    (profileRows ?? []).forEach((p: Profile & { child_id: string; user_id?: string; edited_by?: string | null }) => {
+    (profilesRes.profiles ?? []).forEach((p: Profile & { child_id: string; user_id?: string; edited_by?: string | null }) => {
       byChild[p.child_id] = p;
       touchedByChild[p.child_id] = p.edited_by || p.user_id || null;
     });
@@ -203,13 +203,24 @@ export default function HandoverTab() {
 
   useEffect(() => {
     async function loadPlan() {
-      const { data } = await supabase
-        .from("handover_plans")
-        .select("*")
-        .eq("child_names", sortedSelected)
-        .eq("date_from", dateFrom)
-        .eq("date_to", dateTo)
-        .maybeSingle();
+      const { plans } = await fetch("/api/handover-plans").then((r) => r.json());
+      const data = (
+        (plans ?? []) as {
+          child_names: string[];
+          date_from: string;
+          date_to: string;
+          receiving_carer: string;
+          this_stay: string;
+          return_notes: string;
+          edited_by: string | null;
+          user_id: string;
+        }[]
+      ).find(
+        (x) =>
+          JSON.stringify([...x.child_names].sort()) === JSON.stringify(sortedSelected) &&
+          x.date_from === dateFrom &&
+          x.date_to === dateTo,
+      );
       setReceivingCarer(data?.receiving_carer ?? "");
       setThisStay(data?.this_stay ?? "");
       setReturnNotes(data?.return_notes ?? "");
@@ -232,8 +243,10 @@ export default function HandoverTab() {
   }
 
   async function savePlan(patch: Partial<{ receiving_carer: string; this_stay: string; return_notes: string }>) {
-    await supabase.from("handover_plans").upsert(
-      {
+    await fetch("/api/handover-plans", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         child_names: sortedSelected,
         date_from: dateFrom,
         date_to: dateTo,
@@ -243,9 +256,8 @@ export default function HandoverTab() {
         ...patch,
         updated_at: new Date().toISOString(),
         edited_by: myId,
-      },
-      { onConflict: "household_owner_id,child_names,date_from,date_to" },
-    );
+      }),
+    });
     setPlanTouchedBy(myId);
     flashSaved();
   }
@@ -253,10 +265,11 @@ export default function HandoverTab() {
   async function saveProfileField(childId: string, key: string, value: string) {
     const next = { ...(profiles[childId] || blankProfile()), [key]: value };
     setProfiles((prev) => ({ ...prev, [childId]: next }));
-    await supabase.from("handover_child_profiles").upsert(
-      { child_id: childId, ...next, edited_by: myId },
-      { onConflict: "household_owner_id,child_id" },
-    );
+    await fetch("/api/handover-child-profiles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ child_id: childId, ...next, edited_by: myId }),
+    });
     setProfileTouchedBy((prev) => ({ ...prev, [childId]: myId }));
     flashSaved();
   }

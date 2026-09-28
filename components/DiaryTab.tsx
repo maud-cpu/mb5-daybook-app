@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
 import { Diary, DIARY_SECTIONS } from "@/lib/types";
 import { useHouseholdNames } from "@/lib/useHouseholdNames";
@@ -17,7 +16,6 @@ function blankSections(): Record<string, string> {
 }
 
 export default function DiaryTab() {
-  const supabase = createClient();
   const [names, setNames] = useState<string[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [dateFrom, setDateFrom] = useState(() => new Date(Date.now() - 27 * 86400000).toISOString().slice(0, 10));
@@ -45,9 +43,12 @@ export default function DiaryTab() {
 
   useEffect(() => {
     async function loadDiary() {
-      const query = supabase.from("diaries").select("*").eq("child_names", sortedSelected);
-      const { data } = dateFrom ? await query.eq("date_from", dateFrom).eq("date_to", dateTo) : await query.is("date_from", null).eq("date_to", dateTo);
-      const d = (data ?? [])[0] as Diary | undefined;
+      const { diaries } = await fetch("/api/diaries").then((r) => r.json());
+      const d = ((diaries as Diary[]) ?? []).find(
+        (x) =>
+          JSON.stringify([...x.child_names].sort()) === JSON.stringify(sortedSelected) &&
+          (dateFrom ? x.date_from === dateFrom && x.date_to === dateTo : !x.date_from && x.date_to === dateTo),
+      );
       if (d) {
         setSwName(d.sw_name);
         const s: Record<string, string> = {};
@@ -72,10 +73,11 @@ export default function DiaryTab() {
   async function save(patch: Record<string, string>) {
     const next = { ...sections, ...patch };
     setSections(next);
-    await supabase.from("diaries").upsert(
-      { child_names: sortedSelected, date_from: dateFrom || null, date_to: dateTo || null, sw_name: swName, ...next, edited_by: myId },
-      { onConflict: "household_owner_id,child_names,date_from,date_to" },
-    );
+    await fetch("/api/diaries", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ child_names: sortedSelected, date_from: dateFrom || null, date_to: dateTo || null, sw_name: swName, ...next, edited_by: myId }),
+    });
     setLastTouchedBy(myId);
     setSavedAt(new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }));
     setTimeout(() => setSavedAt(""), 1500);
