@@ -669,7 +669,13 @@ function SupervisionReport({
   // child rather than hunting through one long flat list for what matters.
   const allNames = new Set<string>();
   [...openFollowUps, ...incidentRecords, ...toRaise].forEach((r) => namesOf(r).forEach((n) => allNames.add(n)));
-  const knownOrder = sortChildren(allChildren.filter((c) => allNames.has(c.name))).map((c) => c.name);
+  // dedupe by name -- a child can have more than one row on file (e.g. an
+  // accidental duplicate from auto-detection), which would otherwise build
+  // an identical group twice, one per row.
+  const seenNames = new Set<string>();
+  const knownOrder = sortChildren(allChildren.filter((c) => allNames.has(c.name)))
+    .map((c) => c.name)
+    .filter((n) => (seenNames.has(n) ? false : (seenNames.add(n), true)));
   const extraNames = [...allNames].filter((n) => !knownOrder.includes(n)).sort((a, b) => a.localeCompare(b));
   const childOrder = [...knownOrder, ...extraNames];
 
