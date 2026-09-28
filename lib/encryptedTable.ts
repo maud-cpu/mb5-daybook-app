@@ -1,5 +1,5 @@
 import { SupabaseClient } from "@supabase/supabase-js";
-import { decryptField, encryptField } from "@/lib/crypto";
+import { decryptField, decryptJson, encryptField, encryptJson } from "@/lib/crypto";
 
 // Shared by every Phase-2-onward API route that has some fields ciphertext
 // (in a `<field>_enc` column) and some still plaintext, mid-migration. See
@@ -18,9 +18,10 @@ export async function lazyMigrateRow<T extends Record<string, unknown>>(
   matchColumn: string,
   row: T,
   fields: string[],
+  jsonFields: string[] = [],
 ): Promise<T> {
   const out: Record<string, unknown> = { ...row };
-  const updates: Record<string, string> = {};
+  const updates: Record<string, unknown> = {};
   for (const f of fields) {
     const encVal = row[`${f}_enc`] as string | null | undefined;
     const plainVal = row[f] as string | null | undefined;
@@ -29,6 +30,20 @@ export async function lazyMigrateRow<T extends Record<string, unknown>>(
       out[f] = plainVal;
     } else {
       out[f] = decryptField(encVal);
+    }
+    delete out[`${f}_enc`];
+  }
+  // Whole-object fields (a jsonb column with many individually-sensitive
+  // sub-keys, e.g. children.basics) are encrypted as one ciphertext blob
+  // rather than per-key.
+  for (const f of jsonFields) {
+    const encVal = row[`${f}_enc`] as string | null | undefined;
+    const plainVal = (row[f] as Record<string, unknown> | null | undefined) ?? {};
+    if (encVal) {
+      out[f] = decryptJson(encVal, {});
+    } else {
+      updates[`${f}_enc`] = encryptJson(plainVal);
+      out[f] = plainVal;
     }
     delete out[`${f}_enc`];
   }
@@ -44,8 +59,9 @@ export async function lazyMigrateRows<T extends Record<string, unknown>>(
   matchColumn: string,
   rows: T[],
   fields: string[],
+  jsonFields: string[] = [],
 ): Promise<T[]> {
-  return Promise.all(rows.map((row) => lazyMigrateRow(supabase, table, matchColumn, row, fields)));
+  return Promise.all(rows.map((row) => lazyMigrateRow(supabase, table, matchColumn, row, fields, jsonFields)));
 }
 
 /** Builds a write payload from a partial patch: any key in `fields` gets
@@ -55,10 +71,15 @@ export async function lazyMigrateRows<T extends Record<string, unknown>>(
 export function encryptFieldsForWrite<T extends Record<string, unknown>>(
   input: Partial<T>,
   fields: string[],
+  jsonFields: string[] = [],
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(input)) {
-    if (fields.includes(k)) {
+    if (jsonFields.includes(k)) {
+      const value = v ?? {};
+      out[k] = value;
+      out[`${k}_enc`] = encryptJson(value);
+    } else if (fields.includes(k)) {
       const plain = typeof v === "string" ? v : (v ?? "");
       out[k] = plain;
       out[`${k}_enc`] = encryptField(String(plain));

@@ -392,6 +392,17 @@ export default function CaptureScreen() {
     );
   }
 
+  async function patchChildBasics(id: string, table: "children" | "household_children", basics: Record<string, string>): Promise<string> {
+    const res = await fetch(table === "children" ? "/api/children" : "/api/household-children", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, patch: { basics } }),
+    });
+    if (res.ok) return "";
+    const data = await res.json().catch(() => ({}));
+    return data.error || "unknown error";
+  }
+
   // Applies to every tagged child that needs it (e.g. two siblings sharing
   // the same teacher), not just one. This writes into the SAME "Key
   // contacts at school" repeatable list shown on About us -- adding a new
@@ -415,12 +426,9 @@ export default function CaptureScreen() {
       };
       const nextContacts = existingIdx >= 0 ? contacts.map((ct, idx) => (idx === existingIdx ? nextContact : ct)) : [...contacts, nextContact];
       const nextBasics = { ...basics, teacher: JSON.stringify(nextContacts) };
-      const { error } = await supabase
-        .from(childTable[c.id] || "children")
-        .update({ basics: nextBasics })
-        .eq("id", c.id);
+      const error = await patchChildBasics(c.id, childTable[c.id] || "children", nextBasics);
       if (error) {
-        showToast("Couldn't save: " + error.message);
+        showToast("Couldn't save: " + error);
         return;
       }
       setBasicsByChildId((prev) => ({ ...prev, [c.id]: nextBasics }));
@@ -496,12 +504,9 @@ export default function CaptureScreen() {
         food_likes: append(basics.food_likes || "", note.likes),
         food_dislikes: append(basics.food_dislikes || "", note.dislikes),
       };
-      const { error } = await supabase
-        .from(childTable[c.id] || "children")
-        .update({ basics: nextBasics })
-        .eq("id", c.id);
+      const error = await patchChildBasics(c.id, childTable[c.id] || "children", nextBasics);
       if (error) {
-        showToast("Couldn't save: " + error.message);
+        showToast("Couldn't save: " + error);
         return;
       }
       setBasicsByChildId((prev) => ({ ...prev, [c.id]: nextBasics }));

@@ -469,7 +469,11 @@ export default function AboutScreen() {
   async function saveChildBasics(childId: string, key: string, value: string) {
     const next = { ...(basics[childId] || {}), [key]: value };
     setBasics((prev) => ({ ...prev, [childId]: next }));
-    await supabase.from("children").update({ basics: next }).eq("id", childId);
+    await fetch("/api/children", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: childId, patch: { basics: next } }),
+    });
     syncKeyDateReminder(childId, children.find((c) => c.id === childId)?.name || "", key, value);
     flashSaved();
   }
@@ -513,7 +517,11 @@ export default function AboutScreen() {
   async function saveHouseholdChildBasics(childId: string, key: string, value: string) {
     const next = { ...(householdChildren.find((c) => c.id === childId)?.basics || {}), [key]: value };
     setHouseholdChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, basics: next } : c)));
-    await supabase.from("household_children").update({ basics: next }).eq("id", childId);
+    await fetch("/api/household-children", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: childId, patch: { basics: next } }),
+    });
     syncKeyDateReminder(childId, householdChildren.find((c) => c.id === childId)?.name || "", key, value);
     flashSaved();
   }
@@ -525,7 +533,11 @@ export default function AboutScreen() {
     const next = { ...current, ...patch };
     if (table === "children") setBasics((prev) => ({ ...prev, [childId]: next }));
     else setHouseholdChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, basics: next } : c)));
-    await supabase.from(table).update({ basics: next }).eq("id", childId);
+    await fetch(table === "children" ? "/api/children" : "/api/household-children", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: childId, patch: { basics: next } }),
+    });
     flashSaved();
   }
 
@@ -794,7 +806,11 @@ export default function AboutScreen() {
     // now-cleared textarea, undoing the whole point of extracting it.
     if (res.ok && pendingImportBasics) {
       const { child } = await res.json();
-      await supabase.from("children").update({ basics: pendingImportBasics }).eq("id", child.id);
+      await fetch("/api/children", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: child.id, patch: { basics: pendingImportBasics } }),
+      });
     }
     setNewVisitingChild({ name: "", born: "", category: VISITS_CATS[0][0], gender: "" });
     setImportText("");

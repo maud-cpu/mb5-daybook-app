@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { encryptFieldsForWrite, lazyMigrateRows } from "@/lib/encryptedTable";
 
-// Phase 3 of application-level encryption (see 0068_encrypt_children_identity.sql).
-// Plaintext name/family/hub_carer_*/surrey_contact are kept dual-written --
-// records.child/kids, reminders.people, diaries.child_names and
-// handover_plans.child_names all cache a child's name as text, and matching
-// against those only keeps working because the plaintext mirror here stays
-// byte-identical to what's encrypted. basics (jsonb) stays untouched
-// (Phase 4) -- callers still read/write it straight from the browser.
+// Phase 3+4 of application-level encryption (see 0068_encrypt_children_identity.sql,
+// 0069_encrypt_basics.sql). Plaintext name/family/hub_carer_*/surrey_contact/
+// basics are kept dual-written -- records.child/kids, reminders.people,
+// diaries.child_names and handover_plans.child_names all cache a child's
+// name as text, and matching against those only keeps working because the
+// plaintext mirror here stays byte-identical to what's encrypted.
 const ENC_FIELDS = ["name", "family", "hub_carer_name", "hub_carer_phone", "hub_carer_email", "surrey_contact"];
+const JSON_FIELDS = ["basics"];
 
 export async function GET() {
   const supabase = await createClient();
@@ -21,7 +21,7 @@ export async function GET() {
   const { data, error } = await supabase.from("children").select("*").order("created_at");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const children = await lazyMigrateRows(supabase, "children", "id", data ?? [], ENC_FIELDS);
+  const children = await lazyMigrateRows(supabase, "children", "id", data ?? [], ENC_FIELDS, JSON_FIELDS);
   return NextResponse.json({ children });
 }
 
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
   const body = await req.json();
-  const insert = encryptFieldsForWrite(body, ENC_FIELDS);
+  const insert = encryptFieldsForWrite(body, ENC_FIELDS, JSON_FIELDS);
   // Freshly-written plaintext columns already hold the exact values just
   // sent in -- no decrypt round-trip needed for the row just inserted, so
   // only the real (non-ciphertext) columns are selected back.
@@ -56,7 +56,7 @@ export async function PATCH(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
   const { id, ids, patch } = await req.json();
-  const update = encryptFieldsForWrite(patch, ENC_FIELDS);
+  const update = encryptFieldsForWrite(patch, ENC_FIELDS, JSON_FIELDS);
   const query = supabase.from("children").update(update);
   const { error } = ids?.length ? await query.in("id", ids) : await query.eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
