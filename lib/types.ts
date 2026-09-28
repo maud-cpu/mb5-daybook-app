@@ -190,6 +190,7 @@ export type EntryRecord = {
   flag: string;
   flag_note: string;
   flag_done: boolean;
+  flag_done_at: string | null;
   flag_dismissed: boolean;
   flag_cleared: boolean;
   training_note: string;

@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { backstopFlag, FLAG_TRAINING } from "@/lib/keywordFlags";
 import { FlagKey } from "@/lib/types";
+import { encryptFieldsForWrite, lazyMigrateRows } from "@/lib/encryptedTable";
+
+const ENC_FIELDS = ["text", "flag_note", "training_note"];
 
 /**
  * Re-runs the keyword safety net over every already-saved entry, so an
@@ -20,13 +23,14 @@ export async function POST() {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
-  const { data: records, error } = await supabase
+  const { data, error } = await supabase
     .from("records")
-    .select("id, text, flag, flag_cleared, training_note");
+    .select("id, text, text_enc, flag, flag_cleared, training_note, training_note_enc");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const records = await lazyMigrateRows(supabase, "records", "id", data ?? [], ENC_FIELDS);
 
   let changed = 0;
-  for (const r of records ?? []) {
+  for (const r of records) {
     const patch: Record<string, string> = {};
 
     if (!r.flag && !r.flag_cleared) {
@@ -44,7 +48,8 @@ export async function POST() {
     }
 
     if (Object.keys(patch).length) {
-      const { error: updateError } = await supabase.from("records").update(patch).eq("id", r.id);
+      const update = encryptFieldsForWrite(patch, ENC_FIELDS);
+      const { error: updateError } = await supabase.from("records").update(update).eq("id", r.id);
       if (!updateError) changed++;
     }
   }

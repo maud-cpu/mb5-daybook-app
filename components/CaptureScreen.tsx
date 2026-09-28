@@ -637,11 +637,17 @@ export default function CaptureScreen() {
       shared_with_admin: !!p.shared_with_admin,
       photos: p.photos ?? [],
     }));
-    const { data: inserted, error } = await supabase.from("records").insert(rows).select("id");
-    if (error) {
-      showToast("Couldn't save: " + error.message);
+    const res = await fetch("/api/records", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      showToast("Couldn't save: " + (data.error || "unknown error"));
       return;
     }
+    const { ids: inserted } = await res.json();
     // A "remind me" note on its own was previously just tagged and then never
     // seen again -- nothing ever turned it into an actual calendar/Today
     // entry. It now also creates a real reminder for the date the carer

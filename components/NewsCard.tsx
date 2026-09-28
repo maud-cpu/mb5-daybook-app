@@ -163,10 +163,10 @@ export default function NewsCard() {
 
   async function saveToNotes(n: NewsItem) {
     const body = bodyWithLink(n);
-    await supabase.from("records").insert({
-      bucket: "scratch",
-      text: body ? `${n.title} — ${body}` : n.title,
-      date: today(),
+    await fetch("/api/records", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: [{ bucket: "scratch", text: body ? `${n.title} — ${body}` : n.title, date: today() }] }),
     });
     flashSaved(n.id, "Saved to notes");
     recordAction(n.id, "notes");

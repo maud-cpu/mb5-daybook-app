@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { extractEmail } from "@/lib/domain";
 import { BUCKETS, Contact, EntryRecord, TONE_OPTIONS } from "@/lib/types";
 
@@ -18,7 +17,6 @@ export default function ComposeEmail({
   presetEntryId?: string;
   presetHub?: boolean;
 }) {
-  const supabase = createClient();
   const [recipientOptions, setRecipientOptions] = useState<Recipient[]>([]);
   const [childNames, setChildNames] = useState<string[]>([]);
   const [records, setRecords] = useState<EntryRecord[]>([]);
@@ -39,7 +37,7 @@ export default function ComposeEmail({
 
   useEffect(() => {
     async function load() {
-      const [contactsRes, householdRes, kidsRes, hhKidsRes, visitorsRes, { data: recs }] = await Promise.all([
+      const [contactsRes, householdRes, kidsRes, hhKidsRes, visitorsRes, recordsRes] = await Promise.all([
         fetch("/api/contacts").then((r) => r.json()),
         fetch("/api/household").then((r) => r.json()),
         fetch("/api/children").then((r) => r.json()),
@@ -52,7 +50,7 @@ export default function ComposeEmail({
         // picked up for auto-embedding straight away, and this is the exact
         // same plain-query pattern the Visitors wheel already relies on.
         fetch("/api/household-visitors").then((r) => r.json()),
-        supabase.from("records").select("*").order("created_at", { ascending: false }),
+        fetch("/api/records").then((r) => r.json()),
       ]);
       const contacts = contactsRes.contacts;
       const household = householdRes.household;
@@ -99,7 +97,7 @@ export default function ComposeEmail({
       if (presetHub && household?.is_mockingbird && household.hub_leader_name) setSelectedRecipients(["h:hub"]);
       if (presetEntryId) setSelectedEntries([presetEntryId]);
       setChildNames([...kidRows.map((k) => k.name), ...((hhKids as { name: string }[] | null)?.map((k) => k.name) ?? [])]);
-      setRecords((recs as EntryRecord[]) ?? []);
+      setRecords((recordsRes.records as EntryRecord[]) ?? []);
     }
 
     load();

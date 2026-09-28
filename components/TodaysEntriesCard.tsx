@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
-import { BUCKETS, Bucket } from "@/lib/types";
+import { BUCKETS, Bucket, EntryRecord } from "@/lib/types";
 
 const BUCKET_ICON: Record<Bucket, string> = {
   diary: "📔",
@@ -35,25 +34,22 @@ function fmtTime(iso: string): string {
 // note easily gets captured twice, or the carer has to leave the page just
 // to check. This is a quiet recap, not another list to action.
 export default function TodaysEntriesCard() {
-  const supabase = createClient();
   const router = useRouter();
   const [entries, setEntries] = useState<TodayEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   async function load() {
-    const { data } = await supabase
-      .from("records")
-      .select("id, bucket, text, kids, created_at, amount, med_name")
-      .eq("date", today())
-      .order("created_at", { ascending: false });
-    setEntries((data as TodayEntry[] | null) ?? []);
+    const { records } = await fetch("/api/records").then((r) => r.json());
+    const entries = ((records as EntryRecord[]) ?? [])
+      .filter((r) => r.date === today())
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+    setEntries(entries);
     setLoaded(true);
   }
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data load on mount
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
