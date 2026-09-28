@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { today } from "@/lib/domain";
+import { sortChildren, today } from "@/lib/domain";
 import { Diary, DIARY_SECTIONS } from "@/lib/types";
 import { useHouseholdNames } from "@/lib/useHouseholdNames";
 
@@ -35,7 +35,12 @@ export default function DiaryTab() {
         // placement too, not just the carer's own/adopted/kinship child --
         // they need to be selectable for a statutory diary the same as
         // any other child.
-        setNames([...(kidsRes.children ?? []), ...(hhKidsRes.children ?? [])].map((c: { name: string }) => c.name)),
+        setNames(
+          sortChildren([
+            ...(kidsRes.children ?? []),
+            ...(hhKidsRes.children ?? []).map((c: { name: string }) => ({ ...c, lives_here: true })),
+          ]).map((c: { name: string }) => c.name),
+        ),
     );
   }, []);
 

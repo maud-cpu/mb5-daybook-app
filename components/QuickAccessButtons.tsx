@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { extractEmail, extractPhone, today } from "@/lib/domain";
+import { extractEmail, extractPhone, sortChildren, today } from "@/lib/domain";
 import { clubText, groupClubsByOccurrence, mondayStartWeekday } from "@/lib/calendarHelpers";
 import { Reminder, reminderCategoryLabel } from "@/lib/types";
 import { SearchData, SearchResult, filterSearchData, loadSearchData } from "@/lib/searchData";
@@ -70,10 +70,10 @@ export default function QuickAccessButtons() {
     const householdChildren = householdChildrenRes.children;
     const contacts = contactsRes.contacts;
 
-    const allKids = [
-      ...((children as { name: string; basics: Record<string, string> }[] | null) ?? []),
-      ...((householdChildren as { name: string; basics: Record<string, string> }[] | null) ?? []),
-    ];
+    const allKids = sortChildren([
+      ...((children as { name: string; basics: Record<string, string>; family?: string; lives_here?: boolean | null }[] | null) ?? []),
+      ...((householdChildren as { name: string; basics: Record<string, string> }[] | null) ?? []).map((c) => ({ ...c, lives_here: true })),
+    ]);
     const out: Item[] = [];
     if (kind === "phone") {
       if (rota?.phone) {

@@ -35,6 +35,25 @@ export function bandChangeSoon(child: Pick<Child, "born">): string {
   return "";
 }
 
+/**
+ * Household's own children first (alphabetical), then visiting children
+ * grouped by family (each family alphabetical, families alphabetical by
+ * name, ungrouped visiting children last) -- so a long roster is always
+ * easy to scan instead of listed in whatever order rows were created.
+ */
+export function sortChildren<T extends { name: string; lives_here?: boolean | null; family?: string }>(children: T[]): T[] {
+  return [...children].sort((a, b) => {
+    const aHome = a.lives_here !== false;
+    const bHome = b.lives_here !== false;
+    if (aHome !== bHome) return aHome ? -1 : 1;
+    if (!aHome) {
+      const fam = (a.family || "").localeCompare(b.family || "");
+      if (fam !== 0) return fam;
+    }
+    return a.name.localeCompare(b.name);
+  });
+}
+
 export function findChild(children: Child[], name: string): Child | undefined {
   return children.find((c) => c.name === name);
 }

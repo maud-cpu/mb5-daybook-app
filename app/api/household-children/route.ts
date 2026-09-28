@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { encryptFieldsForWrite, lazyMigrateRows } from "@/lib/encryptedTable";
+import { sortChildren } from "@/lib/domain";
 
 // Phase 3+4 of application-level encryption (see 0068_encrypt_children_identity.sql,
 // 0069_encrypt_basics.sql). Same dual-write reasoning as /api/children.
@@ -18,7 +19,7 @@ export async function GET() {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const children = await lazyMigrateRows(supabase, "household_children", "id", data ?? [], ENC_FIELDS, JSON_FIELDS);
-  return NextResponse.json({ children });
+  return NextResponse.json({ children: sortChildren(children) });
 }
 
 export async function POST(req: NextRequest) {

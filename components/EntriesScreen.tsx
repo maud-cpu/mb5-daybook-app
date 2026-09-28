@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { daycareAmount, describeExpense, describeMeds, expenseTotals, gbp, today } from "@/lib/domain";
+import { daycareAmount, describeExpense, describeMeds, expenseTotals, gbp, sortChildren, today } from "@/lib/domain";
 import { BUCKETS, Bucket, Child, DAYCARE_REASONS, EntryRecord, FLAGS, livesHereOf, Rates } from "@/lib/types";
 import ComposeEmail from "@/components/ComposeEmail";
 import PhotoField from "@/components/PhotoField";
@@ -68,10 +68,12 @@ export default function EntriesScreen() {
     const kids = kidsRes.children;
     const hhKids = hhKidsRes.children;
     setRecords((recordsRes.records as EntryRecord[]) ?? []);
-    setChildren([
-      ...((kids as Child[]) ?? []),
-      ...(((hhKids as Pick<Child, "id" | "name" | "born" | "category">[]) ?? []).map((h) => ({ ...h, family: "", lives_here: true }) as Child)),
-    ]);
+    setChildren(
+      sortChildren([
+        ...((kids as Child[]) ?? []),
+        ...(((hhKids as Pick<Child, "id" | "name" | "born" | "category">[]) ?? []).map((h) => ({ ...h, family: "", lives_here: true }) as Child)),
+      ]),
+    );
     setRates(r as Rates);
     setLoading(false);
   }
