@@ -211,9 +211,15 @@ export default function MiniCalendarCard() {
 
   async function deleteEditing() {
     if (!editingId) return;
-    if (!confirm("Remove this entry?")) return;
-    await fetch(`/api/reminders?id=${editingId}`, { method: "DELETE" });
+    const confirmMsg = editRecordDraft ? "Remove this entry? This also removes it from Entries/Expenses." : "Remove this entry?";
+    if (!confirm(confirmMsg)) return;
+    const recordId = editRecordDraft?.id;
+    await Promise.all([
+      fetch(`/api/reminders?id=${editingId}`, { method: "DELETE" }),
+      recordId ? fetch(`/api/records?id=${recordId}`, { method: "DELETE" }) : Promise.resolve(),
+    ]);
     setEditingId(null);
+    setEditRecordDraft(null);
     load();
   }
 

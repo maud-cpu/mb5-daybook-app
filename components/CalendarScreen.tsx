@@ -370,9 +370,13 @@ export default function CalendarScreen() {
   }
 
   async function deleteOne(r: Reminder) {
-    if (!confirm(`Remove "${r.text}"?`)) return;
+    const confirmMsg = r.record_id ? `Remove "${r.text}"? This also removes it from Entries/Expenses.` : `Remove "${r.text}"?`;
+    if (!confirm(confirmMsg)) return;
     setEditingId(null);
-    await fetch(`/api/reminders?id=${r.id}`, { method: "DELETE" });
+    await Promise.all([
+      fetch(`/api/reminders?id=${r.id}`, { method: "DELETE" }),
+      r.record_id ? fetch(`/api/records?id=${r.record_id}`, { method: "DELETE" }) : Promise.resolve(),
+    ]);
     load();
   }
 

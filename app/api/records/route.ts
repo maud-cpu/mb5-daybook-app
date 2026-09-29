@@ -69,5 +69,10 @@ export async function DELETE(req: NextRequest) {
   const { error, data } = await supabase.from("records").delete().in("id", ids).select();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data?.length) return NextResponse.json({ error: "Nothing removed" }, { status: 404 });
+  // A record deleted from Entries/Expenses shouldn't leave a stale calendar
+  // reminder still pointing at it -- delete the reminder alongside it, the
+  // same as deleting from the calendar already removes the record (see
+  // CalendarScreen/MiniCalendarCard's deleteOne/deleteEditing).
+  await supabase.from("reminders").delete().in("record_id", ids);
   return NextResponse.json({ ok: true });
 }
