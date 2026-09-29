@@ -80,10 +80,10 @@ export default function LoginPage() {
       setMfaError(chErr?.message || "Couldn't start the check — try again.");
       return;
     }
-    const { error: vErr } = await supabase.auth.mfa.verify({ factorId: mfaFactorId, challengeId: challenge.id, code: mfaCode });
+    const { error: vErr } = await supabase.auth.mfa.verify({ factorId: mfaFactorId, challengeId: challenge.id, code: mfaCode.trim() });
     setBusy(false);
     if (vErr) {
-      setMfaError("That code wasn't right — try again.");
+      setMfaError("That code wasn't right — try again. If it keeps failing, check your phone's clock is set to automatic/network time.");
       return;
     }
     router.replace("/");

@@ -52,6 +52,16 @@ export default function TwoFactorCard() {
   async function startEnroll() {
     setError("");
     setBusy(true);
+    // A half-finished attempt from earlier (reloaded the page after
+    // scanning but before entering the code, tried "Turn on" twice) can
+    // leave an unverified factor behind with a different secret to whatever
+    // QR is now on screen -- scanning the new one but still holding the old
+    // entry in the authenticator app looks exactly like "wrong code" every
+    // time. Clearing any unverified factors first means the QR shown is
+    // always the only one that can possibly be right.
+    const { data: existing } = await supabase.auth.mfa.listFactors();
+    const stale = existing?.totp?.filter((f) => f.status !== "verified") ?? [];
+    await Promise.all(stale.map((f) => supabase.auth.mfa.unenroll({ factorId: f.id })));
     const { data, error: err } = await supabase.auth.mfa.enroll({ factorType: "totp" });
     setBusy(false);
     if (err || !data) {
@@ -85,10 +95,10 @@ export default function TwoFactorCard() {
       setError(chErr?.message || "Couldn't check that code — try again.");
       return;
     }
-    const { error: vErr } = await supabase.auth.mfa.verify({ factorId, challengeId: challenge.id, code });
+    const { error: vErr } = await supabase.auth.mfa.verify({ factorId, challengeId: challenge.id, code: code.trim() });
     if (vErr) {
       setBusy(false);
-      setError("That code wasn't right — try again.");
+      setError("That code wasn't right — try again. If it keeps failing, check your phone's clock is set to automatic/network time (a code that's even a little out of sync with the server will never match).");
       return;
     }
     const res = await fetch("/api/mfa/backup-codes", { method: "POST" });
