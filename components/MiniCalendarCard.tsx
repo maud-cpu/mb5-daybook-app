@@ -293,7 +293,11 @@ export default function MiniCalendarCard() {
               </p>
             )}
             {selectedItems.length > 0 && (
-              <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 3 }}>
+              // Capped and scrollable -- a busy day (several clubs, a
+              // reminder or two, something just added from Capture) could
+              // otherwise grow this list tall enough to push the whole card
+              // taller than the note box next to it on desktop.
+              <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 3, maxHeight: 160, overflowY: "auto" }}>
                 {selectedItems.map((it, idx) => (
                   <button
                     key={idx}

@@ -474,7 +474,12 @@ nav.tabbar a.on {
 
 @media (min-width: 720px) {
   .capture-top-grid {
-    grid-template-columns: 3fr 2fr;
+    /* minmax(0, ...) instead of a bare fr value -- otherwise a grid track
+       defaults to a minimum of its content's natural width, so a long
+       calendar entry or club name in the MiniCalendarCard column could
+       force that column wider than its 2fr share and squeeze the note
+       box's column down with it. */
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
   }
 }
 
