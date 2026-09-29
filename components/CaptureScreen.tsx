@@ -907,7 +907,7 @@ export default function CaptureScreen() {
             placeholder="A note, a command — 'diary', 'supervision', 'expenses', 'social worker', 'incident', 'just record', or 'add parents evening to the calendar on the 12th' — or ask a question, e.g. 'what time does Eli go to bed?'"
             value={cap}
             onChange={(e) => setCap(e.target.value)}
-            style={{ flex: 1, minHeight: 200 }}
+            style={{ flex: 1, minHeight: 340 }}
           />
           <button className="btn" disabled={busy || !cap.trim()} onClick={isQuestion(cap) ? askQuestion : sortIt}>
             {busy ? (isQuestion(cap) ? "Thinking…" : "Sorting…") : isQuestion(cap) ? "❓ Answer" : "Sort it"}
