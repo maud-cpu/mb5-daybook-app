@@ -9,6 +9,9 @@ export default function SignOutButton() {
   async function signOut() {
     const supabase = createClient();
     await supabase.auth.signOut();
+    // So a backup-code bypass from this browser never carries over to
+    // whoever signs in next on the same device (see lib/mfa.ts).
+    await fetch("/api/mfa/clear-bypass", { method: "POST" });
     router.replace("/login");
     router.refresh();
   }

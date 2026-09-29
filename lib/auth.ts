@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { mfaSatisfied } from "@/lib/mfa";
 
 export async function requireUser() {
   const supabase = await createClient();
@@ -7,6 +9,8 @@ export async function requireUser() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  const cookieStore = await cookies();
+  if (!(await mfaSatisfied(supabase, cookieStore))) redirect("/login");
   return { supabase, user };
 }
 
