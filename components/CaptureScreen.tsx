@@ -628,7 +628,7 @@ export default function CaptureScreen() {
       kids: p.kids,
       also_in: p.also_in ?? [],
       text: p.text,
-      date: today(),
+      date: p.date || today(),
       kind: p.bucket === "expenses" ? p.kind : null,
       amount: p.amount ?? null,
       miles: p.miles ?? null,
@@ -721,7 +721,7 @@ export default function CaptureScreen() {
           ),
         ];
         return {
-          date: today(),
+          date: p.date || today(),
           carer_names: carerNames.join(", "),
           support_type: p.overnight ? (p.reason === "Emergency" ? "sleepover_emergency" : "sleepover_planned") : "daytime_child",
           amount: p.hours ?? null,
@@ -970,6 +970,13 @@ export default function CaptureScreen() {
                     ))}
                   </select>
                 )}
+                <input
+                  type="date"
+                  title="The date this is actually about — edit if it's guessed wrong"
+                  style={{ flex: "0 0 130px" }}
+                  value={p.date || today()}
+                  onChange={(e) => updatePending(i, { date: e.target.value })}
+                />
                 {!p.hub_update && (
                   <button
                     className="chip"
