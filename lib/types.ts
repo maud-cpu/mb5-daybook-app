@@ -264,6 +264,12 @@ export type Reminder = {
   amount: number | null;
   series_id: string | null;
   source_text: string;
+  /** The records row this reminder was generated from, when there is one
+   * (e.g. a daycare entry that also flagged a calendar reminder) -- lets an
+   * edit here reach the same row Entries/Expenses read, instead of only
+   * ever changing this reminder's own text/date copy. Absent for a plain
+   * appointment with no backing record. */
+  record_id?: string | null;
   /** Set when this came from News & Events' "To-do" action rather than
    * "Calendar" -- belongs in Up next only, never on the calendar. */
   todo_only?: boolean;

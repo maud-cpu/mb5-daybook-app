@@ -680,26 +680,42 @@ export default function CaptureScreen() {
     // AI as one pending item per child rather than one item naming both --
     // merging same date+category+text items here before insert stops that
     // becoming two duplicate calendar entries instead of one with both names.
-    const reminderGroups = new Map<string, { text: string; date: string; category: string; people: string[] }>();
+    const reminderGroups = new Map<
+      string,
+      { text: string; date: string; category: string; people: string[]; recordId: string | null; recordAmbiguous: boolean }
+    >();
     const reminderOrder: string[] = [];
     pending
-      .filter((p) => p.flag === "reminder")
-      .forEach((p) => {
+      .map((p, idx) => ({ p, idx }))
+      .filter(({ p }) => p.flag === "reminder")
+      .forEach(({ p, idx }) => {
         const text = p.flag_note || p.text;
         const date = p.reminder_date || today();
         const category = p.reminder_category || "personal";
         const key = [date, category, text.trim().toLowerCase()].join("|");
         let group = reminderGroups.get(key);
         if (!group) {
-          group = { text, date, category, people: [] };
+          group = { text, date, category, people: [], recordId: null, recordAmbiguous: false };
           reminderGroups.set(key, group);
           reminderOrder.push(key);
         }
         p.kids.forEach((k) => {
           if (k && !group!.people.includes(k)) group!.people.push(k);
         });
+        // Link back to the priced record behind this reminder -- e.g. a
+        // daycare stay's hours -- so editing it from the calendar can update
+        // the same row Entries/Expenses read, not just this reminder's own
+        // text. Left unset when a mixed group has no priced item, or more
+        // than one, since there'd be no single record to point at.
+        if (p.bucket === "expenses" && p.kind === "daycare") {
+          if (group.recordId === null && !group.recordAmbiguous) group.recordId = inserted?.[idx] ?? null;
+          else group.recordAmbiguous = true;
+        }
       });
-    const reminderRows = reminderOrder.map((k) => reminderGroups.get(k)!);
+    const reminderRows = reminderOrder.map((k) => {
+      const g = reminderGroups.get(k)!;
+      return { text: g.text, date: g.date, category: g.category, people: g.people, record_id: g.recordAmbiguous ? null : g.recordId };
+    });
     if (reminderRows.length) {
       await fetch("/api/reminders", {
         method: "POST",

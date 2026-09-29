@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
 import {
+  EntryRecord,
   REMINDER_CATEGORIES,
   REPEAT_OPTIONS,
   Reminder,
@@ -87,6 +88,11 @@ function daysInMonth(year: number, month: number): number {
 type Draft = { text: string; date: string; category: string; people: string[]; amount: string };
 const emptyDraft = (date: string): Draft => ({ text: "", date, category: REMINDER_CATEGORIES[0][0], people: [], amount: "" });
 
+// A reminder linked to a priced daycare record (see 0074_reminder_record_link.sql)
+// can edit that record's own hours/time here too, so Entries and Expenses see
+// the same change instead of only this reminder's text/date copy.
+type RecordDraft = { id: string; hours: string; time_from: string; time_to: string };
+
 type ExtractedItem = {
   _k: string;
   text: string;
@@ -119,6 +125,8 @@ export default function CalendarScreen() {
   const [until, setUntil] = useState(t);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<Draft | null>(null);
+  const [editRecordDraft, setEditRecordDraft] = useState<RecordDraft | null>(null);
+  const [records, setRecords] = useState<EntryRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [extracting, setExtracting] = useState(false);
@@ -133,7 +141,7 @@ export default function CalendarScreen() {
   async function load() {
     const from = isoOf(year, month, 1);
     const to = isoOf(year, month, daysInMonth(year, month));
-    const [remindersRes, kidsRes, hhKidsRes, adultsRes, { data: f2fCourses }, { data: f2fProgress }, clubsRes] = await Promise.all([
+    const [remindersRes, kidsRes, hhKidsRes, adultsRes, { data: f2fCourses }, { data: f2fProgress }, clubsRes, recordsRes] = await Promise.all([
       fetch("/api/reminders").then((r) => r.json()),
       fetch("/api/children").then((r) => r.json()),
       fetch("/api/household-children").then((r) => r.json()),
@@ -141,7 +149,9 @@ export default function CalendarScreen() {
       supabase.from("shared_training_catalog").select("id, title, session_date").eq("is_face_to_face", true).eq("archived", false),
       supabase.from("training_progress").select("course_title, session_date").not("session_date", "is", null),
       fetch("/api/child-clubs").then((r) => r.json()),
+      fetch("/api/records").then((r) => r.json()),
     ]);
+    setRecords((recordsRes.records as EntryRecord[]) ?? []);
     const kids = kidsRes.children;
     const hhKids = hhKidsRes.children;
     const adults = adultsRes.adults;
@@ -313,6 +323,8 @@ export default function CalendarScreen() {
     if (r.id.startsWith(F2F_PREFIX) || r.id.startsWith(CLUB_PREFIX)) return;
     setEditingId(r.id);
     setEditDraft(draftFrom(r));
+    const rec = r.record_id ? records.find((x) => x.id === r.record_id) : undefined;
+    setEditRecordDraft(rec ? { id: rec.id, hours: rec.hours != null ? String(rec.hours) : "", time_from: rec.time_from ?? "", time_to: rec.time_to ?? "" } : null);
   }
 
   async function saveEdit(id: string) {
@@ -325,13 +337,35 @@ export default function CalendarScreen() {
       amount: editDraft.amount ? Number(editDraft.amount) : null,
       edited_by: myId,
     };
+    const recordDraft = editRecordDraft;
     setEditingId(null);
     setEditDraft(null);
-    await fetch("/api/reminders", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, patch }),
-    });
+    setEditRecordDraft(null);
+    await Promise.all([
+      fetch("/api/reminders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, patch }),
+      }),
+      // Keep the linked record (the one Entries/Expenses actually price) in
+      // step with whatever just changed here, instead of only updating this
+      // reminder's own text/date copy.
+      recordDraft
+        ? fetch("/api/records", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: recordDraft.id,
+              patch: {
+                date: editDraft.date,
+                hours: recordDraft.hours === "" ? null : Number(recordDraft.hours),
+                time_from: recordDraft.time_from || null,
+                time_to: recordDraft.time_to || null,
+              },
+            }),
+          })
+        : Promise.resolve(),
+    ]);
     load();
   }
 
@@ -456,11 +490,45 @@ export default function CalendarScreen() {
                   value={editDraft.amount}
                   onChange={(e) => setEditDraft({ ...editDraft, amount: e.target.value })}
                 />
+                {editRecordDraft && (
+                  <>
+                    <p className="hint" style={{ margin: "6px 0 0" }}>
+                      This also updates the linked entry in Entries/Expenses.
+                    </p>
+                    <div className="row" style={{ marginTop: 4 }}>
+                      <input
+                        type="time"
+                        value={editRecordDraft.time_from}
+                        onChange={(e) => setEditRecordDraft({ ...editRecordDraft, time_from: e.target.value })}
+                      />
+                      <input
+                        type="time"
+                        value={editRecordDraft.time_to}
+                        onChange={(e) => setEditRecordDraft({ ...editRecordDraft, time_to: e.target.value })}
+                      />
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        step="0.25"
+                        placeholder="or hrs"
+                        style={{ flex: "0 0 70px" }}
+                        value={editRecordDraft.hours}
+                        onChange={(e) => setEditRecordDraft({ ...editRecordDraft, hours: e.target.value })}
+                      />
+                    </div>
+                  </>
+                )}
                 <div style={{ marginTop: 6 }}>
                   <button className="chip" onClick={() => saveEdit(r.id)}>
                     Save
                   </button>{" "}
-                  <button className="chip" onClick={() => setEditingId(null)}>
+                  <button
+                    className="chip"
+                    onClick={() => {
+                      setEditingId(null);
+                      setEditRecordDraft(null);
+                    }}
+                  >
                     Cancel
                   </button>{" "}
                   <button className="chip" onClick={() => deleteOne(r)}>

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { today } from "@/lib/domain";
-import { REMINDER_CATEGORIES, reminderCategoryLabel } from "@/lib/types";
+import { EntryRecord, REMINDER_CATEGORIES, reminderCategoryLabel } from "@/lib/types";
 import { addDays, clubText, groupClubsByOccurrence, mondayStartWeekday, personColor } from "@/lib/calendarHelpers";
 import PeoplePicker, { PersonOption } from "@/components/PeoplePicker";
 
@@ -11,10 +11,15 @@ import PeoplePicker, { PersonOption } from "@/components/PeoplePicker";
 // (see CalendarScreen's own CLUB_PREFIX for why), so there's no real row to
 // edit or delete here; that's done from About us instead, same as the full
 // Calendar tab treats it.
-type DayItem = { id: string | null; text: string; color: string; icon: string; category: string; people: string[] };
+type DayItem = { id: string | null; text: string; color: string; icon: string; category: string; people: string[]; record_id: string | null };
 
 type Draft = { text: string; category: string; people: string[] };
 const emptyDraft = (): Draft => ({ text: "", category: REMINDER_CATEGORIES[0][0], people: [] });
+
+// A reminder linked to a priced daycare record (see 0074_reminder_record_link.sql)
+// can edit that record's own hours/time here too, so Entries and Expenses see
+// the same change instead of only this reminder's text copy.
+type RecordDraft = { id: string; hours: string; time_from: string; time_to: string };
 
 function categoryIcon(category: string): string {
   return reminderCategoryLabel(category).split(" ")[0] || "📌";
@@ -47,18 +52,22 @@ export default function MiniCalendarCard() {
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft());
+  const [editRecordDraft, setEditRecordDraft] = useState<RecordDraft | null>(null);
+  const [records, setRecords] = useState<EntryRecord[]>([]);
 
   async function load() {
     const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
     const from = days[0];
     const to = days[6];
-    const [remindersRes, kidsRes, hhKidsRes, adultsRes, clubsRes] = await Promise.all([
+    const [remindersRes, kidsRes, hhKidsRes, adultsRes, clubsRes, recordsRes] = await Promise.all([
       fetch("/api/reminders").then((r) => r.json()),
       fetch("/api/children").then((r) => r.json()),
       fetch("/api/household-children").then((r) => r.json()),
       fetch("/api/household-adults").then((r) => r.json()),
       fetch("/api/child-clubs").then((r) => r.json()),
+      fetch("/api/records").then((r) => r.json()),
     ]);
+    setRecords((recordsRes.records as EntryRecord[]) ?? []);
     const kids = kidsRes.children;
     const hhKids = hhKidsRes.children;
     const adults = adultsRes.adults;
@@ -71,6 +80,7 @@ export default function MiniCalendarCard() {
         category: string;
         done: boolean;
         todo_only: boolean;
+        record_id: string | null;
       }[]) ?? []
     ).filter((r) => r.date >= from && r.date <= to && !r.done && !r.todo_only);
     const clubs = clubsRes.clubs;
@@ -88,6 +98,7 @@ export default function MiniCalendarCard() {
         icon: categoryIcon(r.category),
         category: r.category,
         people: r.people,
+        record_id: r.record_id ?? null,
       });
     });
     const clubRows = (clubs ?? []) as { id: string; child_id: string; club_name: string; weekday: number; time_from: string; time_to: string }[];
@@ -96,7 +107,7 @@ export default function MiniCalendarCard() {
       const text = c.childNames.length > 1 ? `${base} (${c.childNames.join(" & ")})` : base;
       days.forEach((iso) => {
         if (mondayStartWeekday(iso) === c.weekday) {
-          (map[iso] ||= []).push({ id: null, text, color: personColor(c.childNames.join(" & ")), icon: "🧩", category: "club", people: c.childNames });
+          (map[iso] ||= []).push({ id: null, text, color: personColor(c.childNames.join(" & ")), icon: "🧩", category: "club", people: c.childNames, record_id: null });
         }
       });
     });
@@ -123,6 +134,7 @@ export default function MiniCalendarCard() {
   function closeForms() {
     setAdding(false);
     setEditingId(null);
+    setEditRecordDraft(null);
   }
 
   function changeWeek(newStart: string) {
@@ -150,6 +162,8 @@ export default function MiniCalendarCard() {
     setDraft({ text: it.text, category: it.category, people: it.people });
     setAdding(false);
     setEditingId(it.id);
+    const rec = it.record_id ? records.find((x) => x.id === it.record_id) : undefined;
+    setEditRecordDraft(rec ? { id: rec.id, hours: rec.hours != null ? String(rec.hours) : "", time_from: rec.time_from ?? "", time_to: rec.time_to ?? "" } : null);
   }
 
   async function saveAdd() {
@@ -165,12 +179,33 @@ export default function MiniCalendarCard() {
 
   async function saveEdit() {
     if (!editingId || !draft.text.trim()) return;
-    await fetch("/api/reminders", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: editingId, patch: { text: draft.text.trim(), category: draft.category, people: draft.people } }),
-    });
+    const recordDraft = editRecordDraft;
     setEditingId(null);
+    setEditRecordDraft(null);
+    await Promise.all([
+      fetch("/api/reminders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editingId, patch: { text: draft.text.trim(), category: draft.category, people: draft.people } }),
+      }),
+      // Keep the linked record (the one Entries/Expenses actually price) in
+      // step with whatever just changed here, instead of only updating this
+      // reminder's own text copy.
+      recordDraft
+        ? fetch("/api/records", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: recordDraft.id,
+              patch: {
+                hours: recordDraft.hours === "" ? null : Number(recordDraft.hours),
+                time_from: recordDraft.time_from || null,
+                time_to: recordDraft.time_to || null,
+              },
+            }),
+          })
+        : Promise.resolve(),
+    ]);
     load();
   }
 
@@ -342,6 +377,34 @@ export default function MiniCalendarCard() {
                   ))}
                 </select>
                 <PeoplePicker options={personOptions} selected={draft.people} onChange={(v) => setDraft({ ...draft, people: v })} />
+                {editRecordDraft && (
+                  <>
+                    <p className="hint" style={{ margin: "6px 0 0" }}>
+                      This also updates the linked entry in Entries/Expenses.
+                    </p>
+                    <div className="row" style={{ marginTop: 4 }}>
+                      <input
+                        type="time"
+                        value={editRecordDraft.time_from}
+                        onChange={(e) => setEditRecordDraft({ ...editRecordDraft, time_from: e.target.value })}
+                      />
+                      <input
+                        type="time"
+                        value={editRecordDraft.time_to}
+                        onChange={(e) => setEditRecordDraft({ ...editRecordDraft, time_to: e.target.value })}
+                      />
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        step="0.25"
+                        placeholder="or hrs"
+                        style={{ flex: "0 0 70px" }}
+                        value={editRecordDraft.hours}
+                        onChange={(e) => setEditRecordDraft({ ...editRecordDraft, hours: e.target.value })}
+                      />
+                    </div>
+                  </>
+                )}
                 <div style={{ marginTop: 6 }}>
                   <button className="chip" onClick={saveEdit}>
                     Save
