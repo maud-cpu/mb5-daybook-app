@@ -229,10 +229,18 @@ function fmtTime(t: string): string {
   return t.slice(0, 5);
 }
 
+// A record's kids array is in whatever order they were tapped/added in --
+// alphabetical reads far better wherever several names get joined for
+// display (e.g. "Amelia & Zola" rather than however they happened to be
+// selected).
+function joinKids(kids: string[]): string {
+  return [...kids].sort((a, b) => a.localeCompare(b)).join(" & ");
+}
+
 export function describeExpense(rates: Rates, children: Child[], r: EntryRecord): string {
   if (r.kind === "mileage") return `${r.miles} miles — ${r.text}`;
   if (r.kind === "daycare") {
-    const who = r.kids.length ? r.kids.join(" & ") : "⚠ no child linked — priced as one child, band 5–10";
+    const who = r.kids.length ? joinKids(r.kids) : "⚠ no child linked — priced as one child, band 5–10";
     const when = r.overnight
       ? "overnight"
       : r.time_from && r.time_to
@@ -249,7 +257,7 @@ export function describeMeds(r: EntryRecord): string {
     r.dose,
     r.given ? `at ${r.given}` : "",
     r.given_by ? `given by ${r.given_by}` : "",
-    r.kids.length ? r.kids.join(" & ") : "",
+    r.kids.length ? joinKids(r.kids) : "",
     r.text,
   ]
     .filter(Boolean)
