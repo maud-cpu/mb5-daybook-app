@@ -41,7 +41,7 @@ export function bandChangeSoon(child: Pick<Child, "born">): string {
  * name, ungrouped visiting children last) -- so a long roster is always
  * easy to scan instead of listed in whatever order rows were created.
  */
-export function sortChildren<T extends { name: string; lives_here?: boolean | null; family?: string }>(children: T[]): T[] {
+export function sortChildren<T extends { name: string }>(children: T[]): T[] {
   // Defensive: a stray duplicate row (e.g. the same real child accidentally
   // present in both the children and household_children tables) used to
   // show up twice everywhere this feeds into -- chips, filters, dropdowns --
@@ -56,16 +56,13 @@ export function sortChildren<T extends { name: string; lives_here?: boolean | nu
     seen.add(key);
     return true;
   });
-  return deduped.sort((a, b) => {
-    const aHome = a.lives_here !== false;
-    const bHome = b.lives_here !== false;
-    if (aHome !== bHome) return aHome ? -1 : 1;
-    if (!aHome) {
-      const fam = (a.family || "").localeCompare(b.family || "");
-      if (fam !== 0) return fam;
-    }
-    return a.name.localeCompare(b.name);
-  });
+  // Every screen that renders this list (Entries, Handover, Paperwork,
+  // Capture, ...) shows it as a flat chip list with no household/visiting
+  // or family grouping visible -- so a child who isn't "lives_here" or who
+  // shares a family group used to get silently shoved after every other
+  // child regardless of their name. Plain alphabetical is what every one
+  // of those screens actually needs.
+  return deduped.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function findChild(children: Child[], name: string): Child | undefined {
