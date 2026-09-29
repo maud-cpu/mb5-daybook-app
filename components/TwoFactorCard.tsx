@@ -62,7 +62,13 @@ export default function TwoFactorCard() {
     const { data: existing } = await supabase.auth.mfa.listFactors();
     const stale = existing?.totp?.filter((f) => f.status !== "verified") ?? [];
     await Promise.all(stale.map((f) => supabase.auth.mfa.unenroll({ factorId: f.id })));
-    const { data, error: err } = await supabase.auth.mfa.enroll({ factorType: "totp" });
+    // Supabase rejects a new factor whose friendly name collides with an
+    // existing one for this user -- every factor here previously left that
+    // name blank, so a leftover from an earlier attempt (one the cleanup
+    // above couldn't remove, e.g. it was already verified) blocked every
+    // later attempt with the exact same "already exists" error. A name
+    // that's different every time can never collide.
+    const { data, error: err } = await supabase.auth.mfa.enroll({ factorType: "totp", friendlyName: `totp-${Date.now()}` });
     setBusy(false);
     if (err || !data) {
       setError(err?.message || "Couldn't start setup — try again.");
