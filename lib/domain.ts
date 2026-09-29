@@ -42,7 +42,21 @@ export function bandChangeSoon(child: Pick<Child, "born">): string {
  * easy to scan instead of listed in whatever order rows were created.
  */
 export function sortChildren<T extends { name: string; lives_here?: boolean | null; family?: string }>(children: T[]): T[] {
-  return [...children].sort((a, b) => {
+  // Defensive: a stray duplicate row (e.g. the same real child accidentally
+  // present in both the children and household_children tables) used to
+  // show up twice everywhere this feeds into -- chips, filters, dropdowns --
+  // which read as a much stranger bug than "one leftover row somewhere".
+  // Keeping the first occurrence of a name is enough to make every list
+  // read correctly regardless of whether the underlying duplicate has been
+  // cleaned up yet.
+  const seen = new Set<string>();
+  const deduped = children.filter((c) => {
+    const key = c.name.trim().toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return deduped.sort((a, b) => {
     const aHome = a.lives_here !== false;
     const bHome = b.lives_here !== false;
     if (aHome !== bHome) return aHome ? -1 : 1;
