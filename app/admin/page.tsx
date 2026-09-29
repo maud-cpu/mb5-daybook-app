@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/auth";
 import { computeUsage, EntryDateRow } from "@/lib/usageStats";
 import ChangePasswordCard from "@/components/ChangePasswordCard";
+import TwoFactorCard from "@/components/TwoFactorCard";
 import DisplayNameCard from "@/components/DisplayNameCard";
 
 export default async function AdminPage() {
@@ -47,6 +48,7 @@ export default async function AdminPage() {
 
       <DisplayNameCard />
       <ChangePasswordCard />
+      <TwoFactorCard />
     </div>
   );
 }

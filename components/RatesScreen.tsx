@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { gbp, today } from "@/lib/domain";
 import { BANDS, Rates } from "@/lib/types";
 import ChangePasswordCard from "@/components/ChangePasswordCard";
+import TwoFactorCard from "@/components/TwoFactorCard";
 
 type RotaRow = { date: string; name: string; phone: string };
 
@@ -225,6 +226,7 @@ export default function RatesScreen() {
       </div>
 
       <ChangePasswordCard />
+      <TwoFactorCard />
     </div>
   );
 }
