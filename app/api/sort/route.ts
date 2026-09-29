@@ -48,7 +48,7 @@ const SortItemSchema = z.object({
   // nullable/union-typed fields (see the comment further down), and an
   // empty string costs the schema almost nothing.
   eventDate: z.string().describe(
-    "YYYY-MM-DD, resolved against today's date in the correct year -- the date this item's own content actually happened or started, ONLY when the text implies a date other than today (e.g. \"yesterday\", \"last night\", \"on the 27th\", \"since Monday\"). Empty string when the text is about today or gives no date for its own content. This is NOT the same as reminderDate below, which is for a future date something still needs doing.",
+    "YYYY-MM-DD, resolved against today's date in the correct year -- the date this item's own content actually happened, started, OR (for a one-off day care/babysitting session, kind=\"daycare\" only) WILL happen, ONLY when the text implies a date other than today (e.g. \"yesterday\", \"last night\", \"on the 27th\", \"since Monday\", \"tomorrow\", \"on Friday\", \"looking after Teddy tomorrow from 5-8pm\"). Empty string when the text is about today or gives no date for its own content. This is NOT the same as reminderDate below, which is for a future appointment/meeting/event the carer needs to attend or act on, not a care session itself.",
   ),
   // A separate, always-checked, plain non-nullable field rather than relying
   // on the model to also remember to set flag/reminderDate on a daycare item
@@ -330,7 +330,7 @@ export async function POST(req: NextRequest) {
   }
 
   const sys = `You sort a UK foster carer's spoken notes into buckets. Buckets: diary (day-to-day observations about a child), supervision (things to raise with the supervising social worker at next supervision -- including training or CPD the CARER THEMSELVES has attended, is attending, or has completed, e.g. "PDA training at Arthur and Henry's school, 2-3pm" or "did the safer caring refresher today", since that's exactly the kind of thing carers report back on at supervision, not a note about a child's own day), expenses (money spent, miles driven, or day care / babysitting provided for other carers' children), meds (a specific dose of medication given to a child), sw (log of contact with a social worker: calls, visits, what was agreed), incident (serious events needing formal reporting: injury, unexplained bruise, allegation, restraint, going missing, police), scratch (anything the carer says to "just record" or that fits nowhere).
-Today's date is ${today()} -- resolve anything relative ("next Friday", "in two weeks", "the 3rd") against that, in the correct year. If the text says the thing it describes happened, or started, on a day other than today (e.g. "yesterday", "last night", "since Monday", "on the 27th"), set "eventDate" to that date so the record is dated correctly -- leave it empty when the text is about today or gives no date of its own.
+Today's date is ${today()} -- resolve anything relative ("next Friday", "in two weeks", "the 3rd") against that, in the correct year. If the text says the thing it describes happened, or started, on a day other than today (e.g. "yesterday", "last night", "since Monday", "on the 27th"), set "eventDate" to that date so the record is dated correctly -- leave it empty when the text is about today or gives no date of its own. The same applies the other way round for a one-off day care/babysitting session (kind "daycare" only): if it's booked for a future day rather than today (e.g. "looking after Teddy tomorrow from 5-8pm", "having Ruby on Saturday"), set "eventDate" to that future date too, so it's dated correctly and reaches the calendar.
 Children known: ${names.join(", ") || "unknown"}. Match spoken names to these where obvious. If the carer names where something goes, obey. Otherwise choose sensibly; use scratch when unsure. Split into separate items if there are several things. Keep the carer's words, tidied for a written record, British English. Never add facts.
 "kids" for each item must only be children the carer actually names or unambiguously refers to (e.g. "she"/"her" meaning the one child just named) in THAT item's own text — never add a child who isn't mentioned there, even if they're mentioned in a different item from the same note. This includes a child named possessively to identify a place or person (e.g. "at Arthur and Henry's school", "Ruby's dentist", "collecting from Jamie's club") -- naming a child that way to say where/who something involves still means they're being referred to, so put them in "kids" too, even though the sentence isn't really "about" them the way a diary entry usually is. Never drop a named child just because they're only mentioned in passing like this -- an unfamiliar name in "kids" is exactly how this app offers to add a brand new child, so a name left out here never gets asked about at all.
 For expenses set "kind": "purchase" (amount in pounds), "mileage" (miles driven, one item per journey, round trip if they say so), or "daycare" (care given: from/to clock times if the carer says them, otherwise hours; kids = the child cared for, overnight true if they stayed the night -- including any staying/sleeping-over phrasing, e.g. "staying with us", "sleeping over", "stopping the night", "with us overnight", not only the literal word "overnight"). Daycare and overnight are always ONE ITEM PER CHILD, even when several children were cared for on the same occasion at the same time. Overnight is set INDIVIDUALLY per child based on what actually happened to THAT child. When a stay spans several nights with a known end/return date (e.g. "staying with us from last night until the 15th", "with us for the week, back on Sunday"), only log the night(s) that have actually happened as daycare -- never invent a charge for a night that hasn't happened yet -- and see the reminder rule below for the end/return date itself.
@@ -407,6 +407,22 @@ Split into one item per separate thing, under "items".`;
         const who = [child, ...others].filter(Boolean)[0] || "";
         flagNote = who ? `${who}'s stay with us ends` : "Stay with us ends";
       }
+      // Same reasoning as stayEndDate above: a one-off day care session
+      // booked for a future date (e.g. "looking after Teddy tomorrow from
+      // 5-8pm") needs to reach the calendar too, or it's easy to forget
+      // it's coming up -- forced from the date alone rather than trusting
+      // the model to also set flag/reminderDate on a daycare item already
+      // juggling kind/kids/overnight/hours/from/to.
+      const futureDaycareDate =
+        p.kind === "daycare" && typeof p.eventDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(p.eventDate) && p.eventDate > today()
+          ? p.eventDate
+          : "";
+      if (futureDaycareDate && flag !== "reminder") {
+        flag = "reminder";
+        const who = [child, ...others].filter(Boolean).join(" & ");
+        const when = p.overnight ? "overnight" : p.from && p.to ? `${p.from}–${p.to}` : p.hours ? `${p.hours} hrs` : "";
+        flagNote = `Looking after ${who || "a child"}${when ? ` — ${when}` : ""}`;
+      }
       const trainingFromFlag = flag && FLAG_TRAINING[flag as FlagKey];
       // Belt and braces: drop anything the AI suggests that isn't actually
       // in the catalogue it was given, in case it names a real-sounding
@@ -453,11 +469,16 @@ Split into one item per separate thing, under "items".`;
             ? p.reminderDate
             : flag === "reminder" && stayEndDate
               ? stayEndDate
-              : flag === "reminder"
-                ? today()
-                : null,
-        reminder_category:
-          flag === "reminder" && REMINDER_CATEGORY_KEYS.includes(p.reminderCategory) ? p.reminderCategory : "personal",
+              : flag === "reminder" && futureDaycareDate
+                ? futureDaycareDate
+                : flag === "reminder"
+                  ? today()
+                  : null,
+        reminder_category: futureDaycareDate
+          ? "household"
+          : flag === "reminder" && REMINDER_CATEGORY_KEYS.includes(p.reminderCategory)
+            ? p.reminderCategory
+            : "personal",
         training_note: trainingNote,
         unmatched,
         school_contact: p.schoolContact?.name ? { name: p.schoolContact.name, contact: p.schoolContact.contact || "" } : null,
