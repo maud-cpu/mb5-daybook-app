@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { daycareAmount, gbp, sortChildren, today } from "@/lib/domain";
 import { withAmazonAffiliateTag } from "@/lib/amazon";
@@ -74,6 +74,18 @@ export default function CaptureScreen() {
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<PendingItem[]>([]);
   const [warning, setWarning] = useState("");
+  // "Check before saving" renders well below the fold once the calendar/
+  // news cards and everything else on the page is accounted for -- easy to
+  // miss after a sort, looking like nothing happened. Scrolling straight to
+  // it the moment new items land makes it impossible to miss.
+  const pendingReviewRef = useRef<HTMLDivElement | null>(null);
+  const justSortedRef = useRef(false);
+  useEffect(() => {
+    if (justSortedRef.current && pending.length > 0) {
+      justSortedRef.current = false;
+      pendingReviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [pending]);
   // A question typed into the same box ("what time does Eli go to bed?")
   // gets answered from everything on file instead of being sorted into a
   // diary entry -- askedQuestion is captured separately from the live `cap`
@@ -328,6 +340,7 @@ export default function CaptureScreen() {
       if (data.error) {
         showToast(data.error);
       } else {
+        justSortedRef.current = true;
         setPending(data.items ?? []);
         if (data.warning) setWarning(data.warning);
       }
@@ -949,7 +962,7 @@ export default function CaptureScreen() {
       {warning && <div className="note">{warning}</div>}
 
       {pending.length > 0 && (
-        <div className="card">
+        <div className="card" ref={pendingReviewRef}>
           <h3>Check before saving</h3>
           {pending.map((p, i) => (
             <div className="item" key={i}>
