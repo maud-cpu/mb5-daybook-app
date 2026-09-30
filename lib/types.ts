@@ -138,15 +138,20 @@ export function pronounsFor(gender: string): { subject: string; object: string; 
   return null;
 }
 
-// "sgo" and "adopted" used to be separate options alongside "fosters" --
-// merged into one (carer's own choice) since all three are the same thing
-// day-to-day: a permanent family member, not an active placement. Existing
-// "sgo"/"adopted" rows are migrated to "fosters" by
-// 0075_merge_sgo_adopted_into_fosters.sql; nothing else reads those two
-// keys any more.
+// "sgo" and "adopted" used to be separate options, then got merged into a
+// "fosters" option ("Child who fosters (inc. adopted & SGO)") -- which then
+// mislabelled the carer's own birth children who'd been marked "adopted",
+// reading as if they themselves were a foster carer. There's no real,
+// distinct category here at all: a permanent family member who isn't an
+// active placement (own, adopted, SGO, or a family member who happens to
+// themselves foster) is just "blank" -- the same "— placement type —"
+// option a plain birth child already uses. Existing "fosters"/"sgo"/
+// "adopted" rows are migrated to blank by
+// 0076_drop_fosters_category.sql; nothing reads any of those three keys
+// any more.
 export const LIVES_CATS = [
-  ["la_long", "Child in foster care (long-term)"],
-  ["la_short", "Child in foster care (short-term)"],
+  ["la_long", "Long term fostering"],
+  ["la_short", "Short term fostering"],
   ["short_break", "Short break / respite"],
   ["parent_and_child", "Parent and child placement"],
   ["remand", "Remand (youth justice)"],
@@ -154,7 +159,6 @@ export const LIVES_CATS = [
   ["private_fostering", "Private fostering"],
   ["staying_put", "Staying Put (18+)"],
   ["supported_lodgings", "Supported lodgings"],
-  ["fosters", "Child who fosters (inc. adopted & SGO)"],
   ["kinship", "Kinship"],
 ] as const;
 

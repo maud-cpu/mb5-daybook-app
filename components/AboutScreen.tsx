@@ -30,17 +30,15 @@ function firstName(name: string): string {
 // Colour by what someone actually IS, not a per-name hash -- so at a glance
 // on the bubbles or in Visitors, every foster placement reads the same
 // colour regardless of whose bubble it is, distinct from the carer's own
-// child, a child who themselves fosters, or a visiting/day care child.
+// permanent family or a visiting/day care child.
 const CATEGORY_COLOR = {
-  own: "#2f6f8f", // household child: blank category, or kinship
-  fosters: "#8e44ad", // "Child who fosters (inc. adopted & SGO)"
+  own: "#2f6f8f", // household child: blank category (own/adopted/SGO/fosters-too), or kinship
   placement: "#2e8b57", // an actual foster placement (la_long, la_short, etc.)
   visiting: "#d4820a", // visits for day care/sleepovers from another carer
   adultChild: "#c0392b", // grown child still living at home, in the adults list
 } as const;
 
 function householdCategoryColor(category: string): string {
-  if (category === "fosters") return CATEGORY_COLOR.fosters;
   if (category === "" || category === "kinship") return CATEGORY_COLOR.own;
   return CATEGORY_COLOR.placement;
 }
@@ -1443,24 +1441,22 @@ export default function AboutScreen() {
               onApplyExtracted={(patch) => saveBasicsBulk(c.id, "household_children", patch)}
             />
           )}
-          {c.category !== "fosters" && (
-            <div style={{ marginTop: 10 }}>
-              <ChildBasicsPanel
-                showMockingbird={false}
-                mockingbird={c.mockingbird}
-                onMockingbird={(v) => updateHouseholdChild(c.id, { mockingbird: v, ...mockingbirdHubPatch(v) })}
-                hubCarerName={c.hub_carer_name}
-                hubCarerPhone={c.hub_carer_phone}
-                hubCarerEmail={c.hub_carer_email}
-                onHubCarer={(field, v) => updateHouseholdChild(c.id, { [field]: v })}
-                showSurreyContact={c.category === "fosters"}
-                surreyContact={c.surrey_contact}
-                onSurreyContact={(v) => updateHouseholdChild(c.id, { surrey_contact: v })}
-                basics={c.basics || {}}
-                onBasics={(key, value) => saveHouseholdChildBasics(c.id, key, value)}
-              />
-            </div>
-          )}
+          <div style={{ marginTop: 10 }}>
+            <ChildBasicsPanel
+              showMockingbird={false}
+              mockingbird={c.mockingbird}
+              onMockingbird={(v) => updateHouseholdChild(c.id, { mockingbird: v, ...mockingbirdHubPatch(v) })}
+              hubCarerName={c.hub_carer_name}
+              hubCarerPhone={c.hub_carer_phone}
+              hubCarerEmail={c.hub_carer_email}
+              onHubCarer={(field, v) => updateHouseholdChild(c.id, { [field]: v })}
+              showSurreyContact={true}
+              surreyContact={c.surrey_contact}
+              onSurreyContact={(v) => updateHouseholdChild(c.id, { surrey_contact: v })}
+              basics={c.basics || {}}
+              onBasics={(key, value) => saveHouseholdChildBasics(c.id, key, value)}
+            />
+          </div>
           {closeButton()}
         </div>
       );
@@ -1555,7 +1551,11 @@ export default function AboutScreen() {
               hubCarerPhone={c.hub_carer_phone}
               hubCarerEmail={c.hub_carer_email}
               onHubCarer={(field, v) => saveChild(c.id, { [field]: v })}
-              showSurreyContact={c.category === "fosters"}
+              // A visiting/day care child's category is from VISITS_CATS, never
+              // one of LIVES_CATS' own-family values -- Surrey contact never
+              // applied here (this matched nothing even before "fosters" was
+              // removed as a category).
+              showSurreyContact={false}
               surreyContact={c.surrey_contact}
               onSurreyContact={(v) => saveChild(c.id, { surrey_contact: v })}
               basics={cb}
@@ -1600,7 +1600,7 @@ export default function AboutScreen() {
               placement -- not a permanent family arrangement (fostering,
               SGO, adopted, kinship) that was never "a placement" awaiting
               an end date in the first place. */}
-          {!["fosters", "kinship"].includes(c.category) && placementEndField(c)}
+          {!["", "kinship"].includes(c.category) && placementEndField(c)}
           <div className="chips" style={{ marginTop: 6 }}>
             <button className="chip" onClick={() => setOpenSchoolAdmin(open ? null : c.id)}>
               🏫 School admin
@@ -1638,37 +1638,24 @@ export default function AboutScreen() {
                 ))}
               </select>
             )}
-            {c.category === "fosters" ? (
-              <>
-                <p className="hint" style={{ marginTop: 8 }}>
-                  Notes
-                </p>
-                <textarea
-                  placeholder="Anything worth noting — no CSW/health/education details needed for a child who themselves fosters"
-                  defaultValue={cb.notes || ""}
-                  onBlur={(e) => saveChildBasics(c.id, "notes", e.target.value)}
-                />
-              </>
-            ) : (
-              <ChildBasicsPanel
-                // A child confirmed as living in this household is automatically part of
-                // whichever Mockingbird constellation the household itself belongs to (see
-                // "Your Mockingbird" above) -- no need to ask again per child. Left showing
-                // for "not set yet" since we don't know their living arrangement yet.
-                showMockingbird={c.lives_here !== true}
-                mockingbird={c.mockingbird}
-                onMockingbird={(v) => saveChild(c.id, { mockingbird: v, ...mockingbirdHubPatch(v) })}
-                hubCarerName={c.hub_carer_name}
-                hubCarerPhone={c.hub_carer_phone}
-                hubCarerEmail={c.hub_carer_email}
-                onHubCarer={(field, v) => saveChild(c.id, { [field]: v })}
-                showSurreyContact={c.category === "fosters"}
-                surreyContact={c.surrey_contact}
-                onSurreyContact={(v) => saveChild(c.id, { surrey_contact: v })}
-                basics={cb}
-                onBasics={(key, value) => saveChildBasics(c.id, key, value)}
-              />
-            )}
+            <ChildBasicsPanel
+              // A child confirmed as living in this household is automatically part of
+              // whichever Mockingbird constellation the household itself belongs to (see
+              // "Your Mockingbird" above) -- no need to ask again per child. Left showing
+              // for "not set yet" since we don't know their living arrangement yet.
+              showMockingbird={c.lives_here !== true}
+              mockingbird={c.mockingbird}
+              onMockingbird={(v) => saveChild(c.id, { mockingbird: v, ...mockingbirdHubPatch(v) })}
+              hubCarerName={c.hub_carer_name}
+              hubCarerPhone={c.hub_carer_phone}
+              hubCarerEmail={c.hub_carer_email}
+              onHubCarer={(field, v) => saveChild(c.id, { [field]: v })}
+              showSurreyContact={["", "kinship"].includes(c.category)}
+              surreyContact={c.surrey_contact}
+              onSurreyContact={(v) => saveChild(c.id, { surrey_contact: v })}
+              basics={cb}
+              onBasics={(key, value) => saveChildBasics(c.id, key, value)}
+            />
           </div>
           {closeButton()}
         </div>
@@ -1748,8 +1735,7 @@ export default function AboutScreen() {
         </div>
         <div className="chips" style={{ marginTop: 10 }}>
           {[
-            ["Your own/kinship child", CATEGORY_COLOR.own],
-            ["Child who fosters (inc. adopted & SGO)", CATEGORY_COLOR.fosters],
+            ["Your own family (own/adopted/SGO/kinship)", CATEGORY_COLOR.own],
             ["Foster placement", CATEGORY_COLOR.placement],
             ["Visiting/day care child", CATEGORY_COLOR.visiting],
             ["Adult child (in Adults)", CATEGORY_COLOR.adultChild],
