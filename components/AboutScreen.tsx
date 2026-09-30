@@ -1596,7 +1596,11 @@ export default function AboutScreen() {
           <div className="row" style={{ marginTop: 6 }}>
             <GenderSelect value={c.gender} onChange={(v) => saveChild(c.id, { gender: v })} />
           </div>
-          {placementEndField(c)}
+          {/* A placement end date only makes sense for an actual, ongoing
+              placement -- not a permanent family arrangement (fostering,
+              SGO, adopted, kinship) that was never "a placement" awaiting
+              an end date in the first place. */}
+          {!["fosters", "sgo", "adopted", "kinship"].includes(c.category) && placementEndField(c)}
           <div className="chips" style={{ marginTop: 6 }}>
             <button className="chip" onClick={() => setOpenSchoolAdmin(open ? null : c.id)}>
               🏫 School admin
