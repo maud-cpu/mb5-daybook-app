@@ -138,9 +138,15 @@ export function pronounsFor(gender: string): { subject: string; object: string; 
   return null;
 }
 
+// "sgo" and "adopted" used to be separate options alongside "fosters" --
+// merged into one (carer's own choice) since all three are the same thing
+// day-to-day: a permanent family member, not an active placement. Existing
+// "sgo"/"adopted" rows are migrated to "fosters" by
+// 0075_merge_sgo_adopted_into_fosters.sql; nothing else reads those two
+// keys any more.
 export const LIVES_CATS = [
-  ["la_long", "Looked after (long term)"],
-  ["la_short", "Looked after (short term)"],
+  ["la_long", "Child in foster care (long-term)"],
+  ["la_short", "Child in foster care (short-term)"],
   ["short_break", "Short break / respite"],
   ["parent_and_child", "Parent and child placement"],
   ["remand", "Remand (youth justice)"],
@@ -148,9 +154,7 @@ export const LIVES_CATS = [
   ["private_fostering", "Private fostering"],
   ["staying_put", "Staying Put (18+)"],
   ["supported_lodgings", "Supported lodgings"],
-  ["fosters", "Child who fosters"],
-  ["sgo", "SGO"],
-  ["adopted", "Adopted"],
+  ["fosters", "Child who fosters (inc. adopted & SGO)"],
   ["kinship", "Kinship"],
 ] as const;
 

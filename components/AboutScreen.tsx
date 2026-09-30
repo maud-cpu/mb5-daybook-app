@@ -41,7 +41,7 @@ const CATEGORY_COLOR = {
 
 function householdCategoryColor(category: string): string {
   if (category === "fosters") return CATEGORY_COLOR.fosters;
-  if (category === "" || ["sgo", "adopted", "kinship"].includes(category)) return CATEGORY_COLOR.own;
+  if (category === "" || category === "kinship") return CATEGORY_COLOR.own;
   return CATEGORY_COLOR.placement;
 }
 
@@ -1453,7 +1453,7 @@ export default function AboutScreen() {
                 hubCarerPhone={c.hub_carer_phone}
                 hubCarerEmail={c.hub_carer_email}
                 onHubCarer={(field, v) => updateHouseholdChild(c.id, { [field]: v })}
-                showSurreyContact={["sgo", "adopted"].includes(c.category)}
+                showSurreyContact={c.category === "fosters"}
                 surreyContact={c.surrey_contact}
                 onSurreyContact={(v) => updateHouseholdChild(c.id, { surrey_contact: v })}
                 basics={c.basics || {}}
@@ -1555,7 +1555,7 @@ export default function AboutScreen() {
               hubCarerPhone={c.hub_carer_phone}
               hubCarerEmail={c.hub_carer_email}
               onHubCarer={(field, v) => saveChild(c.id, { [field]: v })}
-              showSurreyContact={["sgo", "adopted"].includes(c.category)}
+              showSurreyContact={c.category === "fosters"}
               surreyContact={c.surrey_contact}
               onSurreyContact={(v) => saveChild(c.id, { surrey_contact: v })}
               basics={cb}
@@ -1600,7 +1600,7 @@ export default function AboutScreen() {
               placement -- not a permanent family arrangement (fostering,
               SGO, adopted, kinship) that was never "a placement" awaiting
               an end date in the first place. */}
-          {!["fosters", "sgo", "adopted", "kinship"].includes(c.category) && placementEndField(c)}
+          {!["fosters", "kinship"].includes(c.category) && placementEndField(c)}
           <div className="chips" style={{ marginTop: 6 }}>
             <button className="chip" onClick={() => setOpenSchoolAdmin(open ? null : c.id)}>
               🏫 School admin
@@ -1662,7 +1662,7 @@ export default function AboutScreen() {
                 hubCarerPhone={c.hub_carer_phone}
                 hubCarerEmail={c.hub_carer_email}
                 onHubCarer={(field, v) => saveChild(c.id, { [field]: v })}
-                showSurreyContact={["sgo", "adopted"].includes(c.category)}
+                showSurreyContact={c.category === "fosters"}
                 surreyContact={c.surrey_contact}
                 onSurreyContact={(v) => saveChild(c.id, { surrey_contact: v })}
                 basics={cb}
