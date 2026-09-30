@@ -71,8 +71,9 @@ const SortItemSchema = z.object({
   // Zod can validate directly, and the mapping below already treats an
   // empty/falsy string exactly like null everywhere it's read -- so this
   // frees up headroom for the object fields that actually need null.
-  from: z.string().describe("HH:MM, or empty string if not given"),
-  to: z.string().describe("HH:MM, or empty string if not given"),
+  // Transcribed as said, not converted -- see parseClockTime below for why.
+  from: z.string().describe("The time exactly as the carer said it, e.g. \"3pm\", \"3:30pm\", \"15:00\", \"9am\", \"9.30\" -- do NOT convert 12-hour to 24-hour yourself, just transcribe it as closely as possible. Empty string if not given."),
+  to: z.string().describe("Same as \"from\" above, for the end time."),
   reason: z.string().describe("empty string if not given"),
   hours: z.number().nullable(),
   kids: z.array(z.string()),
@@ -160,6 +161,28 @@ const SortItemSchema = z.object({
     ),
 });
 const SortResponseSchema = z.object({ items: z.array(SortItemSchema) });
+
+/**
+ * The model reliably transcribes a spoken time but occasionally miscalculates
+ * the 12-to-24-hour conversion itself (caught live: "3pm til 6pm" came back
+ * as time_from "14:00" -- an hour short of 3pm -- which then also threw off
+ * the priced hours). Asking it to transcribe the time as said instead, and
+ * doing this conversion here in code, makes it deterministic rather than
+ * hoping the model's arithmetic is right every time.
+ */
+function parseClockTime(raw: string): string {
+  const s = String(raw || "").trim().toLowerCase();
+  if (!s) return "";
+  const m = s.match(/^(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)?$/);
+  if (!m) return /^\d{2}:\d{2}$/.test(s) ? s : "";
+  let hour = Number(m[1]);
+  const minute = m[2] ?? "00";
+  const meridiem = m[3];
+  if (hour > 23 || Number(minute) > 59) return "";
+  if (meridiem === "pm" && hour < 12) hour += 12;
+  if (meridiem === "am" && hour === 12) hour = 0;
+  return `${String(hour).padStart(2, "0")}:${minute}`;
+}
 
 function matchChild(names: string[], x: string | null | undefined): string {
   if (!x) return "";
@@ -412,6 +435,8 @@ Split into one item per separate thing, under "items".`;
       const others = rawOthers.map((o) => matchChild(names, o));
       const kids = [...new Set([child, ...others].filter(Boolean))];
       const unmatched = rawNames.filter((n) => !matchChild(names, n));
+      const timeFrom = parseClockTime(p.from);
+      const timeTo = parseClockTime(p.to);
       let flag: string = p.flag && (FLAG_KEYS as readonly string[]).includes(p.flag) ? p.flag : "";
       let flagNote = p.flagNote || "";
       if (!flag) {
@@ -444,7 +469,7 @@ Split into one item per separate thing, under "items".`;
       if (futureDaycareDate && flag !== "reminder") {
         flag = "reminder";
         const who = [child, ...others].filter(Boolean).join(" & ");
-        const when = p.overnight ? "overnight" : p.from && p.to ? `${p.from}–${p.to}` : p.hours ? `${p.hours} hrs` : "";
+        const when = p.overnight ? "overnight" : timeFrom && timeTo ? `${timeFrom}–${timeTo}` : p.hours ? `${p.hours} hrs` : "";
         flagNote = `Looking after ${who || "a child"}${when ? ` — ${when}` : ""}`;
       }
       const trainingFromFlag = flag && FLAG_TRAINING[flag as FlagKey];
@@ -478,8 +503,8 @@ Split into one item per separate thing, under "items".`;
         amount: p.amount ?? null,
         miles: p.miles ?? null,
         hours: p.hours ?? null,
-        time_from: p.from || null,
-        time_to: p.to || null,
+        time_from: timeFrom || null,
+        time_to: timeTo || null,
         reason: p.reason || "",
         overnight: !!p.overnight,
         med_name: p.medName || "",
