@@ -59,3 +59,23 @@ export async function findPersonByName(
 export function confirmUseExisting(name: string): boolean {
   return confirm(`"${name.trim()}" is already on your list. Use that one instead of adding a new, separate entry?`);
 }
+
+export type ChildTableMatch = NameMatch & { table: "children" | "household_children" };
+
+// A child can legitimately be on file in either table -- a foster placement
+// (children) or the carer's own/adopted/kinship child (household_children)
+// -- so a form that only ever creates a row in ITS OWN table still has to
+// check the OTHER one too before assuming a name is new. Checking only one
+// is exactly how an already-registered child (Ruby, Rubynn) ended up with a
+// second, blank "ghost" record: every add-flow that used to check just its
+// own table now uses this instead.
+export async function findPersonInEitherChildTable(
+  supabase: SupabaseBrowserClient,
+  name: string,
+): Promise<ChildTableMatch | null> {
+  const inChildren = await findPersonByName(supabase, "children", name);
+  if (inChildren) return { ...inChildren, table: "children" };
+  const inHousehold = await findPersonByName(supabase, "household_children", name);
+  if (inHousehold) return { ...inHousehold, table: "household_children" };
+  return null;
+}

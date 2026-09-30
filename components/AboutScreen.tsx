@@ -7,7 +7,7 @@ import { today } from "@/lib/domain";
 import { BASICS_SECTIONS, RepeatableSubfield } from "@/lib/basics";
 import { Child, GENDER_OPTIONS, LIVES_CATS, livesHereOf, MB_OPTIONS, VISITS_CATS } from "@/lib/types";
 import { personColor } from "@/lib/calendarHelpers";
-import { confirmUseExisting, findPersonByName } from "@/lib/findOrCreate";
+import { confirmUseExisting, findPersonByName, findPersonInEitherChildTable } from "@/lib/findOrCreate";
 import ChildSchoolAdmin from "@/components/ChildSchoolAdmin";
 import ChildClubs from "@/components/ChildClubs";
 import ChildDocuments from "@/components/ChildDocuments";
@@ -599,11 +599,11 @@ export default function AboutScreen() {
   async function addHouseholdChild() {
     if (!newHouseholdChild.name.trim()) return;
     setAddNotice("");
-    const match = await findPersonByName(supabase, "household_children", newHouseholdChild.name);
+    const match = await findPersonInEitherChildTable(supabase, newHouseholdChild.name);
     if (match && confirmUseExisting(match.name)) {
       setNewHouseholdChild({ name: "", born: "", category: "", notes: "", gender: "" });
       setAddNotice(`Already had ${match.name} on your list — showing them below instead of adding a second one.`);
-      setSelected(`hh:${match.id}`);
+      setSelected(match.table === "household_children" ? `hh:${match.id}` : `child:${match.id}`);
       return;
     }
     await fetch("/api/household-children", {
@@ -787,13 +787,13 @@ export default function AboutScreen() {
   async function addVisitingChild() {
     if (!newVisitingChild.name.trim()) return;
     setAddNotice("");
-    const match = await findPersonByName(supabase, "children", newVisitingChild.name);
+    const match = await findPersonInEitherChildTable(supabase, newVisitingChild.name);
     if (match && confirmUseExisting(match.name)) {
       setNewVisitingChild({ name: "", born: "", category: VISITS_CATS[0][0], gender: "" });
       setImportText("");
       setPendingImportBasics(null);
       setAddNotice(`Already had ${match.name} on your list — showing them below instead of adding a second one.`);
-      setSelected(`visit:${match.id}`);
+      setSelected(match.table === "household_children" ? `hh:${match.id}` : `visit:${match.id}`);
       return;
     }
     const res = await fetch("/api/children", {
@@ -1644,15 +1644,30 @@ export default function AboutScreen() {
   // caught and cleaned up instead of drifting further out of sync.
   const duplicateNameGroups = (() => {
     type Entry = { selectId: string; name: string };
-    const byName = new Map<string, Entry[]>();
-    const add = (name: string, selectId: string) => {
-      const key = name.trim().toLowerCase();
-      if (!key) return;
-      (byName.get(key) ?? byName.set(key, []).get(key)!).push({ selectId, name });
+    const all: Entry[] = [
+      ...children
+        .filter((c) => c.name.trim())
+        .map((c) => ({ selectId: c.lives_here === false ? `visit:${c.id}` : `child:${c.id}`, name: c.name })),
+      ...householdChildren.filter((c) => c.name.trim()).map((c) => ({ selectId: `hh:${c.id}`, name: c.name })),
+    ];
+    // A plain exact match alone missed a real duplicate (Ruby, Rubynn) that
+    // must have had some invisible difference between the two names -- the
+    // same first-3-letters fallback matchChild already uses (in /api/sort)
+    // to match a spoken name against the roster catches a near-miss like
+    // that too, not just a byte-identical one.
+    const norm = (n: string) => n.trim().toLowerCase();
+    const near = (a: string, b: string) => {
+      const x = norm(a);
+      const y = norm(b);
+      return x === y || (x.length >= 3 && y.length >= 3 && x.slice(0, 3) === y.slice(0, 3));
     };
-    children.forEach((c) => add(c.name, c.lives_here === false ? `visit:${c.id}` : `child:${c.id}`));
-    householdChildren.forEach((c) => add(c.name, `hh:${c.id}`));
-    return [...byName.values()].filter((entries) => entries.length > 1);
+    const groups: Entry[][] = [];
+    all.forEach((entry) => {
+      const group = groups.find((g) => g.some((e) => near(e.name, entry.name)));
+      if (group) group.push(entry);
+      else groups.push([entry]);
+    });
+    return groups.filter((g) => g.length > 1);
   })();
 
   return (

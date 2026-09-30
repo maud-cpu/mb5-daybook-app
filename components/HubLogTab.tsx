@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { today } from "@/lib/domain";
 import { HUB_SUPPORT_TYPES } from "@/lib/types";
-import { confirmUseExisting, findPersonByName } from "@/lib/findOrCreate";
+import { confirmUseExisting, findPersonByName, findPersonInEitherChildTable } from "@/lib/findOrCreate";
 
 const SUPPORT_TYPES = HUB_SUPPORT_TYPES;
 
@@ -95,7 +95,18 @@ export default function HubLogTab() {
   async function addChildFor(visitorId: string) {
     const name = (newChildName[visitorId] || "").trim();
     if (!name) return;
-    const match = await findPersonByName(supabase, "children", name);
+    // Check both tables, not just "children" -- this is exactly how an
+    // already-registered household child (Ruby, Rubynn) got a second,
+    // blank "ghost" record here: this form only ever checked the one
+    // table it creates into, so a name that was actually already on file
+    // as the carer's own/adopted/kinship child looked unregistered.
+    const match = await findPersonInEitherChildTable(supabase, name);
+    if (match && match.table === "household_children") {
+      // household_children has no linked_visitor_id column -- this is the
+      // carer's own child, not someone to add as a visiting hub child.
+      alert(`"${match.name}" already lives in your household (see About us) -- not someone to add as a visiting child here.`);
+      return;
+    }
     if (match && confirmUseExisting(match.name)) {
       // Already on file, just not linked to this carer yet -- link the
       // existing child instead of creating a second row for the same kid.
