@@ -32,8 +32,8 @@ function firstName(name: string): string {
 // colour regardless of whose bubble it is, distinct from the carer's own
 // child, a child who themselves fosters, or a visiting/day care child.
 const CATEGORY_COLOR = {
-  own: "#2f6f8f", // household child: blank category, or sgo/adopted/kinship
-  fosters: "#8e44ad", // "Child who fosters"
+  own: "#2f6f8f", // household child: blank category, or kinship
+  fosters: "#8e44ad", // "Child who fosters (inc. adopted & SGO)"
   placement: "#2e8b57", // an actual foster placement (la_long, la_short, etc.)
   visiting: "#d4820a", // visits for day care/sleepovers from another carer
   adultChild: "#c0392b", // grown child still living at home, in the adults list
@@ -1748,8 +1748,8 @@ export default function AboutScreen() {
         </div>
         <div className="chips" style={{ marginTop: 10 }}>
           {[
-            ["Your own/adopted/kinship child", CATEGORY_COLOR.own],
-            ["Child who fosters", CATEGORY_COLOR.fosters],
+            ["Your own/kinship child", CATEGORY_COLOR.own],
+            ["Child who fosters (inc. adopted & SGO)", CATEGORY_COLOR.fosters],
             ["Foster placement", CATEGORY_COLOR.placement],
             ["Visiting/day care child", CATEGORY_COLOR.visiting],
             ["Adult child (in Adults)", CATEGORY_COLOR.adultChild],
