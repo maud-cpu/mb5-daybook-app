@@ -27,6 +27,24 @@ function firstName(name: string): string {
   return (name || "").trim().split(/\s+/)[0] || "?";
 }
 
+// Colour by what someone actually IS, not a per-name hash -- so at a glance
+// on the bubbles or in Visitors, every foster placement reads the same
+// colour regardless of whose bubble it is, distinct from the carer's own
+// child, a child who themselves fosters, or a visiting/day care child.
+const CATEGORY_COLOR = {
+  own: "#2f6f8f", // household child: blank category, or sgo/adopted/kinship
+  fosters: "#8e44ad", // "Child who fosters"
+  placement: "#2e8b57", // an actual foster placement (la_long, la_short, etc.)
+  visiting: "#d4820a", // visits for day care/sleepovers from another carer
+  adultChild: "#c0392b", // grown child still living at home, in the adults list
+} as const;
+
+function householdCategoryColor(category: string): string {
+  if (category === "fosters") return CATEGORY_COLOR.fosters;
+  if (category === "" || ["sgo", "adopted", "kinship"].includes(category)) return CATEGORY_COLOR.own;
+  return CATEGORY_COLOR.placement;
+}
+
 // A name alone isn't a reliable signal of pronouns -- asking once here lets
 // generated documents (Handover, diary drafts) get it right instead of
 // guessing from the name and sometimes getting it wrong.
@@ -894,8 +912,8 @@ export default function AboutScreen() {
   const householdCenter: WheelNode = { id: CENTER_NODE, label: centerLabel, color: CENTER_COLOR };
 
   const householdRing: WheelNode[] = [
-    ...livingChildren.map((c) => ({ id: `child:${c.id}`, label: firstName(c.name), color: personColor(c.name) })),
-    ...householdChildren.map((c) => ({ id: `hh:${c.id}`, label: firstName(c.name), color: personColor(c.name) })),
+    ...livingChildren.map((c) => ({ id: `child:${c.id}`, label: firstName(c.name), color: householdCategoryColor(c.category) })),
+    ...householdChildren.map((c) => ({ id: `hh:${c.id}`, label: firstName(c.name), color: householdCategoryColor(c.category) })),
     { id: ADD_HH_CHILD, label: "+", color: "", dashed: true },
   ];
 
@@ -983,7 +1001,11 @@ export default function AboutScreen() {
             </p>
           )}
           {adults.map((a) => (
-            <div className="item" key={a.id}>
+            <div
+              className="item"
+              key={a.id}
+              style={a.role === "Adult child" ? { borderLeft: `4px solid ${CATEGORY_COLOR.adultChild}` } : undefined}
+            >
               <div className="row">
                 <input value={a.name} onChange={(e) => updateAdult(a.id, { name: e.target.value })} />
                 <select value={a.role} onChange={(e) => updateAdult(a.id, { role: e.target.value })}>
@@ -1720,6 +1742,20 @@ export default function AboutScreen() {
             maxWidth="380px"
           />
         </div>
+        <div className="chips" style={{ marginTop: 10 }}>
+          {[
+            ["Your own/adopted/kinship child", CATEGORY_COLOR.own],
+            ["Child who fosters", CATEGORY_COLOR.fosters],
+            ["Foster placement", CATEGORY_COLOR.placement],
+            ["Visiting/day care child", CATEGORY_COLOR.visiting],
+            ["Adult child (in Adults)", CATEGORY_COLOR.adultChild],
+          ].map(([label, color]) => (
+            <span key={label} className="hint" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+              <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, display: "inline-block" }} />
+              {label}
+            </span>
+          ))}
+        </div>
       </div>
 
       <div className="card">
@@ -1802,6 +1838,7 @@ export default function AboutScreen() {
                           key={c.id}
                           type="button"
                           className={`chip${selected === `visit:${c.id}` ? " on" : ""}`}
+                          style={{ borderLeft: `3px solid ${CATEGORY_COLOR.visiting}` }}
                           onClick={(e) => {
                             e.stopPropagation();
                             selectVisitorsNode(`visit:${c.id}`);
@@ -1843,6 +1880,7 @@ export default function AboutScreen() {
                       key={c.id}
                       type="button"
                       className={`chip${selected === `visit:${c.id}` ? " on" : ""}`}
+                      style={{ borderLeft: `3px solid ${CATEGORY_COLOR.visiting}` }}
                       onClick={(e) => {
                         e.stopPropagation();
                         selectVisitorsNode(`visit:${c.id}`);
@@ -1869,7 +1907,7 @@ export default function AboutScreen() {
                 style={{
                   cursor: "pointer",
                   marginTop: 8,
-                  borderLeft: `4px solid ${personColor(c.name)}`,
+                  borderLeft: `4px solid ${CATEGORY_COLOR.visiting}`,
                   background: selected === `visit:${c.id}` ? "var(--pine-soft)" : undefined,
                   boxShadow: selected === `visit:${c.id}` ? "0 0 0 2px var(--pine)" : undefined,
                 }}
