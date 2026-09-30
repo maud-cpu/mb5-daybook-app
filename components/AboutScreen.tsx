@@ -1650,20 +1650,16 @@ export default function AboutScreen() {
         .map((c) => ({ selectId: c.lives_here === false ? `visit:${c.id}` : `child:${c.id}`, name: c.name })),
       ...householdChildren.filter((c) => c.name.trim()).map((c) => ({ selectId: `hh:${c.id}`, name: c.name })),
     ];
-    // A plain exact match alone missed a real duplicate (Ruby, Rubynn) that
-    // must have had some invisible difference between the two names -- the
-    // same first-3-letters fallback matchChild already uses (in /api/sort)
-    // to match a spoken name against the roster catches a near-miss like
-    // that too, not just a byte-identical one.
+    // Exact match only (after trim/case-folding) -- a first-3-letters fuzzy
+    // match was tried here and immediately flagged Eli Okandju/Elijah/Elise/
+    // Eliza as one cluster and Ruby/Rubynn as another, purely for sharing a
+    // few letters, even though every one of those is a genuinely different
+    // child. A shared prefix is completely normal among real names; only an
+    // exact name is actually worth asking about.
     const norm = (n: string) => n.trim().toLowerCase();
-    const near = (a: string, b: string) => {
-      const x = norm(a);
-      const y = norm(b);
-      return x === y || (x.length >= 3 && y.length >= 3 && x.slice(0, 3) === y.slice(0, 3));
-    };
     const groups: Entry[][] = [];
     all.forEach((entry) => {
-      const group = groups.find((g) => g.some((e) => near(e.name, entry.name)));
+      const group = groups.find((g) => norm(g[0].name) === norm(entry.name));
       if (group) group.push(entry);
       else groups.push([entry]);
     });
