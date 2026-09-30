@@ -45,7 +45,12 @@ export const BASICS_SECTIONS: BasicsSection[] = [
     fields: [
       { key: "status", label: "Legal status", select: LEGAL_STATUS_OPTIONS },
       { key: "start", label: "Placement started" },
-      { key: "type", label: "Placement type", select: ["Long-term", "Short-term", "Respite", "Emergency"] },
+      // "Placement type" (long-term/short-term/respite/emergency) used to be
+      // a second, separate field here -- exactly duplicating what the
+      // child's own category dropdown (About us) already says, more
+      // precisely, and with nothing keeping the two in step. Removed rather
+      // than added-to-and-synced: one field that's always right beats two
+      // that can quietly disagree.
       { key: "la", label: "Placing authority" },
     ],
   },
