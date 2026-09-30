@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { today } from "@/lib/domain";
+import { ageOf, today } from "@/lib/domain";
 import { BASICS_SECTIONS, RepeatableSubfield } from "@/lib/basics";
 import { Child, GENDER_OPTIONS, LIVES_CATS, livesHereOf, MB_OPTIONS, VISITS_CATS } from "@/lib/types";
 import { personColor } from "@/lib/calendarHelpers";
@@ -1381,6 +1381,12 @@ export default function AboutScreen() {
               onChange={(e) => updateHouseholdChild(c.id, { born: e.target.value || null })}
             />
           </div>
+          {(ageOf({ born: c.born }) ?? 0) >= 18 && (
+            <p className="hint" style={{ color: "var(--danger)" }}>
+              ⚠ This date of birth makes {c.name || "them"} 18 or over — they may belong in &quot;Adults in your
+              household&quot; instead (tap the centre circle above) rather than as a child.
+            </p>
+          )}
           <div className="row">
             <select value={c.category} onChange={(e) => updateHouseholdChild(c.id, { category: e.target.value })}>
               <option value="">— placement type —</option>
@@ -1467,6 +1473,12 @@ export default function AboutScreen() {
               onChange={(e) => saveChild(c.id, { born: e.target.value || null })}
             />
           </div>
+          {(ageOf({ born: c.born }) ?? 0) >= 18 && (
+            <p className="hint" style={{ color: "var(--danger)" }}>
+              ⚠ This date of birth makes {c.name || "them"} 18 or over — they may belong in &quot;Adults in your
+              household&quot; instead (tap the centre circle above) rather than as a child.
+            </p>
+          )}
           <div className="row">
             <select value={c.category} onChange={(e) => saveChild(c.id, { category: e.target.value })}>
               <option value="">— placement type —</option>
@@ -1553,6 +1565,12 @@ export default function AboutScreen() {
             {LIVES_CATS.find(([k]) => k === c.category)?.[1] ?? (c.lives_here === true ? "Lives with us" : "Not set yet")}
             {c.mockingbird ? " · " + (MB_OPTIONS.find(([k]) => k === c.mockingbird)?.[1] ?? c.mockingbird) : ""}
           </div>
+          {(ageOf({ born: c.born }) ?? 0) >= 18 && (
+            <p className="hint" style={{ color: "var(--danger)" }}>
+              ⚠ Their date of birth makes {c.name || "them"} 18 or over — they may belong in &quot;Adults in your
+              household&quot; instead (tap the centre circle above) rather than as a child.
+            </p>
+          )}
           <div className="row" style={{ marginTop: 6 }}>
             <GenderSelect value={c.gender} onChange={(v) => saveChild(c.id, { gender: v })} />
           </div>
@@ -1688,7 +1706,11 @@ export default function AboutScreen() {
       )}
       <div className="card">
         <h3>About us</h3>
-        <p className="hint">Your household — tap a circle to see and edit their details.</p>
+        <p className="hint">
+          Your household — tap a circle to see and edit their details. Tap the centre circle to add or manage the
+          adults in your household (including an adult child still living with you); tap + on the ring to add a
+          child.
+        </p>
         <div className="about-wheels">
           <RadialWheel
             center={householdCenter}
