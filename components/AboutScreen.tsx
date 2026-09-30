@@ -1751,8 +1751,8 @@ export default function AboutScreen() {
             having no key at all. */}
         <div className="chips" style={{ marginTop: 10 }}>
           {[
-            ["Family", CATEGORY_COLOR.own],
-            ["Foster placement", CATEGORY_COLOR.placement],
+            ["No active placement", CATEGORY_COLOR.own],
+            ["Active placement", CATEGORY_COLOR.placement],
           ].map(([label, color]) => (
             <span key={label} className="hint" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
               <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, display: "inline-block" }} />
