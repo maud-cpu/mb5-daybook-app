@@ -45,7 +45,7 @@ export const BASICS_SECTIONS: BasicsSection[] = [
     fields: [
       { key: "status", label: "Legal status", select: LEGAL_STATUS_OPTIONS },
       { key: "start", label: "Placement started" },
-      { key: "type", label: "Placement type", placeholder: "long-term / short-term / respite / emergency" },
+      { key: "type", label: "Placement type", select: ["Long-term", "Short-term", "Respite", "Emergency"] },
       { key: "la", label: "Placing authority" },
     ],
   },
