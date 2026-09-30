@@ -1120,8 +1120,8 @@ export default function AboutScreen() {
         <div className="card">
           <h3>Add a child in your household</h3>
           <p className="hint">
-            A child living here who isn&apos;t an active fostering placement — your own, adopted, kinship, SGO, or a
-            child who themselves fosters. New foster placements are added from Capture.
+            A child living here who isn&apos;t an active fostering placement — birth, adopted, kinship, SGO, or a
+            family member who themselves fosters. New foster placements are added from Capture.
           </p>
           <div className="row">
             <input
@@ -1735,7 +1735,7 @@ export default function AboutScreen() {
         </div>
         <div className="chips" style={{ marginTop: 10 }}>
           {[
-            ["Your own family (own/adopted/SGO/kinship)", CATEGORY_COLOR.own],
+            ["Family — not an active placement (birth/adopted/SGO/kinship)", CATEGORY_COLOR.own],
             ["Foster placement", CATEGORY_COLOR.placement],
             ["Visiting/day care child", CATEGORY_COLOR.visiting],
             ["Adult child (in Adults)", CATEGORY_COLOR.adultChild],
