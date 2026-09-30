@@ -993,6 +993,18 @@ export default function AboutScreen() {
         <div className="card">
           <h3>Adults in your household</h3>
           <p className="hint">Everyone in the household — so it&apos;s all in one place, not scattered across contacts.</p>
+          <p className="hint" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <span
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: "50%",
+                background: CATEGORY_COLOR.adultChild,
+                display: "inline-block",
+              }}
+            />
+            An &quot;Adult child&quot; is marked with this colour below.
+          </p>
           {removeError && (
             <p className="hint" style={{ color: "var(--danger)" }}>
               Couldn&apos;t remove: {removeError}
@@ -1120,8 +1132,8 @@ export default function AboutScreen() {
         <div className="card">
           <h3>Add a child in your household</h3>
           <p className="hint">
-            A child living here who isn&apos;t an active fostering placement — birth, adopted, kinship, SGO, or a
-            family member who themselves fosters. New foster placements are added from Capture.
+            A child living here who isn&apos;t an active fostering placement — part of your family, however that came
+            about. New foster placements are added from Capture.
           </p>
           <div className="row">
             <input
@@ -1718,11 +1730,10 @@ export default function AboutScreen() {
         </div>
       )}
       <div className="card">
-        <h3>About us</h3>
+        <h3>Our household</h3>
         <p className="hint">
-          Your household — tap a circle to see and edit their details. Tap the centre circle to add or manage the
-          adults in your household (including an adult child still living with you); tap + on the ring to add a
-          child.
+          Tap a circle to see and edit their details, or the centre circle for the adults living here. Tap + on the
+          ring to add a child.
         </p>
         <div className="about-wheels">
           <RadialWheel
@@ -1733,12 +1744,15 @@ export default function AboutScreen() {
             maxWidth="380px"
           />
         </div>
+        {/* Only the two colours that actually appear on the wheel itself --
+            "Visiting/day care child" and "Adult child" live in the Visitors
+            card and the Adults panel respectively, so explaining them here,
+            above a wheel that never shows them, was more confusing than
+            having no key at all. */}
         <div className="chips" style={{ marginTop: 10 }}>
           {[
-            ["Family — not an active placement (birth/adopted/SGO/kinship)", CATEGORY_COLOR.own],
+            ["Family", CATEGORY_COLOR.own],
             ["Foster placement", CATEGORY_COLOR.placement],
-            ["Visiting/day care child", CATEGORY_COLOR.visiting],
-            ["Adult child (in Adults)", CATEGORY_COLOR.adultChild],
           ].map(([label, color]) => (
             <span key={label} className="hint" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
               <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, display: "inline-block" }} />
@@ -1753,6 +1767,12 @@ export default function AboutScreen() {
         <p className="hint">
           Everyone who visits regularly but doesn&apos;t live here. To add someone who lives with you, tap the circle
           in the middle of your household above instead. Search, or browse by who they are.
+        </p>
+        <p className="hint" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+          <span
+            style={{ width: 10, height: 10, borderRadius: "50%", background: CATEGORY_COLOR.visiting, display: "inline-block" }}
+          />
+          Every visiting/day care child below is shown in this colour.
         </p>
         <input
           placeholder="Search visitors…"
