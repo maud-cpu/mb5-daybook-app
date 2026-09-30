@@ -1634,8 +1634,47 @@ export default function AboutScreen() {
     return null;
   }
 
+  // A stray duplicate -- the same person as a row in both "children"
+  // (placements/visitors) and "household_children" (own/adopted/kinship),
+  // or twice in the same table -- used to be created silently (see
+  // findOrCreate.ts, fixed to stop new ones) and then only ever discovered
+  // by accident: different, conflicting details showing on different
+  // screens with no visible sign they were meant to be the same person.
+  // Surfacing every name that appears more than once here means it gets
+  // caught and cleaned up instead of drifting further out of sync.
+  const duplicateNameGroups = (() => {
+    type Entry = { selectId: string; name: string };
+    const byName = new Map<string, Entry[]>();
+    const add = (name: string, selectId: string) => {
+      const key = name.trim().toLowerCase();
+      if (!key) return;
+      (byName.get(key) ?? byName.set(key, []).get(key)!).push({ selectId, name });
+    };
+    children.forEach((c) => add(c.name, c.lives_here === false ? `visit:${c.id}` : `child:${c.id}`));
+    householdChildren.forEach((c) => add(c.name, `hh:${c.id}`));
+    return [...byName.values()].filter((entries) => entries.length > 1);
+  })();
+
   return (
     <div>
+      {duplicateNameGroups.length > 0 && (
+        <div className="card" style={{ border: "2px solid var(--danger, #c0392b)" }}>
+          <h3>⚠ Possible duplicate {duplicateNameGroups.length > 1 ? "people" : "person"}</h3>
+          <p className="hint">
+            The same name appears more than once below — tap each one to check whether they&apos;re the same person,
+            and delete the extra entry once you&apos;ve moved anything worth keeping across.
+          </p>
+          {duplicateNameGroups.map((entries) => (
+            <div key={entries[0].selectId} className="chips" style={{ marginTop: 6 }}>
+              {entries.map((e) => (
+                <button key={e.selectId} className="chip" onClick={() => setSelected(e.selectId)}>
+                  {e.name}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
       <div className="card">
         <h3>About us</h3>
         <p className="hint">Your household — tap a circle to see and edit their details.</p>
