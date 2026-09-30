@@ -78,5 +78,9 @@ export function backstopFlag(text: string): { flag: string; flagNote: string } {
 
 export function namesInText(names: string[], text: string): string[] {
   if (!text) return [];
-  return names.filter((n) => new RegExp("\\b" + n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(text));
+  // Trimmed before building the pattern -- a registered name with a stray
+  // leading/trailing space would otherwise need that literal space to
+  // appear in the text at exactly that position, which it never does, so
+  // the name could never be found even though it's genuinely on file.
+  return names.filter((n) => new RegExp("\\b" + n.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(text));
 }

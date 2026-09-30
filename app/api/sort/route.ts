@@ -164,9 +164,20 @@ const SortResponseSchema = z.object({ items: z.array(SortItemSchema) });
 function matchChild(names: string[], x: string | null | undefined): string {
   if (!x) return "";
   const v = String(x).trim().toLowerCase();
-  let m = names.find((n) => n.toLowerCase() === v);
+  // A registered name with a stray leading/trailing space (e.g. from a
+  // paste or voice-typed add) used to fail this match completely -- both
+  // the exact check and the startsWith fallback below are anchored to the
+  // start of the string, so a leading space alone made a real, already-
+  // registered child come back as "not registered". Trimming the stored
+  // name here (never the returned value, which must stay exactly what's
+  // actually on file) fixes matching without needing that stray space
+  // found and removed by hand first.
+  let m = names.find((n) => n.trim().toLowerCase() === v);
   if (m) return m;
-  m = names.find((n) => n.toLowerCase().startsWith(v.slice(0, 3)) || v.startsWith(n.toLowerCase().slice(0, 3)));
+  m = names.find((n) => {
+    const nt = n.trim().toLowerCase();
+    return nt.startsWith(v.slice(0, 3)) || v.startsWith(nt.slice(0, 3));
+  });
   return m || "";
 }
 

@@ -609,7 +609,7 @@ export default function AboutScreen() {
     await fetch("/api/household-children", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...newHouseholdChild, born: newHouseholdChild.born || null }),
+      body: JSON.stringify({ ...newHouseholdChild, name: newHouseholdChild.name.trim(), born: newHouseholdChild.born || null }),
     });
     setNewHouseholdChild({ name: "", born: "", category: "", notes: "", gender: "" });
     setSelected(null);
