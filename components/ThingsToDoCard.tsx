@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { today, trainingStatus } from "@/lib/domain";
 import {
   DueItem,
+  annualReviewItems,
   bandChangeItems,
   diaryDueItems,
   dueReminders,
@@ -142,6 +143,7 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
       ...diaryDueItems(allChildren, (diariesRes.diaries as Diary[]) ?? []),
       ...placementEndItems(children ?? []),
       ...edtMissingItem(householdRes.household?.edt ?? ""),
+      ...annualReviewItems(householdRes.household ?? null),
       ...dueReminders(remindersList),
     ].filter((x) => !dismissedKeys.has(dismissKeyFor(x.key)));
     setDue(dueList);

@@ -27,6 +27,10 @@ function firstName(name: string): string {
   return (name || "").trim().split(/\s+/)[0] || "?";
 }
 
+function fmtDate(iso: string): string {
+  return iso ? new Date(iso + "T12:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+}
+
 // Colour by what someone actually IS, not a per-name hash -- so at a glance
 // on the bubbles or in Visitors, every foster placement reads the same
 // colour regardless of whose bubble it is, distinct from the carer's own
@@ -304,6 +308,8 @@ function ChildBasicsPanel({
 }
 type Visitor = { id: string; name: string; phone: string; email: string; role: string; gender: string; linked_visitor_id: string | null };
 
+type ChecklistItem = { text: string; done: boolean };
+
 type Household = {
   ssw_name: string;
   ssw_phone: string;
@@ -316,6 +322,8 @@ type Household = {
   hub_leader_name: string;
   hub_leader_phone: string;
   hub_leader_email: string;
+  annual_review_date: string | null;
+  annual_review_checklist: ChecklistItem[];
 };
 
 const emptyHousehold: Household = {
@@ -330,6 +338,8 @@ const emptyHousehold: Household = {
   hub_leader_name: "",
   hub_leader_phone: "",
   hub_leader_email: "",
+  annual_review_date: null,
+  annual_review_checklist: [],
 };
 
 const CENTER_COLOR = "#1f5e52";
@@ -337,6 +347,7 @@ const ADD_HH_CHILD = "add-household-child";
 const ADD_VISIT_CHILD = "add-visiting-child";
 const ADD_VISITOR = "add-visitor";
 const SSW_NODE = "ssw";
+const ANNUAL_REVIEW_NODE = "annual-review";
 const CENTER_NODE = "center";
 
 export default function AboutScreen() {
@@ -391,6 +402,7 @@ export default function AboutScreen() {
   const [familyDraft, setFamilyDraft] = useState({ phone: "", email: "", role: VISITOR_ROLES[0], gender: "" });
   const [familyNameDraft, setFamilyNameDraft] = useState("");
   const [visitorSearch, setVisitorSearch] = useState("");
+  const [newChecklistItem, setNewChecklistItem] = useState("");
 
   // A family hub on the Visitors wheel starts as nothing more than shared
   // free text on some children's `family` field -- there's no adult record
@@ -946,8 +958,13 @@ export default function AboutScreen() {
   const visibleFamilyGroups = Object.entries(visitingByFamily).filter(([fam]) => matchesSearch(fam));
   const visibleUngrouped = visitingUngrouped.filter((c) => matchesSearch(c.name));
   const sswVisible = matchesSearch(sswLabel);
+  const annualReviewVisible = matchesSearch("annual review");
   const visitorsDirectoryEmpty =
-    visitorGroups.length === 0 && visibleFamilyGroups.length === 0 && visibleUngrouped.length === 0 && !sswVisible;
+    visitorGroups.length === 0 &&
+    visibleFamilyGroups.length === 0 &&
+    visibleUngrouped.length === 0 &&
+    !sswVisible &&
+    !annualReviewVisible;
 
   function closeButton() {
     return (
@@ -1121,6 +1138,69 @@ export default function AboutScreen() {
           </div>
           <label style={{ marginTop: 10, display: "block" }}>Emergency Duty Team (out-of-hours) number</label>
           <input value={household.edt} onChange={(e) => saveHousehold({ edt: e.target.value })} />
+          {savedAt && <p className="hint">Saved {savedAt}</p>}
+          {closeButton()}
+        </div>
+      );
+    }
+
+    if (selected === ANNUAL_REVIEW_NODE) {
+      const checklist = household.annual_review_checklist || [];
+      const outstanding = checklist.filter((c) => !c.done).length;
+      function toggleChecklistItem(i: number) {
+        const next = checklist.map((c, idx) => (idx === i ? { ...c, done: !c.done } : c));
+        saveHousehold({ annual_review_checklist: next });
+      }
+      function removeChecklistItem(i: number) {
+        saveHousehold({ annual_review_checklist: checklist.filter((_, idx) => idx !== i) });
+      }
+      function addChecklistItem() {
+        const text = newChecklistItem.trim();
+        if (!text) return;
+        saveHousehold({ annual_review_checklist: [...checklist, { text, done: false }] });
+        setNewChecklistItem("");
+      }
+      return (
+        <div className="card">
+          <h3>Your annual review</h3>
+          <label style={{ display: "block" }}>Review date</label>
+          <input
+            type="date"
+            value={household.annual_review_date || ""}
+            onChange={(e) => saveHousehold({ annual_review_date: e.target.value || null })}
+          />
+          <p className="hint" style={{ marginTop: 10 }}>
+            Requirements checklist — {outstanding ? `${outstanding} outstanding` : "all done"}. This is a generic starting
+            list, not an official one — check it against whatever your own SSW/agency actually asks for, and edit it to
+            match.
+          </p>
+          {checklist.map((c, i) => (
+            <div key={i} className="row" style={{ alignItems: "center", gap: 8 }}>
+              <input
+                type="checkbox"
+                style={{ width: "auto", flex: "0 0 auto" }}
+                checked={c.done}
+                onChange={() => toggleChecklistItem(i)}
+              />
+              <span style={{ flex: 1, textDecoration: c.done ? "line-through" : undefined, opacity: c.done ? 0.6 : 1 }}>
+                {c.text}
+              </span>
+              <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => removeChecklistItem(i)}>
+                Remove
+              </button>
+            </div>
+          ))}
+          <div className="row" style={{ marginTop: 8 }}>
+            <input
+              placeholder="Add a requirement"
+              value={newChecklistItem}
+              onChange={(e) => setNewChecklistItem(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addChecklistItem()}
+            />
+            <button className="chip add" onClick={addChecklistItem}>
+              + Add
+            </button>
+          </div>
           {savedAt && <p className="hint">Saved {savedAt}</p>}
           {closeButton()}
         </div>
@@ -1812,6 +1892,24 @@ export default function AboutScreen() {
             <b>{sswLabel}</b>
             <br />
             <small className="muted">Supervising social worker</small>
+          </div>
+        )}
+
+        {annualReviewVisible && (
+          <div
+            className="item"
+            style={{
+              cursor: "pointer",
+              background: selected === ANNUAL_REVIEW_NODE ? "var(--pine-soft)" : undefined,
+              boxShadow: selected === ANNUAL_REVIEW_NODE ? "0 0 0 2px var(--pine)" : undefined,
+            }}
+            onClick={() => selectVisitorsNode(ANNUAL_REVIEW_NODE)}
+          >
+            <b>Your annual review</b>
+            <br />
+            <small className="muted">
+              {household.annual_review_date ? `Due ${fmtDate(household.annual_review_date)}` : "Your own approval review"}
+            </small>
           </div>
         )}
 

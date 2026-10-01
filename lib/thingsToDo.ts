@@ -223,6 +223,31 @@ export function diaryDueItems(
   return out;
 }
 
+// A carer's own annual review (About us -> Your annual review) gets more
+// warning than other due dates since there's a whole checklist (insurance,
+// DBS, training, etc) to work through beforehand, not just one appointment
+// to book.
+const ANNUAL_REVIEW_WARN_DAYS = 30;
+
+export function annualReviewItems(household: {
+  annual_review_date?: string | null;
+  annual_review_checklist?: { text: string; done: boolean }[];
+} | null): DueItem[] {
+  if (!household?.annual_review_date) return [];
+  const t = today();
+  const date = household.annual_review_date;
+  const warnFrom = new Date();
+  warnFrom.setDate(warnFrom.getDate() + ANNUAL_REVIEW_WARN_DAYS);
+  const warnFromStr = warnFrom.toISOString().slice(0, 10);
+  if (date > warnFromStr) return [];
+  const outstanding = (household.annual_review_checklist || []).filter((c) => !c.done).length;
+  const checklistNote = outstanding ? ` — ${outstanding} checklist item${outstanding === 1 ? "" : "s"} still outstanding` : "";
+  if (date <= t) {
+    return [{ key: "annual-review", urgent: true, text: `Your annual review was due ${date}${checklistNote}` }];
+  }
+  return [{ key: "annual-review", urgent: false, text: `Your annual review is due ${date}${checklistNote}` }];
+}
+
 // About us already records a CLA review and SW statutory visit "next due"
 // date per child (Key dates) -- nothing ever actually nudged off them before
 // now. Same warning window as recurringCheckItems, for the same reason: due
