@@ -148,14 +148,20 @@ export function recurringCheckItems(children: (Pick<Child, "id" | "name"> & { ba
   return out;
 }
 
+// A reminder used to keep showing (turning red, "overdue [date]") for every
+// day after its own date until manually ticked off -- which read as nagging
+// clutter once the thing it was for had already happened (a meeting 3 days
+// ago isn't still "due"). It now only shows on its own day; once that day's
+// passed it drops off Up next by itself, with no action needed -- the
+// Calendar still has the full record if it's ever needed again.
 export function dueReminders(reminders: Reminder[]): DueItem[] {
   const t = today();
   return reminders
-    .filter((r) => !r.done && r.date <= t)
+    .filter((r) => !r.done && r.date === t)
     .map((r) => ({
       key: "rem-" + r.id,
-      urgent: r.date < t,
-      text: r.text + (r.date < t ? ` (overdue ${r.date})` : ""),
+      urgent: false,
+      text: r.text,
       detail: r.source_text || undefined,
     }));
 }
