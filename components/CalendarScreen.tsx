@@ -102,6 +102,7 @@ type ExtractedItem = {
   amount: number | null;
   repeat: string;
   until: string | null;
+  url: string | null;
   source: string;
 };
 
@@ -292,7 +293,7 @@ export default function CalendarScreen() {
   async function commitExtracted(items: ExtractedItem[]) {
     const rows: Record<string, unknown>[] = [];
     for (const it of items) {
-      const base = { text: it.text, category: it.category, people: it.people, amount: it.amount, source_text: it.source };
+      const base = { text: it.text, category: it.category, people: it.people, amount: it.amount, source_text: it.source, url: it.url };
       if (it.repeat === "none" || !it.until) {
         rows.push({ ...base, date: it.date });
       } else {
@@ -373,10 +374,11 @@ export default function CalendarScreen() {
     const confirmMsg = r.record_id ? `Remove "${r.text}"? This also removes it from Entries/Expenses.` : `Remove "${r.text}"?`;
     if (!confirm(confirmMsg)) return;
     setEditingId(null);
-    await Promise.all([
-      fetch(`/api/reminders?id=${r.id}`, { method: "DELETE" }),
+    const [remRes] = await Promise.all([
+      fetch(`/api/reminders?id=${r.id}`, { method: "DELETE" }).then((res) => res.json()),
       r.record_id ? fetch(`/api/records?id=${r.record_id}`, { method: "DELETE" }) : Promise.resolve(),
     ]);
+    if (remRes?.error) alert(`Couldn't remove "${r.text}": ${remRes.error}`);
     load();
   }
 
@@ -587,6 +589,11 @@ export default function CalendarScreen() {
                     <span>{reminderCategoryText(r.category)}</span>
                     <PersonTags people={r.people} />
                     {r.amount != null ? <span>£{Number(r.amount).toFixed(2)}</span> : ""}
+                    {r.url && (
+                      <a href={r.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+                        🔗 Link
+                      </a>
+                    )}
                     {r.done ? <span>Done</span> : ""}
                     {authorOf(r.user_id) && <span className="badge-author">by {authorOf(r.user_id)}</span>}
                     {authorOf(r.edited_by) && r.edited_by !== r.user_id && (
@@ -744,6 +751,12 @@ export default function CalendarScreen() {
                   style={{ marginTop: 6 }}
                   value={it.amount ?? ""}
                   onChange={(e) => updateExtracted(it._k, { amount: e.target.value ? Number(e.target.value) : null })}
+                />
+                <input
+                  placeholder="Link (e.g. where to RSVP/pay) — paste one in if it wasn't picked up"
+                  style={{ marginTop: 6 }}
+                  value={it.url ?? ""}
+                  onChange={(e) => updateExtracted(it._k, { url: e.target.value.trim() || null })}
                 />
                 {it.repeat !== "none" && (
                   <p className="hint" style={{ marginTop: 4 }}>

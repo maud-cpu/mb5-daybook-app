@@ -327,6 +327,10 @@ export type Reminder = {
    * to-face rows synthesised client-side, which aren't real database rows. */
   user_id?: string;
   edited_by?: string | null;
+  /** A link given in the source text for where to actually act on this
+   * (RSVP, log in, pay, book) -- e.g. "Log in to Online Guide Manager" in a
+   * pasted email. Null when none was found/given. */
+  url?: string | null;
 };
 
 export const REPEAT_OPTIONS = [
@@ -675,4 +679,6 @@ export type PendingItem = Partial<EntryRecord> & {
   school_admin_note?: string;
   /** Set when the note is about contact with, or news via, the carer's Mockingbird hub network -- offered as a one-click save to the Hub log. */
   hub_update?: { carer_names: string; support_type: string } | null;
+  /** When flag is "reminder": a link in the text for where to actually act on it (RSVP, log in, pay, book). Empty string if none found. */
+  reminder_url?: string;
 };

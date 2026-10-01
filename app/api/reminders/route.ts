@@ -67,14 +67,27 @@ export async function DELETE(req: NextRequest) {
   const sourceKey = params.get("sourceKey");
   const seriesId = params.get("seriesId");
 
-  let query = supabase.from("reminders").delete();
+  // A delete whose WHERE clause (or RLS policy) matches nothing isn't an
+  // error as far as Postgres is concerned -- it just affects 0 rows, and
+  // the old code here returned { ok: true } regardless, so a delete that
+  // silently matched nothing (e.g. a household_owner_id mismatch) looked
+  // identical to a real success and the "deleted" row just reappeared on
+  // the next reload with no explanation why. Selecting the deleted ids
+  // back lets a single-id delete tell the two cases apart and say so.
+  let query = supabase.from("reminders").delete().select("id");
   if (idsParam) query = query.in("id", idsParam.split(",").filter(Boolean));
   else if (id) query = query.eq("id", id);
   else if (sourceKey) query = query.eq("source_key", sourceKey);
   else if (seriesId) query = query.eq("series_id", seriesId);
   else return NextResponse.json({ error: "Missing id, ids, sourceKey or seriesId" }, { status: 400 });
 
-  const { error } = await query;
+  const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+  if (id && !data?.length) {
+    return NextResponse.json(
+      { error: "Nothing was deleted — it may already be gone, or you may not have permission to remove it." },
+      { status: 404 },
+    );
+  }
+  return NextResponse.json({ ok: true, deleted: data?.length ?? 0 });
 }

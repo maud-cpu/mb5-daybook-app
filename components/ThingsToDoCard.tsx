@@ -360,6 +360,14 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
               <small className="muted">📞 GP: {gp}</small>
             </>
           )}
+          {x.url && (
+            <>
+              <br />
+              <a href={x.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+                🔗 Open link
+              </a>
+            </>
+          )}
           {open && x.detail && (
             <div className="muted" style={{ margin: "4px 0", whiteSpace: "pre-wrap" }}>
               {linkify(x.detail)}

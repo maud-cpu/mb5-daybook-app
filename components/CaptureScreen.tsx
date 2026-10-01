@@ -682,7 +682,7 @@ export default function CaptureScreen() {
     // becoming two duplicate calendar entries instead of one with both names.
     const reminderGroups = new Map<
       string,
-      { text: string; date: string; category: string; people: string[]; recordId: string | null; recordAmbiguous: boolean }
+      { text: string; date: string; category: string; url: string; people: string[]; recordId: string | null; recordAmbiguous: boolean }
     >();
     const reminderOrder: string[] = [];
     pending
@@ -695,7 +695,7 @@ export default function CaptureScreen() {
         const key = [date, category, text.trim().toLowerCase()].join("|");
         let group = reminderGroups.get(key);
         if (!group) {
-          group = { text, date, category, people: [], recordId: null, recordAmbiguous: false };
+          group = { text, date, category, url: p.reminder_url || "", people: [], recordId: null, recordAmbiguous: false };
           reminderGroups.set(key, group);
           reminderOrder.push(key);
         }
@@ -714,7 +714,14 @@ export default function CaptureScreen() {
       });
     const reminderRows = reminderOrder.map((k) => {
       const g = reminderGroups.get(k)!;
-      return { text: g.text, date: g.date, category: g.category, people: g.people, record_id: g.recordAmbiguous ? null : g.recordId };
+      return {
+        text: g.text,
+        date: g.date,
+        category: g.category,
+        people: g.people,
+        url: g.url || null,
+        record_id: g.recordAmbiguous ? null : g.recordId,
+      };
     });
     if (reminderRows.length) {
       await fetch("/api/reminders", {
@@ -1227,6 +1234,14 @@ export default function CaptureScreen() {
                             onChange={(e) => updatePending(i, { reminder_date: e.target.value })}
                           />
                         </div>
+                      )}
+                      {p.flag === "reminder" && (
+                        <input
+                          placeholder="Link (e.g. where to RSVP/pay) — paste one in if it wasn't picked up"
+                          style={{ marginTop: 6 }}
+                          value={p.reminder_url ?? ""}
+                          onChange={(e) => updatePending(i, { reminder_url: e.target.value.trim() })}
+                        />
                       )}
                     </>
                   ) : (

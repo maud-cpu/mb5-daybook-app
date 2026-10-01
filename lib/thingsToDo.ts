@@ -8,6 +8,9 @@ export type DueItem = {
   /** Extra context to show when tapped -- e.g. a reminder's source_text,
    * the body of a news item that was added straight to Things To Do. */
   detail?: string;
+  /** A link to actually act on this (RSVP, log in, pay, book), shown as a
+   * direct tappable link rather than buried in detail. */
+  url?: string;
 };
 
 export type IncidentLike = { id: string; text: string; created_at: string; reported: string | null };
@@ -170,6 +173,7 @@ export function dueReminders(reminders: Reminder[]): DueItem[] {
       urgent: false,
       text: r.date === t ? r.text : `${r.text} — ${new Date(r.date + "T12:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}`,
       detail: r.source_text || undefined,
+      url: r.url || undefined,
     }));
 }
 
