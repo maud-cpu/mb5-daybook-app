@@ -119,6 +119,16 @@ export type Child = {
    * above (which stays as a fallback grouping for when no adult's on
    * file yet). Absent on children/queries that never select it. */
   linked_visitor_id?: string | null;
+  /** A VISITING child's own underlying placement type (one of LIVES_CATS),
+   * independent of "category" -- which, for a visiting child, instead holds
+   * WHY they visit (one of VISITS_CATS: sleepover/daycare/etc). Why someone
+   * visits and what their actual placement is are two separate facts (a
+   * visiting child can be kinship-and-daycare, foster-and-daycare, etc) --
+   * this is what the carer's Mockingbird-number and expense-claim rules
+   * (MB_COUNTED_CATEGORIES/EXPENSE_EXCLUDED_CATEGORIES) actually key off
+   * for a visiting child, not "category". Always "" for a household child
+   * (lives_here true), where "category" already holds this directly. */
+  placement_category: string;
 };
 
 // Used so generated documents (Handover, diary drafts) can use the right

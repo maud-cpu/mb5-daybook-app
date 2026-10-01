@@ -1511,7 +1511,7 @@ export default function AboutScreen() {
           )}
           <div className="row">
             <select value={c.category} onChange={(e) => saveChild(c.id, { category: e.target.value })}>
-              <option value="">— placement type —</option>
+              <option value="">— why they visit —</option>
               {VISITS_CATS.map(([k, l]) => (
                 <option key={k} value={k}>
                   {l}
@@ -1520,6 +1520,18 @@ export default function AboutScreen() {
             </select>
             <GenderSelect value={c.gender} onChange={(v) => saveChild(c.id, { gender: v })} />
           </div>
+          {/* Independent of "why they visit" above -- a visiting child's own
+              placement with their own carer (kinship-and-daycare, foster-
+              and-daycare, etc) is a separate fact, needed for the carer's
+              Mockingbird-number and expense-claim rules. */}
+          <select value={c.placement_category} onChange={(e) => saveChild(c.id, { placement_category: e.target.value })}>
+            <option value="">— their own placement type, if known —</option>
+            {LIVES_CATS.map(([k, l]) => (
+              <option key={k} value={k}>
+                {l}
+              </option>
+            ))}
+          </select>
           {visitors.length > 0 && (
             <select
               value={c.linked_visitor_id && visitors.some((v) => v.id === c.linked_visitor_id) ? c.linked_visitor_id : ""}
