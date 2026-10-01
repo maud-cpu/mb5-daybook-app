@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ageOf, today } from "@/lib/domain";
 import { BASICS_SECTIONS, RepeatableSubfield } from "@/lib/basics";
-import { Child, GENDER_OPTIONS, LIVES_CATS, livesHereOf, MB_OPTIONS, VISITS_CATS } from "@/lib/types";
+import { Child, GENDER_OPTIONS, LIVES_CATS, livesHereOf, MB_OPTIONS, NON_PLACEMENT_CATEGORIES, VISITS_CATS } from "@/lib/types";
 import { personColor } from "@/lib/calendarHelpers";
 import { confirmUseExisting, findPersonByName, findPersonInEitherChildTable } from "@/lib/findOrCreate";
 import ChildSchoolAdmin from "@/components/ChildSchoolAdmin";
@@ -39,7 +39,7 @@ const CATEGORY_COLOR = {
 } as const;
 
 function householdCategoryColor(category: string): string {
-  if (category === "" || category === "kinship") return CATEGORY_COLOR.own;
+  if ((NON_PLACEMENT_CATEGORIES as readonly string[]).includes(category)) return CATEGORY_COLOR.own;
   return CATEGORY_COLOR.placement;
 }
 
@@ -1612,7 +1612,7 @@ export default function AboutScreen() {
               placement -- not a permanent family arrangement (fostering,
               SGO, adopted, kinship) that was never "a placement" awaiting
               an end date in the first place. */}
-          {!["", "kinship"].includes(c.category) && placementEndField(c)}
+          {!(NON_PLACEMENT_CATEGORIES as readonly string[]).includes(c.category) && placementEndField(c)}
           <div className="chips" style={{ marginTop: 6 }}>
             <button className="chip" onClick={() => setOpenSchoolAdmin(open ? null : c.id)}>
               🏫 School admin
@@ -1662,7 +1662,7 @@ export default function AboutScreen() {
               hubCarerPhone={c.hub_carer_phone}
               hubCarerEmail={c.hub_carer_email}
               onHubCarer={(field, v) => saveChild(c.id, { [field]: v })}
-              showSurreyContact={["", "kinship"].includes(c.category)}
+              showSurreyContact={(NON_PLACEMENT_CATEGORIES as readonly string[]).includes(c.category)}
               surreyContact={c.surrey_contact}
               onSurreyContact={(v) => saveChild(c.id, { surrey_contact: v })}
               basics={cb}

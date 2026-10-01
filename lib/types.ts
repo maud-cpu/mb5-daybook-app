@@ -138,17 +138,14 @@ export function pronounsFor(gender: string): { subject: string; object: string; 
   return null;
 }
 
-// "sgo" and "adopted" used to be separate options, then got merged into a
-// "fosters" option ("Child who fosters (inc. adopted & SGO)") -- which then
-// mislabelled the carer's own birth children who'd been marked "adopted",
-// reading as if they themselves were a foster carer. There's no real,
-// distinct category here at all: a permanent family member who isn't an
-// active placement (own, adopted, SGO, or a family member who happens to
-// themselves foster) is just "blank" -- the same "— placement type —"
-// option a plain birth child already uses. Existing "fosters"/"sgo"/
-// "adopted" rows are migrated to blank by
-// 0076_drop_fosters_category.sql; nothing reads any of those three keys
-// any more.
+// "sgo" and "adopted" were briefly merged into blank/"fosters" (a wording
+// fix gone too far) before it turned out they're not interchangeable with a
+// plain birth/kinship child at all: SGO and Adopted both carry real rules
+// the carer tracks by them -- neither counts toward her Mockingbird numbers,
+// and she can't claim daycare/expenses for either. "Child who fosters" (a
+// family member who happens to themselves foster) stays folded into blank,
+// since that was never a legal/placement status, just a role description
+// with no financial or statistical consequence of its own.
 export const LIVES_CATS = [
   ["la_long", "Long term fostering"],
   ["la_short", "Short term fostering"],
@@ -160,7 +157,38 @@ export const LIVES_CATS = [
   ["staying_put", "Staying Put (18+)"],
   ["supported_lodgings", "Supported lodgings"],
   ["kinship", "Kinship"],
+  ["sgo", "SGO (Special Guardianship)"],
+  ["adopted", "Adopted"],
 ] as const;
+
+// Categories that count toward the carer's Mockingbird numbers -- SGO and
+// Adopted explicitly do not (they're permanent legal statuses with no
+// ongoing LA/Mockingbird involvement), everything else active or kinship
+// does. Visiting/day care children count too, but by THEIR OWN underlying
+// placement type (see children.visit_category), not by this list directly.
+export const MB_COUNTED_CATEGORIES = [
+  "la_long",
+  "la_short",
+  "short_break",
+  "parent_and_child",
+  "remand",
+  "uasc",
+  "private_fostering",
+  "staying_put",
+  "supported_lodgings",
+  "kinship",
+] as const;
+
+// Same two categories are also not claimable for daycare/expenses -- an SGO
+// or Adopted child is, financially, the carer's own family from that point
+// on, the same as a birth child.
+export const EXPENSE_EXCLUDED_CATEGORIES = ["sgo", "adopted"] as const;
+
+// Blank (a plain birth child), Kinship, SGO and Adopted are never an active
+// placement -- used wherever the UI needs to tell "permanent family" apart
+// from "currently a looked-after/active placement" (colour-coding, hiding
+// placement-end-date, showing Surrey contact).
+export const NON_PLACEMENT_CATEGORIES = ["", "kinship", "sgo", "adopted"] as const;
 
 export const VISITS_CATS = [
   ["sleepover", "Sleepover"],
