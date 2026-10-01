@@ -292,6 +292,10 @@ export type Diary = {
   child_names: string[];
   date_from: string | null;
   date_to: string | null;
+  /** When this diary was actually sent to the SW -- separate from
+   * date_from/date_to (the period it covers), which can genuinely differ
+   * from when it went out. Used for the "diary overdue" nudge. */
+  sent_at: string | null;
   sw_name: string;
   user_id?: string;
   edited_by?: string | null;

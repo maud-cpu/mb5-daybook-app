@@ -7,15 +7,17 @@ import { today, trainingStatus } from "@/lib/domain";
 import {
   DueItem,
   bandChangeItems,
+  diaryDueItems,
   dueReminders,
   edtMissingItem,
   invoiceMonthItems,
   missingNumbersItems,
   placementEndItems,
   recurringCheckItems,
+  statutoryDateItems,
   unreportedIncidentItems,
 } from "@/lib/thingsToDo";
-import { EntryRecord, FLAGS, Reminder, relatedFormFor } from "@/lib/types";
+import { Diary, EntryRecord, FLAGS, Reminder, relatedFormFor } from "@/lib/types";
 import { linkify } from "@/lib/linkify";
 
 type FollowUp = {
@@ -84,6 +86,7 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
       { data: progress },
       remindersRes,
       { data: dismissed },
+      diariesRes,
     ] = await Promise.all([
       fetch("/api/records").then((r) => r.json()),
       fetch("/api/children").then((r) => r.json()),
@@ -97,6 +100,7 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
       supabase.from("training_progress").select("course_title, completed_on"),
       fetch("/api/reminders").then((r) => r.json()),
       supabase.from("dismissed_todos").select("key, text, dismissed_at").order("dismissed_at", { ascending: false }).limit(20),
+      fetch("/api/diaries").then((r) => r.json()),
     ]);
     const reminders = ((remindersRes.reminders as { date: string }[]) ?? []).sort((a, b) => a.date.localeCompare(b.date));
     const children = childrenRes.children;
@@ -134,6 +138,8 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
       ...trainingItems,
       ...missingNumbersItems(allChildren),
       ...recurringCheckItems(allChildren),
+      ...statutoryDateItems(allChildren),
+      ...diaryDueItems(allChildren, (diariesRes.diaries as Diary[]) ?? []),
       ...placementEndItems(children ?? []),
       ...edtMissingItem(householdRes.household?.edt ?? ""),
       ...dueReminders(remindersList),

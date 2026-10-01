@@ -1,5 +1,5 @@
 import { bandChangeSoon, today } from "@/lib/domain";
-import { Child, Reminder } from "@/lib/types";
+import { Child, Diary, Reminder } from "@/lib/types";
 
 export type DueItem = {
   key: string;
@@ -151,17 +151,104 @@ export function recurringCheckItems(children: (Pick<Child, "id" | "name"> & { ba
 // A reminder used to keep showing (turning red, "overdue [date]") for every
 // day after its own date until manually ticked off -- which read as nagging
 // clutter once the thing it was for had already happened (a meeting 3 days
-// ago isn't still "due"). It now only shows on its own day; once that day's
-// passed it drops off Up next by itself, with no action needed -- the
-// Calendar still has the full record if it's ever needed again.
+// ago isn't still "due"). It now only shows from ADVANCE_DAYS before its own
+// date (enough notice to actually prepare -- "Eli's school trip in 3 days,
+// needs wellies" is only useful seen ahead of time) and drops off by itself
+// once that day's passed, with no action needed -- the Calendar still has
+// the full record if it's ever needed again.
+const REMINDER_ADVANCE_DAYS = 3;
+
 export function dueReminders(reminders: Reminder[]): DueItem[] {
   const t = today();
+  const windowEnd = new Date();
+  windowEnd.setDate(windowEnd.getDate() + REMINDER_ADVANCE_DAYS);
+  const windowEndStr = windowEnd.toISOString().slice(0, 10);
   return reminders
-    .filter((r) => !r.done && r.date === t)
+    .filter((r) => !r.done && r.date >= t && r.date <= windowEndStr)
     .map((r) => ({
       key: "rem-" + r.id,
       urgent: false,
-      text: r.text,
+      text: r.date === t ? r.text : `${r.text} — ${new Date(r.date + "T12:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}`,
       detail: r.source_text || undefined,
     }));
+}
+
+// Daily/weekly/fortnightly/monthly/termly, set per child (About us ->
+// Social work team -> "Diary due") -- defaulting to 3 weeks if never set,
+// since that's roughly what most placements expect without being told
+// otherwise.
+const DIARY_FREQUENCY_DAYS: Record<string, number> = {
+  Daily: 1,
+  Weekly: 7,
+  Fortnightly: 14,
+  Monthly: 30,
+  Termly: 70,
+};
+const DEFAULT_DIARY_DAYS = 21;
+
+export function diaryDueItems(
+  children: (Pick<Child, "id" | "name"> & { basics: Record<string, string> })[],
+  diaries: Pick<Diary, "child_names" | "sent_at" | "date_from" | "date_to">[],
+): DueItem[] {
+  const t = today();
+  const out: DueItem[] = [];
+  children.forEach((c) => {
+    const days = DIARY_FREQUENCY_DAYS[c.basics?.diary_frequency || ""] ?? DEFAULT_DIARY_DAYS;
+    // The period a diary covers (date_from/date_to) can genuinely differ from
+    // when it was actually sent -- sent_at is the real answer when it's set,
+    // falling back to the covered period for a diary logged before that
+    // field existed.
+    const lastSent = diaries
+      .filter((d) => d.child_names.includes(c.name))
+      .map((d) => d.sent_at || d.date_to || d.date_from)
+      .filter((x): x is string => !!x)
+      .sort()
+      .pop();
+    // Never nagged about a child with no diary history at all -- there's no
+    // baseline to measure "overdue" against, and flagging every child the
+    // moment this shipped would read as a sudden wall of nagging rather than
+    // a useful nudge.
+    if (!lastSent) return;
+    const due = new Date(lastSent + "T12:00");
+    due.setDate(due.getDate() + days);
+    const dueStr = due.toISOString().slice(0, 10);
+    if (dueStr <= t) {
+      out.push({
+        key: `diary-${c.id}`,
+        urgent: false,
+        text: `${c.name}'s diary to the SW is due — last sent ${lastSent}`,
+      });
+    }
+  });
+  return out;
+}
+
+// About us already records a CLA review and SW statutory visit "next due"
+// date per child (Key dates) -- nothing ever actually nudged off them before
+// now. Same warning window as recurringCheckItems, for the same reason: due
+// shows as soon as it's actually passed, coming-up shows a little ahead so
+// it's not a surprise.
+export function statutoryDateItems(children: (Pick<Child, "id" | "name"> & { basics: Record<string, string> })[]): DueItem[] {
+  const t = today();
+  const WARN_DAYS = 14;
+  const warnFrom = new Date();
+  warnFrom.setDate(warnFrom.getDate() + WARN_DAYS);
+  const warnFromStr = warnFrom.toISOString().slice(0, 10);
+  const out: DueItem[] = [];
+  const checks: [string, string][] = [
+    ["review_next", "CLA review"],
+    ["visit_next", "SW statutory visit"],
+  ];
+  children.forEach((c) => {
+    checks.forEach(([key, label]) => {
+      const next = c.basics?.[key];
+      if (!next) return;
+      if (next <= t) {
+        out.push({ key: `stat-${key}-${c.id}`, urgent: false, text: `${c.name}'s ${label} was due ${next}` });
+      } else if (next <= warnFromStr) {
+        out.push({ key: `stat-${key}-${c.id}`, urgent: false, text: `${c.name}'s ${label} due ${next}` });
+      }
+    });
+  });
+  return out;
 }

@@ -21,6 +21,7 @@ export default function DiaryTab() {
   const [dateFrom, setDateFrom] = useState(() => new Date(Date.now() - 27 * 86400000).toISOString().slice(0, 10));
   const [dateTo, setDateTo] = useState(today());
   const [swName, setSwName] = useState("");
+  const [sentAt, setSentAt] = useState("");
   const [sections, setSections] = useState<Record<string, string>>(blankSections());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -60,12 +61,14 @@ export default function DiaryTab() {
       );
       if (d) {
         setSwName(d.sw_name);
+        setSentAt(d.sent_at || "");
         const s: Record<string, string> = {};
         DIARY_SECTIONS.forEach(([k]) => (s[k] = d[k] || ""));
         setSections(s);
         setLastTouchedBy(d.edited_by || d.user_id || null);
       } else {
         setSwName("");
+        setSentAt("");
         setSections(blankSections());
         setLastTouchedBy(null);
       }
@@ -85,7 +88,15 @@ export default function DiaryTab() {
     await fetch("/api/diaries", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ child_names: sortedSelected, date_from: dateFrom || null, date_to: dateTo || null, sw_name: swName, ...next, edited_by: myId }),
+      body: JSON.stringify({
+        child_names: sortedSelected,
+        date_from: dateFrom || null,
+        date_to: dateTo || null,
+        sw_name: swName,
+        sent_at: sentAt || null,
+        ...next,
+        edited_by: myId,
+      }),
     });
     setLastTouchedBy(myId);
     setSavedAt(new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }));
@@ -190,6 +201,14 @@ ${DIARY_SECTIONS.map(([k, h, hint]) => `<tr class="h"><td colspan="3">${h}<br><s
           <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
         </div>
         <input placeholder="Social worker's name" value={swName} onChange={(e) => setSwName(e.target.value)} onBlur={() => save({})} />
+        <label className="hint" style={{ display: "block", marginTop: 6 }}>
+          Sent to SW on
+        </label>
+        <input type="date" value={sentAt} onChange={(e) => setSentAt(e.target.value)} onBlur={() => save({})} />
+        <p className="hint">
+          Separate from the dates above (the period this diary covers) — this is when it actually went out, which is
+          what &quot;diary due&quot; nudges on Capture check against.
+        </p>
         {error && <p style={{ color: "var(--danger)", fontSize: 14 }}>{error}</p>}
         <button className="btn" onClick={draft} disabled={busy}>
           {busy ? "Drafting…" : "Draft from my entries"}

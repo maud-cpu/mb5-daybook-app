@@ -57,6 +57,11 @@ export const BASICS_SECTIONS: BasicsSection[] = [
   {
     title: "Social work team",
     fields: [
+      {
+        key: "diary_frequency",
+        label: "Diary due",
+        select: ["Daily", "Weekly", "Fortnightly", "Monthly", "Termly"],
+      },
       { key: "csw", label: "Child's social worker" },
       { key: "csw_phone", label: "CSW phone", type: "tel" },
       { key: "csw_email", label: "CSW email", type: "email" },
