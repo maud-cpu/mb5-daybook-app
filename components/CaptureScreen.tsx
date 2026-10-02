@@ -330,22 +330,33 @@ export default function CaptureScreen() {
     if (!text) return;
     setBusy(true);
     setWarning("");
-    try {
-      const res = await fetch("/api/sort", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      const data = await res.json();
-      if (data.error) {
-        showToast(data.error);
-      } else {
-        justSortedRef.current = true;
-        setPending(data.items ?? []);
-        if (data.warning) setWarning(data.warning);
+    // A network-level failure here (as opposed to the server's own
+    // structured {error: ...} response) usually means the request never
+    // completed at all -- a dropped connection, or an unusually rich note
+    // (several distinct things to pull out, each with training/hub lookups)
+    // taking long enough to brush up against the serverless function's own
+    // time limit. One silent retry papers over a one-off blip without
+    // making her notice and resend by hand; a second failure in a row is
+    // genuinely worth surfacing rather than retrying forever.
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const res = await fetch("/api/sort", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+        const data = await res.json();
+        if (data.error) {
+          showToast(data.error);
+        } else {
+          justSortedRef.current = true;
+          setPending(data.items ?? []);
+          if (data.warning) setWarning(data.warning);
+        }
+        break;
+      } catch {
+        if (attempt === 2) showToast("Couldn't reach the sorting service after retrying — try again in a moment.");
       }
-    } catch {
-      showToast("Couldn't reach the sorting service — try again in a moment.");
     }
     setBusy(false);
   }
