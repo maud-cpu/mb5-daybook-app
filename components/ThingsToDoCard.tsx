@@ -214,16 +214,32 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
     load();
   }
 
+  // A reminder with a real time (see 0082_reminder_time.sql) exports as an
+  // actual timed event -- floating local time, no TZID, so it lands on
+  // whatever timezone the receiving phone/calendar app is already in --
+  // rather than always as an all-day marker. Falls back to the previous
+  // all-day format when the text never gave a time.
+  function icsEventFor(r: Pick<Reminder, "id" | "date" | "text" | "time_from" | "time_to">): string {
+    const d = r.date.replace(/-/g, "");
+    if (!r.time_from) {
+      return `BEGIN:VEVENT\r\nUID:${r.id}@mb5\r\nDTSTART;VALUE=DATE:${d}\r\nSUMMARY:${r.text}\r\nBEGIN:VALARM\r\nTRIGGER:-PT9H\r\nACTION:DISPLAY\r\nDESCRIPTION:${r.text}\r\nEND:VALARM\r\nEND:VEVENT`;
+    }
+    const from = r.time_from.slice(0, 5).replace(":", "");
+    // A started-but-no-end time defaults to an hour -- enough for a phone
+    // calendar to show it as a real timed event rather than guessing zero
+    // length, without needing the carer to fill in an end time she may
+    // never have been given in the first place.
+    const to = r.time_to
+      ? r.time_to.slice(0, 5).replace(":", "")
+      : String((Number(from.slice(0, 2)) + 1) % 24).padStart(2, "0") + from.slice(2);
+    return `BEGIN:VEVENT\r\nUID:${r.id}@mb5\r\nDTSTART:${d}T${from}00\r\nDTEND:${d}T${to}00\r\nSUMMARY:${r.text}\r\nBEGIN:VALARM\r\nTRIGGER:-PT30M\r\nACTION:DISPLAY\r\nDESCRIPTION:${r.text}\r\nEND:VALARM\r\nEND:VEVENT`;
+  }
+
   function downloadIcs() {
     if (!allReminders.length) return;
     const ics =
       "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//MB5 Day Book//EN\r\n" +
-      allReminders
-        .map(
-          (r) =>
-            `BEGIN:VEVENT\r\nUID:${r.id}@mb5\r\nDTSTART;VALUE=DATE:${r.date.replace(/-/g, "")}\r\nSUMMARY:${r.text}\r\nBEGIN:VALARM\r\nTRIGGER:-PT9H\r\nACTION:DISPLAY\r\nDESCRIPTION:${r.text}\r\nEND:VALARM\r\nEND:VEVENT`,
-        )
-        .join("\r\n") +
+      allReminders.map(icsEventFor).join("\r\n") +
       "\r\nEND:VCALENDAR\r\n";
     const blob = new Blob([ics], { type: "text/calendar" });
     const a = document.createElement("a");

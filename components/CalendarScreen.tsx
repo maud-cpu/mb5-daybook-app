@@ -29,6 +29,8 @@ function f2fReminder(id: string, text: string, date: string): Reminder {
     id: F2F_PREFIX + id,
     text,
     date,
+    time_from: null,
+    time_to: null,
     done: false,
     done_at: null,
     category: "training",
@@ -46,11 +48,13 @@ function f2fReminder(id: string, text: string, date: string): Reminder {
 // in the visible month whenever that day's weekday matches. Edited from
 // About us, not here -- read-only, like a face-to-face training session.
 const CLUB_PREFIX = "club:";
-function clubReminder(clubKey: string, text: string, date: string, childNames: string[]): Reminder {
+function clubReminder(clubKey: string, text: string, date: string, childNames: string[], timeFrom: string, timeTo: string): Reminder {
   return {
     id: `${CLUB_PREFIX}${clubKey}:${date}`,
     text,
     date,
+    time_from: timeFrom || null,
+    time_to: timeTo || null,
     done: false,
     done_at: null,
     category: "club",
@@ -85,8 +89,16 @@ function daysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate();
 }
 
-type Draft = { text: string; date: string; category: string; people: string[]; amount: string };
-const emptyDraft = (date: string): Draft => ({ text: "", date, category: REMINDER_CATEGORIES[0][0], people: [], amount: "" });
+type Draft = { text: string; date: string; category: string; people: string[]; amount: string; time_from: string; time_to: string };
+const emptyDraft = (date: string): Draft => ({
+  text: "",
+  date,
+  category: REMINDER_CATEGORIES[0][0],
+  people: [],
+  amount: "",
+  time_from: "",
+  time_to: "",
+});
 
 // A reminder linked to a priced daycare record (see 0074_reminder_record_link.sql)
 // can edit that record's own hours/time here too, so Entries and Expenses see
@@ -103,6 +115,8 @@ type ExtractedItem = {
   repeat: string;
   until: string | null;
   url: string | null;
+  timeFrom: string | null;
+  timeTo: string | null;
   source: string;
 };
 
@@ -180,7 +194,7 @@ export default function CalendarScreen() {
       const text = clubText(c.club_name, c.time_from, c.time_to);
       for (let d = 1; d <= daysInMonth(year, month); d++) {
         const iso = isoOf(year, month, d);
-        if (mondayStartWeekday(iso) === c.weekday) clubReminders.push(clubReminder(c.id, text, iso, c.childNames));
+        if (mondayStartWeekday(iso) === c.weekday) clubReminders.push(clubReminder(c.id, text, iso, c.childNames, c.time_from, c.time_to));
       }
     });
 
@@ -239,7 +253,14 @@ export default function CalendarScreen() {
 
   async function addReminder() {
     if (!draft.text.trim() || !draft.date) return;
-    const base = { text: draft.text.trim(), category: draft.category, people: draft.people, amount: draft.amount ? Number(draft.amount) : null };
+    const base = {
+      text: draft.text.trim(),
+      category: draft.category,
+      people: draft.people,
+      amount: draft.amount ? Number(draft.amount) : null,
+      time_from: draft.time_from || null,
+      time_to: draft.time_to || null,
+    };
     let rows: Record<string, unknown>[];
     if (repeat === "none") {
       rows = [{ ...base, date: draft.date }];
@@ -293,7 +314,16 @@ export default function CalendarScreen() {
   async function commitExtracted(items: ExtractedItem[]) {
     const rows: Record<string, unknown>[] = [];
     for (const it of items) {
-      const base = { text: it.text, category: it.category, people: it.people, amount: it.amount, source_text: it.source, url: it.url };
+      const base = {
+        text: it.text,
+        category: it.category,
+        people: it.people,
+        amount: it.amount,
+        source_text: it.source,
+        url: it.url,
+        time_from: it.timeFrom,
+        time_to: it.timeTo,
+      };
       if (it.repeat === "none" || !it.until) {
         rows.push({ ...base, date: it.date });
       } else {
@@ -317,7 +347,15 @@ export default function CalendarScreen() {
   }
 
   function draftFrom(r: Reminder): Draft {
-    return { text: r.text, date: r.date, category: r.category, people: r.people, amount: r.amount != null ? String(r.amount) : "" };
+    return {
+      text: r.text,
+      date: r.date,
+      category: r.category,
+      people: r.people,
+      amount: r.amount != null ? String(r.amount) : "",
+      time_from: r.time_from ?? "",
+      time_to: r.time_to ?? "",
+    };
   }
 
   function startEdit(r: Reminder) {
@@ -336,6 +374,8 @@ export default function CalendarScreen() {
       category: editDraft.category,
       people: editDraft.people,
       amount: editDraft.amount ? Number(editDraft.amount) : null,
+      time_from: editDraft.time_from || null,
+      time_to: editDraft.time_to || null,
       edited_by: myId,
     };
     const recordDraft = editRecordDraft;
@@ -487,6 +527,26 @@ export default function CalendarScreen() {
                     ))}
                   </select>
                 </div>
+                <div className="row" style={{ marginTop: 6, alignItems: "center" }}>
+                  <span className="muted" style={{ flex: "0 0 auto" }}>
+                    Time (optional)
+                  </span>
+                  <input
+                    type="time"
+                    style={{ flex: "0 0 110px" }}
+                    value={editDraft.time_from}
+                    onChange={(e) => setEditDraft({ ...editDraft, time_from: e.target.value })}
+                  />
+                  <span className="muted" style={{ flex: "0 0 auto" }}>
+                    to
+                  </span>
+                  <input
+                    type="time"
+                    style={{ flex: "0 0 110px" }}
+                    value={editDraft.time_to}
+                    onChange={(e) => setEditDraft({ ...editDraft, time_to: e.target.value })}
+                  />
+                </div>
                 <PeoplePicker options={personOptions} selected={editDraft.people} onChange={(v) => setEditDraft({ ...editDraft, people: v })} />
                 <input
                   type="number"
@@ -573,6 +633,7 @@ export default function CalendarScreen() {
                   </span>
                   <span className="day-item-meta">
                     <span>{reminderCategoryText(r.category)}</span>
+                    {r.time_from && <span>{r.time_from.slice(0, 5)}{r.time_to ? `–${r.time_to.slice(0, 5)}` : ""}</span>}
                     <PersonTags people={r.people} />
                   </span>
                 </span>
@@ -587,6 +648,7 @@ export default function CalendarScreen() {
                   </div>
                   <div className="day-item-meta">
                     <span>{reminderCategoryText(r.category)}</span>
+                    {r.time_from && <span>{r.time_from.slice(0, 5)}{r.time_to ? `–${r.time_to.slice(0, 5)}` : ""}</span>}
                     <PersonTags people={r.people} />
                     {r.amount != null ? <span>£{Number(r.amount).toFixed(2)}</span> : ""}
                     {r.url && (
@@ -638,6 +700,16 @@ export default function CalendarScreen() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="row" style={{ marginTop: 6, alignItems: "center" }}>
+                <span className="muted" style={{ flex: "0 0 auto" }}>
+                  Time (optional)
+                </span>
+                <input type="time" style={{ flex: "0 0 110px" }} value={draft.time_from} onChange={(e) => setDraft({ ...draft, time_from: e.target.value })} />
+                <span className="muted" style={{ flex: "0 0 auto" }}>
+                  to
+                </span>
+                <input type="time" style={{ flex: "0 0 110px" }} value={draft.time_to} onChange={(e) => setDraft({ ...draft, time_to: e.target.value })} />
               </div>
               <PeoplePicker options={personOptions} selected={draft.people} onChange={(v) => setDraft({ ...draft, people: v })} />
               <input
@@ -738,6 +810,26 @@ export default function CalendarScreen() {
                       </option>
                     ))}
                   </select>
+                </div>
+                <div className="row" style={{ marginTop: 6, alignItems: "center" }}>
+                  <span className="muted" style={{ flex: "0 0 auto" }}>
+                    Time (optional)
+                  </span>
+                  <input
+                    type="time"
+                    style={{ flex: "0 0 110px" }}
+                    value={it.timeFrom ?? ""}
+                    onChange={(e) => updateExtracted(it._k, { timeFrom: e.target.value || null })}
+                  />
+                  <span className="muted" style={{ flex: "0 0 auto" }}>
+                    to
+                  </span>
+                  <input
+                    type="time"
+                    style={{ flex: "0 0 110px" }}
+                    value={it.timeTo ?? ""}
+                    onChange={(e) => updateExtracted(it._k, { timeTo: e.target.value || null })}
+                  />
                 </div>
                 <PeoplePicker
                   options={personOptions}

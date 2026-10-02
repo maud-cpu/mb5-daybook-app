@@ -315,6 +315,12 @@ export type Reminder = {
   id: string;
   text: string;
   date: string;
+  /** A specific start/end time, when the text actually gave one (e.g. "be
+   * at school at 8:45", "10:30 until 12:30") -- null for a plain day
+   * marker with no time of its own. HH:MM, same convention as
+   * records.time_from/time_to. */
+  time_from: string | null;
+  time_to: string | null;
   done: boolean;
   done_at: string | null;
   category: string;
@@ -667,6 +673,9 @@ export type PendingItem = Partial<EntryRecord> & {
   reminder_date?: string | null;
   /** When flag is "reminder": which REMINDER_CATEGORIES this is, e.g. "medical" for a GP/dentist appointment. */
   reminder_category?: string;
+  /** When flag is "reminder" and the text gave a specific time (a start time, or a start-end range), HH:MM. Null/empty if the text gave no time of its own. */
+  reminder_time_from?: string | null;
+  reminder_time_to?: string | null;
   /** A school contact (e.g. class teacher) the AI spotted in the text, offered as a one-click save to the tagged child's School admin. */
   school_contact?: { name: string; contact: string } | null;
   /** A recurring club/activity the AI spotted in the text, offered as a one-click save to the tagged child's Clubs list. */

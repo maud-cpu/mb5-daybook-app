@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { today } from "@/lib/domain";
+import { parseClockTime, today } from "@/lib/domain";
 import { REMINDER_CATEGORIES } from "@/lib/types";
 import { aiErrorMessage } from "@/lib/aiErrors";
 
@@ -21,6 +21,8 @@ const EventItemSchema = z.object({
   repeat: z.enum(["none", "weekly", "fortnightly", "monthly"]),
   until: z.iso.date().nullable(),
   url: z.string().nullable(),
+  timeFrom: z.string().nullable(),
+  timeTo: z.string().nullable(),
 });
 const EventsResponseSchema = z.object({ items: z.array(EventItemSchema) });
 
@@ -68,6 +70,7 @@ export async function POST(req: NextRequest) {
   const sys = `You read a pasted email/message (from a school, a club, a fostering agency/local authority, or anywhere else a UK foster carer gets this kind of thing) and pull out calendar-worthy items: a date to remember, something to pay and by when, an event, a deadline. Today's date is ${today()} -- resolve anything relative ("this Friday", "next Wednesday", "the 15th") against that, in the correct year. One email can contain several distinct dated things (a newsletter mentioning non-uniform day AND parents' evening AND a trip payment deadline) -- return one item per distinct thing, not one blob.
 When the text asks the carer to confirm, RSVP, reply, register, or otherwise let someone know whether the child will attend/take part (e.g. "please visit the following link to let us know if...", "please let your daughter's unit leader know if they will be attending", "reply to confirm a place") -- that request to respond is itself a SEPARATE calendar-worthy item, in ADDITION to the event itself. Date the RSVP item for ${today()} (today) unless the text states an explicit reply-by/booking deadline, in which case use that deadline instead -- never the event's own date, since replying needs to happen well before the event, not on the day. Word its "text" as the action needed (e.g. "RSVP: does Zola want to go to the Remembrance Parade & Bake Sale? (8 Nov)"), and still return the event itself (same date, people, category) as its own item too if it's otherwise calendar-worthy in its own right.
 Set "url" to a web address given in the text for where to actually go to respond/RSVP/book/pay/log in (e.g. a link next to "Log in to Online Guide Manager", a booking page, a payment link), if one is literally present in the text -- copy it exactly as given, including the full "https://..." if shown. Null if no such link is in the text (a link behind clickable text that was pasted as plain text, with no visible URL, cannot be recovered -- don't guess or invent one).
+Set "timeFrom" to a specific time this item starts at (e.g. "10:30", "2pm"), transcribed exactly as given -- do NOT convert 12-hour to 24-hour yourself. Set "timeTo" the same way if an end time/range is given (e.g. "10:30 until 12:30"). Null for either when the text gives no time of its own -- most items are just a date.
 Children in this household: ${childNames.join(", ") || "none given"}. Adults in this household: ${adultNames.join(", ") || "none given"}.
 Set "people" to a list of everyone the text says this specific item is actually about or involves -- could be one child, several children (e.g. a family trip involving everyone), an adult (e.g. a parents' evening), or someone else entirely who isn't in this household (spell their name as given). Use the exact names given above where they match. Empty list if the text doesn't say who it's for.
 Set "category" to exactly one of: ${categoryKeys.join(", ")} -- "training" is for training/courses, "surrey" is fostering agency/social worker/local authority communications, "medical" is a health appointment, "family" is contact with birth family, "household" is general household/logistics, "personal" is anything else personal, "school" and "club" are self-explanatory.
@@ -95,6 +98,8 @@ Never invent a date that isn't stated or clearly resolvable from context. If the
       repeat: it.repeat,
       until: it.until,
       url: it.url && /^https?:\/\/\S+$/i.test(it.url.trim()) ? it.url.trim() : null,
+      timeFrom: parseClockTime(it.timeFrom || "") || null,
+      timeTo: parseClockTime(it.timeTo || "") || null,
     }));
     return NextResponse.json({ items });
   } catch (e) {

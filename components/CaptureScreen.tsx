@@ -682,7 +682,17 @@ export default function CaptureScreen() {
     // becoming two duplicate calendar entries instead of one with both names.
     const reminderGroups = new Map<
       string,
-      { text: string; date: string; category: string; url: string; people: string[]; recordId: string | null; recordAmbiguous: boolean }
+      {
+        text: string;
+        date: string;
+        category: string;
+        url: string;
+        timeFrom: string;
+        timeTo: string;
+        people: string[];
+        recordId: string | null;
+        recordAmbiguous: boolean;
+      }
     >();
     const reminderOrder: string[] = [];
     pending
@@ -695,7 +705,17 @@ export default function CaptureScreen() {
         const key = [date, category, text.trim().toLowerCase()].join("|");
         let group = reminderGroups.get(key);
         if (!group) {
-          group = { text, date, category, url: p.reminder_url || "", people: [], recordId: null, recordAmbiguous: false };
+          group = {
+            text,
+            date,
+            category,
+            url: p.reminder_url || "",
+            timeFrom: p.reminder_time_from || "",
+            timeTo: p.reminder_time_to || "",
+            people: [],
+            recordId: null,
+            recordAmbiguous: false,
+          };
           reminderGroups.set(key, group);
           reminderOrder.push(key);
         }
@@ -720,6 +740,8 @@ export default function CaptureScreen() {
         category: g.category,
         people: g.people,
         url: g.url || null,
+        time_from: g.timeFrom || null,
+        time_to: g.timeTo || null,
         record_id: g.recordAmbiguous ? null : g.recordId,
       };
     });
@@ -1232,6 +1254,21 @@ export default function CaptureScreen() {
                             style={{ flex: "0 0 150px" }}
                             value={p.reminder_date || today()}
                             onChange={(e) => updatePending(i, { reminder_date: e.target.value })}
+                          />
+                          <input
+                            type="time"
+                            style={{ flex: "0 0 110px" }}
+                            value={p.reminder_time_from ?? ""}
+                            onChange={(e) => updatePending(i, { reminder_time_from: e.target.value || null })}
+                          />
+                          <span className="muted" style={{ flex: "0 0 auto" }}>
+                            to
+                          </span>
+                          <input
+                            type="time"
+                            style={{ flex: "0 0 110px" }}
+                            value={p.reminder_time_to ?? ""}
+                            onChange={(e) => updatePending(i, { reminder_time_to: e.target.value || null })}
                           />
                         </div>
                       )}

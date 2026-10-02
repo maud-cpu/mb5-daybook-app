@@ -4,6 +4,30 @@ export function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/**
+ * The model reliably transcribes a spoken/written time but occasionally
+ * miscalculates the 12-to-24-hour conversion itself (caught live: "3pm til
+ * 6pm" came back as time_from "14:00" -- an hour short of 3pm). Asking it
+ * to transcribe the time as said instead, and doing this conversion here
+ * in code, makes it deterministic rather than hoping the model's
+ * arithmetic is right every time. Shared by /api/sort and
+ * /api/extract-events, both of which need the same carer-said -> HH:MM
+ * parsing for a reminder/daycare time.
+ */
+export function parseClockTime(raw: string): string {
+  const s = String(raw || "").trim().toLowerCase();
+  if (!s) return "";
+  const m = s.match(/^(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)?$/);
+  if (!m) return /^\d{2}:\d{2}$/.test(s) ? s : "";
+  let hour = Number(m[1]);
+  const minute = m[2] ?? "00";
+  const meridiem = m[3];
+  if (hour > 23 || Number(minute) > 59) return "";
+  if (meridiem === "pm" && hour < 12) hour += 12;
+  if (meridiem === "am" && hour === 12) hour = 0;
+  return `${String(hour).padStart(2, "0")}:${minute}`;
+}
+
 export function ageOf(child: Pick<Child, "born">, on = new Date()): number | null {
   if (!child.born) return null;
   const [y, m] = child.born.split("-").map(Number);

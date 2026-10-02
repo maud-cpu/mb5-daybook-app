@@ -162,6 +162,8 @@ export default function QuickAccessButtons() {
         id: `club:${c.id}`,
         text: clubText(c.club_name, c.time_from, c.time_to),
         date: today(),
+        time_from: c.time_from || null,
+        time_to: c.time_to || null,
         done: false,
         done_at: null,
         category: "club",
