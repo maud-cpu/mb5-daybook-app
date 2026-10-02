@@ -323,10 +323,15 @@ export async function POST(req: NextRequest) {
     supabase.from("household_children").select("name"),
     supabase.from("household_visitors").select("id, name"),
   ]);
-  const { data: courseRows } = await supabase
-    .from("shared_training_catalog")
-    .select("title, description")
-    .eq("archived", false);
+  const [{ data: allCourseRows }, { data: completedRows }] = await Promise.all([
+    supabase.from("shared_training_catalog").select("title, description").eq("archived", false),
+    supabase.from("training_progress").select("course_title"),
+  ]);
+  // Never suggest a course the carer has already marked done on Training &
+  // Resources -- re-recommending something already completed is exactly the
+  // noise this list exists to cut down on.
+  const completedCourseTitles = new Set(((completedRows ?? []) as { course_title: string }[]).map((c) => c.course_title.trim().toLowerCase()));
+  const courseRows = (allCourseRows ?? []).filter((c) => !completedCourseTitles.has((c.title as string).trim().toLowerCase()));
   // A child living in the household (household_children) is sometimes an
   // actual foster placement too, not just the carer's own/adopted/kinship
   // child -- so notes naming them should match and tag them just like the

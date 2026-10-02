@@ -40,19 +40,31 @@ export default function CaptureTrainingCard({ refreshKey }: { refreshKey?: numbe
   const [randomSeed] = useState(() => Math.random());
 
   async function load() {
-    const [recordsRes, { data: dismissed }, { data: courses }, { data: platforms }, { data: fb }, { data: userData }, { data: saved }] =
-      await Promise.all([
-        fetch("/api/records").then((r) => r.json()),
-        supabase.from("dismissed_training_suggestions").select("title"),
-        supabase
-          .from("shared_training_catalog")
-          .select("id, title, url, length, how, platform, external_rating, external_rating_note")
-          .eq("archived", false),
-        supabase.from("shared_training_platforms").select("name, url"),
-        supabase.from("training_feedback").select("course_id, user_id, rating, comment"),
-        supabase.auth.getUser(),
-        supabase.from("training_saved").select("title"),
-      ]);
+    const [
+      recordsRes,
+      { data: dismissed },
+      { data: courses },
+      { data: platforms },
+      { data: fb },
+      { data: userData },
+      { data: saved },
+      { data: completed },
+    ] = await Promise.all([
+      fetch("/api/records").then((r) => r.json()),
+      supabase.from("dismissed_training_suggestions").select("title"),
+      supabase
+        .from("shared_training_catalog")
+        .select("id, title, url, length, how, platform, external_rating, external_rating_note")
+        .eq("archived", false),
+      supabase.from("shared_training_platforms").select("name, url"),
+      supabase.from("training_feedback").select("course_id, user_id, rating, comment"),
+      supabase.auth.getUser(),
+      supabase.from("training_saved").select("title"),
+      // Same table Training & Resources ticks a course off in -- suggesting
+      // something already marked done here wastes the exact nudge this card
+      // exists for.
+      supabase.from("training_progress").select("course_title"),
+    ]);
 
     const urlByPlatform: Record<string, string> = {};
     (platforms ?? []).forEach((p: { name: string; url: string }) => (urlByPlatform[p.name] = p.url));
@@ -84,6 +96,9 @@ export default function CaptureTrainingCard({ refreshKey }: { refreshKey?: numbe
       },
     );
     const dismissedTitles = new Set(((dismissed as { title: string }[] | null) ?? []).map((d) => d.title.trim().toLowerCase()));
+    const completedTitles = new Set(
+      ((completed as { course_title: string }[] | null) ?? []).map((c) => c.course_title.trim().toLowerCase()),
+    );
 
     const notes: { training_note: string }[] = (recordsRes.records ?? []).filter(
       (r: { training_note: string }) => r.training_note,
@@ -95,7 +110,8 @@ export default function CaptureTrainingCard({ refreshKey }: { refreshKey?: numbe
         if (idx === -1) return;
         const title = line.slice(0, idx).trim();
         const why = line.slice(idx + 3).trim();
-        if (!title || !why || dismissedTitles.has(title.trim().toLowerCase())) return;
+        if (!title || !why || dismissedTitles.has(title.trim().toLowerCase()) || completedTitles.has(title.trim().toLowerCase()))
+          return;
         if (!map[title]) map[title] = { reasons: [] };
         if (!map[title].reasons.includes(why)) map[title].reasons.push(why);
       });
