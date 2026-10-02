@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { daycareAmount, describeExpense, describeMeds, expenseTotals, gbp, sortChildren, today } from "@/lib/domain";
 import { addDays } from "@/lib/calendarHelpers";
@@ -11,8 +12,9 @@ import { BASICS_SECTIONS } from "@/lib/basics";
 import DiaryTab from "@/components/DiaryTab";
 import HandoverTab from "@/components/HandoverTab";
 import HubLogTab from "@/components/HubLogTab";
+import AnnualReviewTab from "@/components/AnnualReviewTab";
 
-type Tab = "month" | "supervision" | "cla" | "expenses" | "meds" | "diary" | "handover" | "hub";
+type Tab = "month" | "supervision" | "cla" | "expenses" | "meds" | "diary" | "handover" | "hub" | "annualReview";
 type ChildWithBasics = Child & { basics: Record<string, string> };
 type TrainingCompletion = { title: string; completedOn: string; url: string; length: string; platform: string };
 type NewExpenseDraft = {
@@ -53,9 +55,15 @@ function fmtMonthLabel(ym: string): string {
   return new Date(ym + "-01").toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 }
 
+const TAB_VALUES: Tab[] = ["month", "supervision", "cla", "expenses", "meds", "diary", "handover", "hub", "annualReview"];
+
 export default function PaperworkScreen() {
   const supabase = createClient();
-  const [tab, setTab] = useState<Tab>("month");
+  const searchParams = useSearchParams();
+  // A link in from elsewhere (e.g. About Us's "write up your review" link)
+  // should land straight on that tab, not always on "Month".
+  const tabParam = searchParams.get("tab");
+  const [tab, setTab] = useState<Tab>((TAB_VALUES as string[]).includes(tabParam || "") ? (tabParam as Tab) : "month");
   const [records, setRecords] = useState<EntryRecord[]>([]);
   const [children, setChildren] = useState<ChildWithBasics[]>([]);
   const [rates, setRates] = useState<Rates | null>(null);
@@ -221,7 +229,7 @@ export default function PaperworkScreen() {
   return (
     <div>
       <div className="tabs">
-        {(["month", "supervision", "cla", "expenses", "meds", "diary", "handover", "hub"] as Tab[]).map((t) => (
+        {TAB_VALUES.map((t) => (
           <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
             {t === "month"
               ? "Month"
@@ -237,7 +245,9 @@ export default function PaperworkScreen() {
                         ? "Diary for SW"
                         : t === "handover"
                           ? "Handover"
-                          : "Hub log"}
+                          : t === "hub"
+                            ? "Hub log"
+                            : "Annual review"}
           </button>
         ))}
       </div>
@@ -531,6 +541,7 @@ export default function PaperworkScreen() {
       {tab === "handover" && <HandoverTab />}
 
       {tab === "hub" && <HubLogTab />}
+      {tab === "annualReview" && <AnnualReviewTab />}
     </div>
   );
 }

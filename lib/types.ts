@@ -287,6 +287,16 @@ export const DIARY_SECTIONS = [
 
 export type DiarySectionKey = (typeof DIARY_SECTIONS)[number][0];
 
+export const ANNUAL_REVIEW_SECTIONS = [
+  ["achievements", "Achievements & progress this year", "yours and the children's — training completed, skills developed, positive outcomes"],
+  ["challenges", "Challenges or support needed", "anything that's been difficult, and what support would help going forward"],
+  ["changes", "Changes to your household/circumstances", "health, relationships, work, home — anything the agency should know about"],
+  ["training_plan", "Training planned for next year", "courses or development you want to do before the next review"],
+  ["other", "Anything else", ""],
+] as const;
+
+export type AnnualReviewSectionKey = (typeof ANNUAL_REVIEW_SECTIONS)[number][0];
+
 export type Diary = {
   id: string;
   child_names: string[];

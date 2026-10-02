@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ageOf, today } from "@/lib/domain";
@@ -1201,6 +1202,9 @@ export default function AboutScreen() {
               + Add
             </button>
           </div>
+          <p className="hint" style={{ marginTop: 10 }}>
+            <Link href="/dashboard/paperwork?tab=annualReview">Write up the review, upload documents, and send it to your SSW →</Link>
+          </p>
           {savedAt && <p className="hint">Saved {savedAt}</p>}
           {closeButton()}
         </div>
