@@ -32,6 +32,8 @@ export default function AnnualReviewTab() {
   const [sentAt, setSentAt] = useState("");
   const [docs, setDocs] = useState<HouseholdDoc[]>([]);
   const [savedAt, setSavedAt] = useState("");
+  const [drafting, setDrafting] = useState(false);
+  const [draftError, setDraftError] = useState("");
 
   useEffect(() => {
     fetch("/api/household")
@@ -54,6 +56,32 @@ export default function AnnualReviewTab() {
     const next = { ...notes, [key]: value };
     setNotes(next);
     save({ annual_review_notes: next });
+  }
+
+  async function draft() {
+    setDrafting(true);
+    setDraftError("");
+    const res = await fetch("/api/draft-annual-review", { method: "POST" });
+    const data = await res.json();
+    setDrafting(false);
+    if (data.error) {
+      setDraftError(data.error);
+      return;
+    }
+    const next = { ...notes };
+    let filled = 0;
+    ANNUAL_REVIEW_SECTIONS.forEach(([k]) => {
+      if (!next[k]?.trim() && data.sections?.[k]) {
+        next[k] = data.sections[k];
+        filled++;
+      }
+    });
+    if (filled) {
+      setNotes(next);
+      save({ annual_review_notes: next });
+    } else {
+      setDraftError("Nothing new to fill in — your boxes already have content, or there's nothing in your entries to draw on.");
+    }
   }
 
   function exportWord() {
@@ -117,6 +145,15 @@ ${ANNUAL_REVIEW_SECTIONS.map(([k, h, hint]) => `<tr class="h"><td colspan="2">${
           <b>{outstandingCount ? `${outstandingCount} outstanding` : "all done"}</b>.{" "}
           <Link href="/dashboard/about">Edit the date or checklist in About Us →</Link>
         </p>
+        <button className="btn" onClick={draft} disabled={drafting}>
+          {drafting ? "Drafting…" : "Draft from my entries"}
+        </button>
+        <p className="note">
+          Pulls from your diary, supervision and social worker notes (and completed training) since{" "}
+          {household.annual_review_sent_at ? `your last review (${fmtDate(household.annual_review_sent_at)})` : "a year ago"} —
+          fills empty boxes only, never overwrites what you&apos;ve written.
+        </p>
+        {draftError && <p style={{ color: "var(--danger)", fontSize: 14 }}>{draftError}</p>}
       </div>
 
       {ANNUAL_REVIEW_SECTIONS.map(([k, h, hint]) => (
