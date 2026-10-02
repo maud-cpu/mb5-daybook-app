@@ -151,7 +151,17 @@ export default function CalendarScreen() {
   const [peopleFilter, setPeopleFilter] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [showSourceFor, setShowSourceFor] = useState<string | null>(null);
+  const [feedToken, setFeedToken] = useState("");
+  const [showPhoneSubscribe, setShowPhoneSubscribe] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [copyMsg, setCopyMsg] = useState("");
   const { authorOf, myId } = useHouseholdNames();
+
+  useEffect(() => {
+    fetch("/api/household")
+      .then((r) => r.json())
+      .then(({ household }) => setFeedToken(household?.calendar_feed_token || ""));
+  }, []);
 
   async function load() {
     const from = isoOf(year, month, 1);
@@ -303,6 +313,27 @@ export default function CalendarScreen() {
     setExtracting(false);
   }
 
+  async function regenerateFeedLink() {
+    if (!confirm("Get a new link? Your old one will stop working on any device already subscribed to it.")) return;
+    setRegenerating(true);
+    const newToken = crypto.randomUUID();
+    await fetch("/api/household", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ calendar_feed_token: newToken }),
+    });
+    setFeedToken(newToken);
+    setRegenerating(false);
+  }
+
+  function copyFeedLink(url: string) {
+    navigator.clipboard.writeText(url).then(
+      () => setCopyMsg("Copied"),
+      () => setCopyMsg("Couldn't copy"),
+    );
+    setTimeout(() => setCopyMsg(""), 2000);
+  }
+
   function updateExtracted(k: string, patch: Partial<ExtractedItem>) {
     setExtracted((prev) => prev.map((it) => (it._k === k ? { ...it, ...patch } : it)));
   }
@@ -442,8 +473,45 @@ export default function CalendarScreen() {
     setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
   }
 
+  const feedUrlHttps = feedToken ? `${typeof window !== "undefined" ? window.location.origin : ""}/api/public/calendar-feed?token=${feedToken}` : "";
+  const feedUrlWebcal = feedUrlHttps.replace(/^https?:\/\//, "webcal://");
+
   return (
     <div>
+      <div className="card">
+        <p className="hint" style={{ cursor: "pointer" }} onClick={() => setShowPhoneSubscribe((v) => !v)}>
+          {showPhoneSubscribe ? "▾" : "▸"} 📱 Subscribe on your phone / Google Calendar
+        </p>
+        {showPhoneSubscribe && (
+          <>
+            <p className="hint">
+              Add this once as a calendar subscription (not a one-off import) and it keeps itself up to date on its
+              own — most calendar apps check for changes every few hours. On an iPhone/iPad, tap the link below. In
+              Google Calendar, go to Settings → Add calendar → From URL and paste the link.
+            </p>
+            {feedToken ? (
+              <>
+                <a className="chip" href={feedUrlWebcal}>
+                  📅 Tap to subscribe (iPhone/iPad)
+                </a>{" "}
+                <button className="chip" onClick={() => copyFeedLink(feedUrlHttps)}>
+                  Copy link for Google Calendar
+                </button>
+                {copyMsg && <span className="hint"> {copyMsg}</span>}
+                <p className="hint" style={{ marginTop: 8 }}>
+                  <button className="chip" disabled={regenerating} onClick={regenerateFeedLink}>
+                    {regenerating ? "Generating…" : "Get a new link"}
+                  </button>{" "}
+                  if this one&apos;s ever shared somewhere you didn&apos;t mean it to be.
+                </p>
+              </>
+            ) : (
+              <p className="muted">Loading…</p>
+            )}
+          </>
+        )}
+      </div>
+
       <div className="card">
         <div className="row" style={{ alignItems: "center", justifyContent: "space-between" }}>
           <button
