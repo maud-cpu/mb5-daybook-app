@@ -26,9 +26,11 @@ export async function POST(req: NextRequest) {
   const voiceInstructions =
     voice === "handover"
       ? `a practical handover note about ${who} for another carer to read before looking after ${who} -- specific and useful at a glance, plain British English, short practical bullet points or sentences a carer could act on`
-      : `written TO ${who} in the second person ("You came to us…"), warm, plain, honest and factual, in British English`;
+      : voice === "annualReview"
+        ? `written by the carer herself in the first person ("I"), about her own year as a foster carer -- plain, honest, factual British English, suitable for her supervising social worker to read as part of her annual review`
+        : `written TO ${who} in the second person ("You came to us…"), warm, plain, honest and factual, in British English`;
 
-  const sys = `You are updating one box of a UK foster carer's ${voice === "handover" ? "handover profile" : "diary"} for ${who}, titled "${label}"${hint ? ` (${hint})` : ""}. The carer has typed a new note to add to it. Rewrite the box's full contents ${voiceInstructions}, weaving the new note in alongside whatever was already there. Keep everything factually true to both texts -- never invent anything, never drop something already there unless the new note corrects it. If the box was empty, just write it up from the new note alone. Return only the rewritten box text and nothing else -- no heading, no preamble, no quote marks around it.`;
+  const sys = `You are updating one box of a UK foster carer's ${voice === "handover" ? "handover profile" : voice === "annualReview" ? "annual review" : "diary"}${voice === "annualReview" ? "" : ` for ${who}`}, titled "${label}"${hint ? ` (${hint})` : ""}. The carer has typed a new note to add to it. Rewrite the box's full contents ${voiceInstructions}, weaving the new note in alongside whatever was already there. Keep everything factually true to both texts -- never invent anything, never drop something already there unless the new note corrects it. If the box was empty, just write it up from the new note alone. Return only the rewritten box text and nothing else -- no heading, no preamble, no quote marks around it.`;
 
   const existing = (existingText || "").trim();
   const userMsg = existing ? `Current box content:\n${existing}\n\nNew note to add:\n${note.trim()}` : `New note to add:\n${note.trim()}`;

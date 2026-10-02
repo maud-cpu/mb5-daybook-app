@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { today } from "@/lib/domain";
 import { ANNUAL_REVIEW_SECTIONS, AnnualReviewSectionKey } from "@/lib/types";
 import HouseholdDocuments, { HouseholdDoc } from "@/components/HouseholdDocuments";
 
@@ -34,6 +35,10 @@ export default function AnnualReviewTab() {
   const [savedAt, setSavedAt] = useState("");
   const [drafting, setDrafting] = useState(false);
   const [draftError, setDraftError] = useState("");
+  const [noteOpenFor, setNoteOpenFor] = useState<AnnualReviewSectionKey | null>(null);
+  const [noteFor, setNoteFor] = useState<Partial<Record<AnnualReviewSectionKey, string>>>({});
+  const [noteError, setNoteError] = useState<Partial<Record<AnnualReviewSectionKey, string>>>({});
+  const [rewritingFor, setRewritingFor] = useState<AnnualReviewSectionKey | null>(null);
 
   useEffect(() => {
     fetch("/api/household")
@@ -56,6 +61,40 @@ export default function AnnualReviewTab() {
     const next = { ...notes, [key]: value };
     setNotes(next);
     save({ annual_review_notes: next });
+  }
+
+  async function addNoteAndRewrite(key: AnnualReviewSectionKey, label: string, hint: string) {
+    const note = (noteFor[key] || "").trim();
+    if (!note) return;
+    setRewritingFor(key);
+    setNoteError((prev) => ({ ...prev, [key]: "" }));
+    // Save the carer's own words as a real record first -- the rewrite below
+    // only ever touches this box's text, same reasoning as the Diary tab's
+    // own "Add a note & rewrite".
+    const recRes = await fetch("/api/records", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: [{ bucket: "scratch", date: today(), text: note, kids: [], child: "" }] }),
+    });
+    if (!recRes.ok) {
+      setNoteError((prev) => ({ ...prev, [key]: "Couldn't save that note" }));
+      setRewritingFor(null);
+      return;
+    }
+    const res = await fetch("/api/rewrite-box", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label, hint, existingText: notes[key], note, voice: "annualReview" }),
+    });
+    const data = await res.json();
+    setRewritingFor(null);
+    if (data.error) {
+      setNoteError((prev) => ({ ...prev, [key]: `${data.error} — but your note is saved on the record.` }));
+      return;
+    }
+    saveNote(key, data.text);
+    setNoteFor((prev) => ({ ...prev, [key]: "" }));
+    setNoteOpenFor(null);
   }
 
   async function draft() {
@@ -161,6 +200,30 @@ ${ANNUAL_REVIEW_SECTIONS.map(([k, h, hint]) => `<tr class="h"><td colspan="2">${
           <h3>{h}</h3>
           {hint && <p className="muted">{hint}</p>}
           <textarea rows={4} value={notes[k] || ""} onChange={(e) => setNotes((prev) => ({ ...prev, [k]: e.target.value }))} onBlur={() => saveNote(k, notes[k] || "")} />
+          {noteOpenFor === k ? (
+            <div style={{ marginTop: 8, padding: 8, background: "#fbfaf6", borderRadius: "var(--radius-sm)" }}>
+              <textarea
+                rows={2}
+                placeholder="Add something extra and I'll weave it into the box above"
+                value={noteFor[k] || ""}
+                onChange={(e) => setNoteFor((prev) => ({ ...prev, [k]: e.target.value }))}
+              />
+              {noteError[k] && <p style={{ color: "var(--danger)", fontSize: 14 }}>{noteError[k]}</p>}
+              <div className="row">
+                <button className="btn" onClick={() => addNoteAndRewrite(k, h, hint)} disabled={rewritingFor === k || !noteFor[k]?.trim()}>
+                  {rewritingFor === k ? "Rewriting…" : "Add & rewrite"}
+                </button>
+                <button className="chip" onClick={() => setNoteOpenFor(null)}>
+                  Cancel
+                </button>
+              </div>
+              <p className="note">This also gets saved as one of your own entries.</p>
+            </div>
+          ) : (
+            <button className="chip" onClick={() => setNoteOpenFor(k)}>
+              + Add a note &amp; rewrite
+            </button>
+          )}
         </div>
       ))}
 
