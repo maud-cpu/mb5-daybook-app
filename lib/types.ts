@@ -347,6 +347,10 @@ export type Reminder = {
    * (RSVP, log in, pay, book) -- e.g. "Log in to Online Guide Manager" in a
    * pasted email. Null when none was found/given. */
   url?: string | null;
+  /** Set when this was pushed from the hub lead's Hub calendar (see
+   * 0083_hub_calendar.sql) rather than created by this household itself --
+   * kept in sync with the shared_hub_events row it came from. */
+  hub_event_id?: string | null;
 };
 
 export const REPEAT_OPTIONS = [
