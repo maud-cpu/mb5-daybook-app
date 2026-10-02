@@ -26,8 +26,9 @@ const PROFILE_ENC_FIELDS = [
 
 // A big household history (a year or more of diary entries) takes the model
 // longer to read through and reason over than a normal request -- give it
-// the same headroom /api/sort gets for the same reason.
-export const maxDuration = 60;
+// the same headroom /api/sort gets for the same reason (raised from 60 after
+// a real 60s timeout there confirmed Fluid Compute supports well beyond it).
+export const maxDuration = 120;
 
 // Every basics field, in the same labels/order About Us uses -- repeatable
 // fields (allergies, teacher contacts, extra dates) are stored as a JSON

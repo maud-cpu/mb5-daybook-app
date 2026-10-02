@@ -3,7 +3,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { aiErrorMessage } from "@/lib/aiErrors";
 
-export const maxDuration = 60;
+// See /api/sort for why this is 120, not the default 60 -- same AI-heavy
+// shape of request, same confirmed Fluid Compute headroom to use.
+export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();

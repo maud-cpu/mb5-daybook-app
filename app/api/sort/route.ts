@@ -8,13 +8,15 @@ import { parseClockTime, today } from "@/lib/domain";
 import { BUCKETS, DAYCARE_REASONS, FlagKey, HUB_SUPPORT_TYPE_KEYS, PendingItem, REMINDER_CATEGORIES } from "@/lib/types";
 import { aiErrorMessage } from "@/lib/aiErrors";
 
-// A long, detailed note (several paragraphs covering a whole incident) needs
-// the model longer to sort into several richly-filled items than Vercel's
-// default serverless function timeout allows -- a real crisis entry was cut
-// off mid-request and silently fell back to a plain, unflagged "Just record"
-// with none of the AI sorting applied. Without this, that failure mode is
-// indistinguishable from the AI just not being available.
-export const maxDuration = 60;
+// A long, detailed note (several distinct things, each needing training/hub
+// lookups -- a real one: a CLA summary covering a safeguarding comment, a
+// housing date, a training suggestion involving several hub carers, an
+// anniversary and a PEP date) can take the model longer to sort than even
+// this generous a budget -- confirmed live as a hard "Task timed out after
+// 60 seconds" Vercel error, not a flaky request. Fluid Compute (enabled on
+// this project) supports well beyond 60s, so this was the code's own
+// ceiling, not the account's -- raised for real headroom on a rich note.
+export const maxDuration = 120;
 
 const REMINDER_CATEGORY_KEYS = REMINDER_CATEGORIES.map(([k]) => k);
 
