@@ -50,7 +50,7 @@ const EXTRACT_KEYS = [
 function fieldMeta(key: string) {
   for (const section of BASICS_SECTIONS) {
     const field = section.fields.find((f) => f.key === key);
-    if (field) return field;
+    if (field) return { ...field, sectionTitle: section.title };
   }
   return undefined;
 }
@@ -59,7 +59,13 @@ const ExtractSchema = z.object(
   Object.fromEntries(
     EXTRACT_KEYS.map((key) => {
       const field = fieldMeta(key);
-      const desc = [field?.label, field?.placeholder].filter(Boolean).join(" -- ");
+      // A bare field label (e.g. "Dislikes") reads fine in the UI, grouped
+      // visually under its own section heading ("Food") -- but flattened
+      // into a schema description with nothing else to go on, "Dislikes"
+      // alone let a document's general "doesn't like maths" land in food
+      // dislikes instead of being left out. The section title disambiguates
+      // this the same way the UI's own grouping already does.
+      const desc = [field ? `${field.sectionTitle}: ${field.label}` : undefined, field?.placeholder].filter(Boolean).join(" -- ");
       return [key, z.string().describe(desc || key)];
     }),
   ) as Record<(typeof EXTRACT_KEYS)[number], z.ZodString>,
@@ -127,7 +133,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const sys = `You extract information about a child in UK foster care from a document a carer has on file (an old handover, meeting notes, an assessment, a report, correspondence). Use only what is actually written -- never invent or infer a contact, number or preference that isn't there. Leave a field as an empty string if the document doesn't give it. Write in plain British English, combining a name/number/address for the same thing onto one short readable line where the fields ask for that.`;
+  const sys = `You extract information about a child in UK foster care from a document a carer has on file (an old handover, meeting notes, an assessment, a report, correspondence). Use only what is actually written -- never invent or infer a contact, number or preference that isn't there. Leave a field as an empty string if the document doesn't give it. Write in plain British English, combining a name/number/address for the same thing onto one short readable line where the fields ask for that. Each field's description says which section it belongs to (e.g. "Food: Dislikes") -- match a preference, like or dislike to the section it's actually about, never to the nearest-sounding field regardless of topic (a child disliking a school subject is not a food dislike, disliking a food is not a school note).`;
 
   try {
     const anthropic = new Anthropic({ apiKey });
