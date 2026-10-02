@@ -119,7 +119,12 @@ export default function EntriesScreen() {
 
   async function del(id: string) {
     if (!confirm("Delete this entry?")) return;
-    await fetch(`/api/records?id=${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/records?id=${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert("Couldn't delete: " + (data.error || "unknown error"));
+      return;
+    }
     setRecords((prev) => prev.filter((r) => r.id !== id));
   }
 
