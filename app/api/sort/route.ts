@@ -318,19 +318,33 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No text given" }, { status: 400 });
   }
 
-  const [{ data: children }, { data: householdChildren }, { data: hubVisitorRows }, { data: upcomingReminderRows }] = await Promise.all([
-    supabase.from("children").select("name, lives_here, linked_visitor_id"),
-    supabase.from("household_children").select("name"),
-    supabase.from("household_visitors").select("id, name"),
-    // A later note often refers back to something already on the calendar
-    // by name only ("I'm also going to Bough Beech") without restating its
-    // date -- without this, every note is sorted in total isolation and the
-    // model has no way to know "Bough Beech" already means a specific date,
-    // so it fell back to today's date instead of the trip's actual one.
-    // Scoped to upcoming/undone only (not the full history "ask" uses) so
-    // this stays a short, cheap list on every single capture.
-    supabase.from("reminders").select("date, text, people").eq("done", false).gte("date", today()).order("date").limit(40),
-  ]);
+  const [{ data: children }, { data: householdChildren }, { data: hubVisitorRows }, { data: upcomingReminderRows }, { data: recentRecordRows }] =
+    await Promise.all([
+      supabase.from("children").select("name, lives_here, linked_visitor_id"),
+      supabase.from("household_children").select("name"),
+      supabase.from("household_visitors").select("id, name"),
+      // A later note often refers back to something already on the calendar
+      // by name only ("I'm also going to Bough Beech") without restating its
+      // date -- without this, every note is sorted in total isolation and the
+      // model has no way to know "Bough Beech" already means a specific date,
+      // so it fell back to today's date instead of the trip's actual one.
+      // Scoped to upcoming/undone only (not the full history "ask" uses) so
+      // this stays a short, cheap list on every single capture.
+      supabase.from("reminders").select("date, text, people").eq("done", false).gte("date", today()).order("date").limit(40),
+      // Same reasoning, for things that were only ever said in a diary/
+      // supervision/sw/scratch note, never put on the calendar -- a recent
+      // mention is still exactly the kind of thing a later note ("the school
+      // called about it again") might refer back to without repeating. Left
+      // out of expenses/meds (highly structured, rarely referenced by name)
+      // to keep this short and cheap on every single capture, not a second
+      // "ask"-sized context dump.
+      supabase
+        .from("records")
+        .select("date, bucket, text, kids")
+        .in("bucket", ["diary", "supervision", "sw", "scratch", "incident"])
+        .order("date", { ascending: false })
+        .limit(25),
+    ]);
   const [{ data: allCourseRows }, { data: completedRows }] = await Promise.all([
     supabase.from("shared_training_catalog").select("title, description").eq("archived", false),
     supabase.from("training_progress").select("course_title"),
@@ -374,6 +388,10 @@ export async function POST(req: NextRequest) {
     ((upcomingReminderRows ?? []) as { date: string; text: string; people: string[] }[])
       .map((r) => `${r.date} — ${r.text}${r.people?.length ? " (" + r.people.join(", ") + ")" : ""}`)
       .join("\n") || "(nothing upcoming)";
+  const recentEntriesBlock =
+    ((recentRecordRows ?? []) as { date: string; bucket: string; text: string; kids: string[] }[])
+      .map((r) => `${r.date} · ${BUCKETS[r.bucket as keyof typeof BUCKETS] || r.bucket}${r.kids?.length ? " · " + r.kids.join(", ") : ""} — ${r.text}`)
+      .join("\n") || "(none)";
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -402,6 +420,9 @@ Today's date is ${today()} -- resolve anything relative ("next Friday", "in two 
 Already on the calendar (each note is sorted independently, with no memory of anything said before it, so this is the only way to know about something already recorded):
 ${upcomingRemindersBlock}
 If THIS note names something that's clearly the same thing as one of those (a trip, event or appointment referred to by name, place or who it's with, without restating its own date -- e.g. "I'm also going to Bough Beech" when "Bough Beech" is already above on a specific date), treat it as being about that existing date: use THAT date for "eventDate"/"reminderDate" (with "reminder" flagged the same as any other dated item) rather than defaulting to today just because this note itself doesn't repeat the date. Only match something clearly the same thing, named explicitly -- never guess a connection that isn't actually there.
+Recently logged (most recent first, for the same reason -- something only ever mentioned in a diary/supervision/sw note, never put on the calendar, can still be referred back to later the same way):
+${recentEntriesBlock}
+Use this the same way as the calendar list above: if THIS note clearly continues or refers back to one of these (the same named thing, same ongoing situation), use what's already known rather than treating it as unconnected or guessing it's about today. Never just repeat or restate one of these as if it were new.
 Children known: ${names.join(", ") || "unknown"}. Match spoken names to these where obvious. If the carer names where something goes, obey. Otherwise choose sensibly; use scratch when unsure. Split into separate items if there are several things. Keep the carer's words, tidied for a written record, British English. Never add facts.
 Of those, children who live in the carer's own household (their own/adopted/kinship children, or their own foster placements): ${householdChildNames.join(", ") || "none"}. Children who instead VISIT for day care/sleepovers from another carer's household (this is the ONLY group "daycare"/"expenses" below is ever billable for): ${visitingChildNames.join(", ") || "none"}. This distinction is what decides "expenses"/"daycare" below, regardless of how the note itself is worded -- e.g. "Darcie on daycare Saturday 3-9pm" IS billable daycare if Darcie is in the visiting list, even though the text doesn't say whose child she is.
 "kids" for each item must only be children the carer actually names or unambiguously refers to (e.g. "she"/"her" meaning the one child just named) in THAT item's own text — never add a child who isn't mentioned there, even if they're mentioned in a different item from the same note. This includes a child named possessively to identify a place or person (e.g. "at Arthur and Henry's school", "Ruby's dentist", "collecting from Jamie's club") -- naming a child that way to say where/who something involves still means they're being referred to, so put them in "kids" too, even though the sentence isn't really "about" them the way a diary entry usually is. Never drop a named child just because they're only mentioned in passing like this -- an unfamiliar name in "kids" is exactly how this app offers to add a brand new child, so a name left out here never gets asked about at all.
