@@ -61,6 +61,22 @@ function isMandatory(c: Course): boolean {
   return c.group_key !== "next";
 }
 
+// Read/watch/listen for the Inspire me tab -- keyed off the same
+// "<Medium>, <duration>" convention the admin bulk-import/edit tools
+// already write (see AdminSharedContent.tsx's KIND_TO_LENGTH map and its
+// "Video, 3 min" / "Book, ~250 pages" placeholders), so no new data is
+// needed, just reading what's already there a different way. Anything
+// that doesn't match a known medium (an in-person workshop, a bare
+// "Online", a row with no length set at all) falls outside all three --
+// counted as neither a book, a video, nor a podcast.
+function mediumBucket(c: Course): "read" | "watch" | "listen" | null {
+  const m = mediumOf(c).toLowerCase();
+  if (/book|article|read|text|document|pdf/.test(m)) return "read";
+  if (/podcast|audio/.test(m)) return "listen";
+  if (/video|movie|film|tv|webinar/.test(m)) return "watch";
+  return null;
+}
+
 // A book's full title/subtitle/author/bestseller blurb can run to 150+
 // characters, which reads fine as an Amazon listing but turns a training-
 // list row into a wall of text next to every plain course name. Cut at the
@@ -81,13 +97,14 @@ const COURSE_SORTS = [
 // catalogue all competing for attention at once. Splitting into explicit
 // tabs makes it immediately obvious which mode you're in, instead of
 // relying on filters quietly narrowing one shared list.
-type TrainingTab = "all" | "suggested" | "compulsory" | "inspire" | "search";
+type TrainingTab = "all" | "suggested" | "compulsory" | "inspire" | "search" | "log";
 const TRAINING_TABS: [TrainingTab, string][] = [
   ["all", "All training & resources"],
   ["suggested", "Suggested for you"],
   ["compulsory", "Compulsory only"],
   ["inspire", "Inspire me"],
   ["search", "Search"],
+  ["log", "Log a training"],
 ];
 
 // A stable pseudo-random number for (seed, id) -- gives a shuffled order
@@ -501,23 +518,100 @@ export default function TrainingScreen() {
     const pool = courses.filter((c) => c.id !== linkedCourse?.id);
     const notDone = pool.filter((c) => !progress[c.title]);
     const basis = notDone.length ? notDone : pool;
-    const pick = basis.length
-      ? [...basis].sort((a, b) => seededRandom(inspireSeed, a.id) - seededRandom(inspireSeed, b.id))[0]
-      : undefined;
-    if (!pick) {
-      return (
-        <div className="card">
-          <p className="empty">Nothing in the catalogue yet to suggest.</p>
-        </div>
-      );
+
+    function pickFrom(list: Course[]): Course | undefined {
+      return list.length
+        ? [...list].sort((a, b) => seededRandom(inspireSeed, a.id) - seededRandom(inspireSeed, b.id))[0]
+        : undefined;
     }
-    return renderGroupCard(
-      { key: "inspire", label: "🎲 Something to try", rows: [pick] },
+
+    const reroll = (
       <div className="row" style={{ margin: "0 0 10px", justifyContent: "flex-end" }}>
         <button className="chip" onClick={() => setInspireSeed(Math.random())}>
           🔀 Show me another
         </button>
-      </div>,
+      </div>
+    );
+
+    const buckets = (["read", "watch", "listen"] as const)
+      .map((kind) => ({
+        kind,
+        label: kind === "read" ? "📖 One to read" : kind === "watch" ? "🎬 One to watch" : "🎙️ One to listen to",
+        pick: pickFrom(basis.filter((c) => mediumBucket(c) === kind)),
+      }))
+      .filter((b) => b.pick);
+
+    if (!buckets.length) {
+      // Nothing in the catalogue has a recognisable read/watch/listen
+      // medium (or the catalogue's just empty) -- fall back to one plain
+      // random pick rather than showing nothing at all.
+      const pick = pickFrom(basis);
+      if (!pick) {
+        return (
+          <div className="card">
+            <p className="empty">Nothing in the catalogue yet to suggest.</p>
+          </div>
+        );
+      }
+      return renderGroupCard({ key: "inspire", label: "🎲 Something to try", rows: [pick] }, reroll);
+    }
+
+    return (
+      <>
+        {reroll}
+        {buckets.map((b) => renderGroupCard({ key: b.kind, label: b.label, rows: b.pick ? [b.pick] : [] }))}
+      </>
+    );
+  }
+
+  function logTab() {
+    const catalogTitles = new Set(courses.map((c) => c.title.trim().toLowerCase()));
+    const otherTraining = Object.entries(progress).filter(([title]) => !catalogTitles.has(title.trim().toLowerCase()));
+    return (
+      <div className="card">
+        <h3>Log a training</h3>
+        <p className="hint">
+          Attended or completed via a Capture note, or add one here directly — for anything not in the courses
+          listed on the other tabs.
+        </p>
+        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+          <input
+            type="text"
+            placeholder="What training did you do?"
+            value={manualTitle}
+            onChange={(e) => setManualTitle(e.target.value)}
+            style={{ flex: "1 1 200px" }}
+          />
+          <input type="date" value={manualDate} onChange={(e) => setManualDate(e.target.value)} style={{ flex: "0 0 150px" }} />
+          <button
+            className="chip"
+            style={{ flex: "0 0 auto" }}
+            disabled={!manualTitle.trim()}
+            onClick={() => {
+              setCompleted(manualTitle.trim(), manualDate);
+              setManualTitle("");
+            }}
+          >
+            Log it
+          </button>
+        </div>
+        {otherTraining
+          .sort((a, b) => b[1].localeCompare(a[1]))
+          .map(([title, completedOn]) => (
+            <div key={title} className="rec" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+              <span style={{ flex: 1 }}>
+                <b>{title}</b>
+                <br />
+                <small className="muted">
+                  {new Date(completedOn + "T12:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                </small>
+              </span>
+              <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => setCompleted(title, "")}>
+                Remove
+              </button>
+            </div>
+          ))}
+      </div>
     );
   }
 
@@ -606,6 +700,7 @@ export default function TrainingScreen() {
       {trainingTab === "compulsory" && renderGroupCard({ key: "compulsory", label: "⭐ Compulsory training", rows: compulsoryRows }, sortPicker(false))}
       {trainingTab === "inspire" && inspireTab()}
       {trainingTab === "search" && searchTab()}
+      {trainingTab === "log" && logTab()}
 
       {Object.keys(savedTitles).length > 0 && (
         <div className="card">
@@ -640,59 +735,6 @@ export default function TrainingScreen() {
               })}
         </div>
       )}
-      {(() => {
-        const catalogTitles = new Set(courses.map((c) => c.title.trim().toLowerCase()));
-        const otherTraining = Object.entries(progress).filter(([title]) => !catalogTitles.has(title.trim().toLowerCase()));
-        return (
-          <div className="card">
-            <h3>Other training you&apos;ve logged</h3>
-            <p className="hint">
-              Attended or completed via a Capture note, or add one here directly — for anything not in the courses
-              above.
-            </p>
-            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-              <input
-                type="text"
-                placeholder="What training did you do?"
-                value={manualTitle}
-                onChange={(e) => setManualTitle(e.target.value)}
-                style={{ flex: "1 1 200px" }}
-              />
-              <input
-                type="date"
-                value={manualDate}
-                onChange={(e) => setManualDate(e.target.value)}
-                style={{ flex: "0 0 150px" }}
-              />
-              <button
-                className="chip"
-                style={{ flex: "0 0 auto" }}
-                disabled={!manualTitle.trim()}
-                onClick={() => {
-                  setCompleted(manualTitle.trim(), manualDate);
-                  setManualTitle("");
-                }}
-              >
-                Log it
-              </button>
-            </div>
-            {otherTraining
-              .sort((a, b) => b[1].localeCompare(a[1]))
-              .map(([title, completedOn]) => (
-                <div key={title} className="rec" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
-                  <span style={{ flex: 1 }}>
-                    <b>{title}</b>
-                    <br />
-                    <small className="muted">{new Date(completedOn + "T12:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</small>
-                  </span>
-                  <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => setCompleted(title, "")}>
-                    Remove
-                  </button>
-                </div>
-              ))}
-          </div>
-        );
-      })()}
       <ResourceRecommendations />
       {dismissed.length > 0 && (
         <div className="card">
