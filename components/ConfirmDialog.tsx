@@ -12,7 +12,9 @@ export default function ConfirmDialog({
   itemLabel,
   alsoRemoves,
   confirmLabel = "Remove",
+  secondaryLabel,
   onConfirm,
+  onSecondary,
   onCancel,
 }: {
   title: string;
@@ -21,7 +23,10 @@ export default function ConfirmDialog({
   /** Other places this will also disappear from (e.g. ["Calendar"], ["Entries / Expenses"]) -- omitted or empty shows no such warning. */
   alsoRemoves?: string[];
   confirmLabel?: string;
+  /** A middle option alongside Cancel/Confirm, e.g. "Delete this, keep Calendar" -- omitted when there's nothing linked to offer a choice about. */
+  secondaryLabel?: string;
   onConfirm: () => void;
+  onSecondary?: () => void;
   onCancel: () => void;
 }) {
   return (
@@ -43,10 +48,15 @@ export default function ConfirmDialog({
             </ul>
           </div>
         )}
-        <div className="row" style={{ marginTop: 16, justifyContent: "flex-end" }}>
+        <div className="row" style={{ marginTop: 16, flexWrap: "wrap", justifyContent: "flex-end" }}>
           <button className="chip" style={{ flex: "0 0 auto" }} onClick={onCancel}>
             Cancel
           </button>
+          {secondaryLabel && onSecondary && (
+            <button className="chip" style={{ flex: "0 0 auto" }} onClick={onSecondary}>
+              {secondaryLabel}
+            </button>
+          )}
           <button className="chip" style={{ flex: "0 0 auto", background: "var(--danger)", color: "#fff", borderColor: "var(--danger)" }} onClick={onConfirm}>
             {confirmLabel}
           </button>

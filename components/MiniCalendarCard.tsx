@@ -242,13 +242,15 @@ export default function MiniCalendarCard() {
     setPendingDelete({ id: editingId, text: draft.text, recordIds: editingRecordIds });
   }
 
-  async function confirmDeleteEditing() {
+  async function confirmDeleteEditing(keepLinked = false) {
     const target = pendingDelete;
     if (!target) return;
     setPendingDelete(null);
     await Promise.all([
       fetch(`/api/reminders?id=${target.id}`, { method: "DELETE" }),
-      target.recordIds.length ? fetch(`/api/records?ids=${target.recordIds.join(",")}`, { method: "DELETE" }) : Promise.resolve(),
+      !keepLinked && target.recordIds.length
+        ? fetch(`/api/records?ids=${target.recordIds.join(",")}`, { method: "DELETE" })
+        : Promise.resolve(),
     ]);
     setEditingId(null);
     setEditRecordDraft(null);
@@ -498,7 +500,10 @@ export default function MiniCalendarCard() {
           title="Remove this reminder?"
           itemLabel={pendingDelete.text}
           alsoRemoves={pendingDelete.recordIds.length ? ["Entries / Expenses"] : []}
-          onConfirm={confirmDeleteEditing}
+          confirmLabel={pendingDelete.recordIds.length ? "Delete both" : "Remove"}
+          secondaryLabel={pendingDelete.recordIds.length ? "Remove this, keep entry" : undefined}
+          onSecondary={pendingDelete.recordIds.length ? () => confirmDeleteEditing(true) : undefined}
+          onConfirm={() => confirmDeleteEditing(false)}
           onCancel={() => setPendingDelete(null)}
         />
       )}

@@ -158,11 +158,11 @@ export default function EntriesScreen() {
     });
   }
 
-  async function confirmDelete() {
+  async function confirmDelete(keepLinked = false) {
     const target = pendingDelete;
     if (!target) return;
     setPendingDelete(null);
-    const res = await fetch(`/api/records?ids=${target.ids.join(",")}`, { method: "DELETE" });
+    const res = await fetch(`/api/records?ids=${target.ids.join(",")}${keepLinked ? "&keepLinked=1" : ""}`, { method: "DELETE" });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       alert("Couldn't delete: " + (data.error || "unknown error"));
@@ -345,8 +345,10 @@ export default function EntriesScreen() {
           title={pendingDelete.ids.length > 1 ? `Delete ${pendingDelete.label}?` : "Delete this entry?"}
           itemLabel={pendingDelete.ids.length === 1 ? pendingDelete.label : undefined}
           alsoRemoves={pendingDelete.alsoRemoves}
-          confirmLabel="Delete"
-          onConfirm={confirmDelete}
+          confirmLabel={pendingDelete.alsoRemoves.length ? "Delete both" : "Delete"}
+          secondaryLabel={pendingDelete.alsoRemoves.length ? "Delete this, keep Calendar" : undefined}
+          onSecondary={pendingDelete.alsoRemoves.length ? () => confirmDelete(true) : undefined}
+          onConfirm={() => confirmDelete(false)}
           onCancel={() => setPendingDelete(null)}
         />
       )}

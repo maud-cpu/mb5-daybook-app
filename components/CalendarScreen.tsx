@@ -447,7 +447,7 @@ export default function CalendarScreen() {
     setPendingDelete(r);
   }
 
-  async function confirmDeleteOne() {
+  async function confirmDeleteOne(keepLinked = false) {
     const r = pendingDelete;
     if (!r) return;
     setPendingDelete(null);
@@ -457,7 +457,7 @@ export default function CalendarScreen() {
     setEditingId(null);
     const [remRes] = await Promise.all([
       fetch(`/api/reminders?id=${r.id}`, { method: "DELETE" }).then((res) => res.json()),
-      recordIds.length ? fetch(`/api/records?ids=${recordIds.join(",")}`, { method: "DELETE" }) : Promise.resolve(),
+      !keepLinked && recordIds.length ? fetch(`/api/records?ids=${recordIds.join(",")}`, { method: "DELETE" }) : Promise.resolve(),
     ]);
     if (remRes?.error) alert(`Couldn't remove "${r.text}": ${remRes.error}`);
     load();
@@ -485,6 +485,9 @@ export default function CalendarScreen() {
 
   const feedUrlHttps = feedToken ? `${typeof window !== "undefined" ? window.location.origin : ""}/api/public/calendar-feed?token=${feedToken}` : "";
   const feedUrlWebcal = feedUrlHttps.replace(/^https?:\/\//, "webcal://");
+  const pendingDeleteHasRecord = pendingDelete
+    ? [pendingDelete.record_id, ...(pendingDelete.record_ids || [])].filter(Boolean).length > 0
+    : false;
 
   return (
     <div>
@@ -1016,10 +1019,11 @@ export default function CalendarScreen() {
         <ConfirmDialog
           title="Remove this reminder?"
           itemLabel={pendingDelete.text}
-          alsoRemoves={
-            [pendingDelete.record_id, ...(pendingDelete.record_ids || [])].filter(Boolean).length ? ["Entries / Expenses"] : []
-          }
-          onConfirm={confirmDeleteOne}
+          alsoRemoves={pendingDeleteHasRecord ? ["Entries / Expenses"] : []}
+          confirmLabel={pendingDeleteHasRecord ? "Delete both" : "Remove"}
+          secondaryLabel={pendingDeleteHasRecord ? "Remove this, keep entry" : undefined}
+          onSecondary={pendingDeleteHasRecord ? () => confirmDeleteOne(true) : undefined}
+          onConfirm={() => confirmDeleteOne(false)}
           onCancel={() => setPendingDelete(null)}
         />
       )}
