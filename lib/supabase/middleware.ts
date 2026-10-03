@@ -29,7 +29,11 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const isPublic = path === "/login" || path.startsWith("/_next") || path.startsWith("/api/public");
+  // Vercel Cron calls /api/cron/* with no session cookie at all, the same
+  // problem /api/public solves for the calendar feed -- it's not "public"
+  // data though, so it stays its own prefix and is secured by the route's
+  // own CRON_SECRET bearer-token check instead of a user session.
+  const isPublic = path === "/login" || path.startsWith("/_next") || path.startsWith("/api/public") || path.startsWith("/api/cron");
   // The MFA challenge/redeem endpoints have to stay reachable even for a
   // signed-in user who hasn't cleared MFA yet -- they're exactly how that
   // gets satisfied, so gating them the same as everything else would be a

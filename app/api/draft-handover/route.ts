@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
   const { data: allRecords } = await supabase
     .from("records")
     .select("date, bucket, child, kids, text")
+    .is("deleted_at", null)
     .in("bucket", ["diary", "supervision", "meds", "sw", "incident", "scratch"])
     .order("date", { ascending: false })
     .limit(400);
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
   // misgendered a child in generated text -- use what's on file instead of
   // leaving the model to guess from the name.
   const [{ data: cRow }, { data: hhRow }] = await Promise.all([
-    supabase.from("children").select("gender").eq("name", childName).maybeSingle(),
+    supabase.from("children").select("gender").is("deleted_at", null).eq("name", childName).maybeSingle(),
     supabase.from("household_children").select("gender").eq("name", childName).maybeSingle(),
   ]);
   const pronouns = pronounsFor(cRow?.gender || hhRow?.gender || "");

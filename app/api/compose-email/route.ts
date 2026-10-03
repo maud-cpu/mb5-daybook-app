@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   if (!apiKey) return NextResponse.json({ error: "AI drafting isn't set up yet (no ANTHROPIC_API_KEY)." }, { status: 400 });
 
   const { data: entries } = entryIds?.length
-    ? await supabase.from("records").select("date, bucket, text").in("id", entryIds)
+    ? await supabase.from("records").select("date, bucket, text").is("deleted_at", null).in("id", entryIds)
     : { data: [] };
 
   const recipientLine = (recipients || []).map((r: { label: string; name?: string }) => `${r.label}${r.name ? ` (${r.name})` : ""}`).join(", ") || "not specified";

@@ -8,14 +8,24 @@ import { encryptFieldsForWrite, lazyMigrateRows } from "@/lib/encryptedTable";
 // are enum-like/id/deprecated -- also left plain.
 const ENC_FIELDS = ["text", "source_text"];
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
-  const { data, error } = await supabase.from("reminders").select("*");
+  // The Bin view (?bin=1) -- see the matching comment in /api/records.
+  if (req.nextUrl.searchParams.get("bin") === "1") {
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    await supabase.from("reminders").delete().lt("deleted_at", cutoff);
+    const { data, error } = await supabase.from("reminders").select("*").not("deleted_at", "is", null).order("deleted_at", { ascending: false });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const reminders = await lazyMigrateRows(supabase, "reminders", "id", data ?? [], ENC_FIELDS);
+    return NextResponse.json({ reminders });
+  }
+
+  const { data, error } = await supabase.from("reminders").select("*").is("deleted_at", null);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const reminders = await lazyMigrateRows(supabase, "reminders", "id", data ?? [], ENC_FIELDS);
@@ -66,6 +76,11 @@ export async function DELETE(req: NextRequest) {
   const idsParam = params.get("ids");
   const sourceKey = params.get("sourceKey");
   const seriesId = params.get("seriesId");
+  // "hard" is the Bin's own "delete forever" on a row that's already
+  // soft-deleted -- every other delete is soft (sets deleted_at rather
+  // than removing the row), so it lands in the Bin for 30 days. See
+  // 0086_recycle_bin.sql.
+  const hard = params.get("hard") === "1";
 
   // A delete whose WHERE clause (or RLS policy) matches nothing isn't an
   // error as far as Postgres is concerned -- it just affects 0 rows, and
@@ -74,7 +89,9 @@ export async function DELETE(req: NextRequest) {
   // identical to a real success and the "deleted" row just reappeared on
   // the next reload with no explanation why. Selecting the deleted ids
   // back lets a single-id delete tell the two cases apart and say so.
-  let query = supabase.from("reminders").delete().select("id");
+  let query = hard
+    ? supabase.from("reminders").delete().select("id")
+    : supabase.from("reminders").update({ deleted_at: new Date().toISOString() }).is("deleted_at", null).select("id");
   if (idsParam) query = query.in("id", idsParam.split(",").filter(Boolean));
   else if (id) query = query.eq("id", id);
   else if (sourceKey) query = query.eq("source_key", sourceKey);

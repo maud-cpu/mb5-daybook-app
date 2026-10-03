@@ -8,6 +8,7 @@ import { BUCKETS, Bucket, Child, DAYCARE_REASONS, EntryRecord, FLAGS, livesHereO
 import ComposeEmail from "@/components/ComposeEmail";
 import PhotoField from "@/components/PhotoField";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import BinPanel from "@/components/BinPanel";
 import { useHouseholdNames } from "@/lib/useHouseholdNames";
 
 const ERANGES: [string, string][] = [
@@ -49,6 +50,7 @@ export default function EntriesScreen() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [pendingDelete, setPendingDelete] = useState<{ ids: string[]; label: string; alsoRemoves: string[] } | null>(null);
+  const [showBin, setShowBin] = useState(false);
   const { authorOf, myId } = useHouseholdNames();
 
   // Whether any reminder (Calendar) points back at this record -- the
@@ -210,10 +212,24 @@ export default function EntriesScreen() {
     );
   }
 
+  if (showBin) {
+    return (
+      <div>
+        <button className="chip" style={{ marginBottom: 10 }} onClick={() => setShowBin(false)}>
+          ← Back
+        </button>
+        <BinPanel />
+      </div>
+    );
+  }
+
   return (
     <div>
       <button className="chip" style={{ marginBottom: 10 }} onClick={() => setComposing(true)}>
         ✉️ Compose email
+      </button>
+      <button className="chip" style={{ marginBottom: 10, marginLeft: 8 }} onClick={() => setShowBin(true)}>
+        🗑 Bin
       </button>
       <select style={{ marginBottom: 10 }} value={erange} onChange={(e) => setErange(e.target.value)}>
         {ERANGES.map(([k, l]) => (

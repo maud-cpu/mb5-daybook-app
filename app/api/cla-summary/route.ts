@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
   const { data: allRecords } = await supabase
     .from("records")
     .select("id, date, bucket, kids, text, flag, flag_note, flag_done, also_in, reported, created_at")
+    .is("deleted_at", null)
     .order("date");
   const kidRecords = (allRecords ?? []).filter((r) => (r.kids || []).includes(childName));
 

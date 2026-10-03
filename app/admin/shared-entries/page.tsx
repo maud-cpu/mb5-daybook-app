@@ -7,6 +7,7 @@ export default async function SharedEntriesPage() {
   const { data: records, error } = await supabase
     .from("records")
     .select("*")
+    .is("deleted_at", null)
     .eq("shared_with_admin", true)
     .order("created_at", { ascending: false });
 

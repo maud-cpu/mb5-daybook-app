@@ -300,7 +300,7 @@ export async function POST(req: NextRequest) {
 
   const [{ data: children }, { data: householdChildren }, { data: hubVisitorRows }, { data: upcomingReminderRows }, { data: recentRecordRows }] =
     await Promise.all([
-      supabase.from("children").select("name, lives_here, linked_visitor_id"),
+      supabase.from("children").select("name, lives_here, linked_visitor_id").is("deleted_at", null),
       supabase.from("household_children").select("name"),
       supabase.from("household_visitors").select("id, name"),
       // A later note often refers back to something already on the calendar
@@ -310,7 +310,7 @@ export async function POST(req: NextRequest) {
       // so it fell back to today's date instead of the trip's actual one.
       // Scoped to upcoming/undone only (not the full history "ask" uses) so
       // this stays a short, cheap list on every single capture.
-      supabase.from("reminders").select("date, text, people").eq("done", false).gte("date", today()).order("date").limit(40),
+      supabase.from("reminders").select("date, text, people").is("deleted_at", null).eq("done", false).gte("date", today()).order("date").limit(40),
       // Same reasoning, for things that were only ever said in a diary/
       // supervision/sw/scratch note, never put on the calendar -- a recent
       // mention is still exactly the kind of thing a later note ("the school
@@ -321,6 +321,7 @@ export async function POST(req: NextRequest) {
       supabase
         .from("records")
         .select("date, bucket, text, kids")
+        .is("deleted_at", null)
         .in("bucket", ["diary", "supervision", "sw", "scratch", "incident"])
         .order("date", { ascending: false })
         .limit(25),

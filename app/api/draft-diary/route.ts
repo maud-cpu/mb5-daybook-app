@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
   let query = supabase
     .from("records")
     .select("date, bucket, child, kids, text")
+    .is("deleted_at", null)
     .in("bucket", ["diary", "sw", "incident", "supervision"])
     .order("date");
   if (dateFrom) query = query.gte("date", dateFrom);

@@ -25,7 +25,8 @@ export async function POST() {
 
   const { data, error } = await supabase
     .from("records")
-    .select("id, text, text_enc, flag, flag_cleared, training_note, training_note_enc");
+    .select("id, text, text_enc, flag, flag_cleared, training_note, training_note_enc")
+    .is("deleted_at", null);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const records = await lazyMigrateRows(supabase, "records", "id", data ?? [], ENC_FIELDS);
 

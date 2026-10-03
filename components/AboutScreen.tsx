@@ -511,6 +511,12 @@ export default function AboutScreen() {
             people: childName ? [childName] : [],
             done: false,
             done_at: null,
+            // Setting a new date always means "I want a reminder for this" --
+            // explicit, not left as whatever deleted_at the row happened to
+            // have from before (the upsert otherwise only touches the
+            // columns listed here, so a previously-binned one would
+            // silently stay hidden even though its date just changed).
+            deleted_at: null,
           },
         ],
         onConflict: "household_owner_id,source_key",
@@ -553,7 +559,12 @@ export default function AboutScreen() {
   }
 
   async function removeChild(childId: string, name: string) {
-    if (!confirm(`Remove ${name || "this child"}? Their diary entries and other records are kept, just no longer linked to a child in this list.`)) return;
+    if (
+      !confirm(
+        `Remove ${name || "this child"}? Their diary entries and other records are kept, just no longer linked to a child in this list. You can restore ${name || "them"} from the Bin (in Entries) within 30 days.`,
+      )
+    )
+      return;
     setRemoveError("");
     setChildren((prev) => prev.filter((c) => c.id !== childId));
     const res = await fetch(`/api/children?id=${childId}`, { method: "DELETE" });

@@ -119,6 +119,10 @@ export type Child = {
    * above (which stays as a fallback grouping for when no adult's on
    * file yet). Absent on children/queries that never select it. */
   linked_visitor_id?: string | null;
+  /** Set when soft-deleted (see 0086_recycle_bin.sql) -- present only on a
+   * ?bin=1 fetch; absent/null everywhere else, since the normal GET already
+   * filters these out. */
+  deleted_at?: string | null;
   /** A VISITING child's own underlying placement type (one of LIVES_CATS),
    * independent of "category" -- which, for a visiting child, instead holds
    * WHY they visit (one of VISITS_CATS: sleepover/daycare/etc). Why someone
@@ -262,6 +266,10 @@ export type EntryRecord = {
   edited: string | null;
   edited_by: string | null;
   created_at: string;
+  /** Set when soft-deleted (see 0086_recycle_bin.sql) -- present only on a
+   * ?bin=1 fetch; absent/null everywhere else, since the normal GET already
+   * filters these out. */
+  deleted_at?: string | null;
 };
 
 export const TONE_OPTIONS = [
@@ -358,6 +366,10 @@ export type Reminder = {
    * 0083_hub_calendar.sql) rather than created by this household itself --
    * kept in sync with the shared_hub_events row it came from. */
   hub_event_id?: string | null;
+  /** Set when soft-deleted (see 0086_recycle_bin.sql) -- present only on a
+   * ?bin=1 fetch; absent/null everywhere else, since the normal GET already
+   * filters these out. */
+  deleted_at?: string | null;
 };
 
 export const REPEAT_OPTIONS = [

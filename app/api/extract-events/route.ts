@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
   }
 
   const [{ data: kids }, { data: hhKids }, { data: adults }] = await Promise.all([
-    supabase.from("children").select("name"),
+    supabase.from("children").select("name").is("deleted_at", null),
     supabase.from("household_children").select("name"),
     supabase.from("household_adults").select("name"),
   ]);

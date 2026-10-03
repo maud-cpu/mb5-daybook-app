@@ -42,6 +42,7 @@ export async function POST() {
     supabase
       .from("records")
       .select("date, bucket, child, kids, text")
+      .is("deleted_at", null)
       .in("bucket", ["diary", "supervision", "sw", "incident", "scratch"])
       .gte("date", dateFrom)
       .order("date"),

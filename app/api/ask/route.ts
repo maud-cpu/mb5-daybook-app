@@ -134,7 +134,8 @@ export async function POST(req: NextRequest) {
   ] = await Promise.all([
     supabase
       .from("children")
-      .select("id, name, born, family, category, lives_here, gender, basics, hub_carer_name, hub_carer_phone, hub_carer_email"),
+      .select("id, name, born, family, category, lives_here, gender, basics, hub_carer_name, hub_carer_phone, hub_carer_email")
+      .is("deleted_at", null),
     supabase.from("household_children").select("id, name, born, category, gender, basics"),
     supabase.from("household_adults").select("name, phone, email, role"),
     supabase.from("household_visitors").select("name, phone, email, role"),
@@ -149,9 +150,10 @@ export async function POST(req: NextRequest) {
     supabase
       .from("records")
       .select("date, bucket, kind, text, kids, flag, amount, miles, hours, time_from, time_to, overnight, reason, med_name, dose, given")
+      .is("deleted_at", null)
       .order("date", { ascending: false })
       .limit(1200),
-    supabase.from("reminders").select("date, text, people, done").order("date", { ascending: false }).limit(500),
+    supabase.from("reminders").select("date, text, people, done").is("deleted_at", null).order("date", { ascending: false }).limit(500),
     supabase.from("hub_support_log").select("date, carer_names, support_type, notes").order("date", { ascending: false }).limit(300),
   ]);
   const profiles = await lazyMigrateRows(supabase, "handover_child_profiles", "id", profilesRaw ?? [], PROFILE_ENC_FIELDS);

@@ -12,14 +12,24 @@ import { sortChildren } from "@/lib/domain";
 const ENC_FIELDS = ["name", "family", "hub_carer_name", "hub_carer_phone", "hub_carer_email", "surrey_contact"];
 const JSON_FIELDS = ["basics"];
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
-  const { data, error } = await supabase.from("children").select("*").order("created_at");
+  // The Bin view (?bin=1) -- see the matching comment in /api/records.
+  if (req.nextUrl.searchParams.get("bin") === "1") {
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    await supabase.from("children").delete().lt("deleted_at", cutoff);
+    const { data, error } = await supabase.from("children").select("*").not("deleted_at", "is", null).order("deleted_at", { ascending: false });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const children = await lazyMigrateRows(supabase, "children", "id", data ?? [], ENC_FIELDS, JSON_FIELDS);
+    return NextResponse.json({ children });
+  }
+
+  const { data, error } = await supabase.from("children").select("*").is("deleted_at", null).order("created_at");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const children = await lazyMigrateRows(supabase, "children", "id", data ?? [], ENC_FIELDS, JSON_FIELDS);
@@ -72,8 +82,14 @@ export async function DELETE(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
   const id = req.nextUrl.searchParams.get("id");
+  // "hard" is the Bin's own "delete forever" on a row that's already
+  // soft-deleted -- a normal delete is soft (sets deleted_at), so it lands
+  // in the Bin for 30 days. See 0086_recycle_bin.sql.
+  const hard = req.nextUrl.searchParams.get("hard") === "1";
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
-  const { error, data } = await supabase.from("children").delete().eq("id", id).select();
+  const { error, data } = hard
+    ? await supabase.from("children").delete().eq("id", id).select()
+    : await supabase.from("children").update({ deleted_at: new Date().toISOString() }).eq("id", id).is("deleted_at", null).select();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data?.length) return NextResponse.json({ error: "Nothing removed" }, { status: 404 });
   return NextResponse.json({ ok: true });
