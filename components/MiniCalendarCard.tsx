@@ -6,12 +6,22 @@ import { today } from "@/lib/domain";
 import { EntryRecord, REMINDER_CATEGORIES, reminderCategoryLabel } from "@/lib/types";
 import { addDays, clubText, groupClubsByOccurrence, mondayStartWeekday, personColor } from "@/lib/calendarHelpers";
 import PeoplePicker, { PersonOption } from "@/components/PeoplePicker";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 // id is null for a virtual club occurrence -- synthesised fresh every load
 // (see CalendarScreen's own CLUB_PREFIX for why), so there's no real row to
 // edit or delete here; that's done from About us instead, same as the full
 // Calendar tab treats it.
-type DayItem = { id: string | null; text: string; color: string; icon: string; category: string; people: string[]; record_id: string | null };
+type DayItem = {
+  id: string | null;
+  text: string;
+  color: string;
+  icon: string;
+  category: string;
+  people: string[];
+  record_id: string | null;
+  record_ids: string[];
+};
 
 type Draft = { text: string; category: string; people: string[] };
 const emptyDraft = (): Draft => ({ text: "", category: REMINDER_CATEGORIES[0][0], people: [] });
@@ -53,6 +63,8 @@ export default function MiniCalendarCard() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft());
   const [editRecordDraft, setEditRecordDraft] = useState<RecordDraft | null>(null);
+  const [editingRecordIds, setEditingRecordIds] = useState<string[]>([]);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; text: string; recordIds: string[] } | null>(null);
   const [records, setRecords] = useState<EntryRecord[]>([]);
 
   async function load() {
@@ -81,6 +93,7 @@ export default function MiniCalendarCard() {
         done: boolean;
         todo_only: boolean;
         record_id: string | null;
+        record_ids: string[] | null;
       }[]) ?? []
     ).filter((r) => r.date >= from && r.date <= to && !r.done && !r.todo_only);
     const clubs = clubsRes.clubs;
@@ -99,6 +112,7 @@ export default function MiniCalendarCard() {
         category: r.category,
         people: r.people,
         record_id: r.record_id ?? null,
+        record_ids: r.record_ids ?? [],
       });
     });
     const clubRows = (clubs ?? []) as { id: string; child_id: string; club_name: string; weekday: number; time_from: string; time_to: string }[];
@@ -107,7 +121,16 @@ export default function MiniCalendarCard() {
       const text = c.childNames.length > 1 ? `${base} (${c.childNames.join(" & ")})` : base;
       days.forEach((iso) => {
         if (mondayStartWeekday(iso) === c.weekday) {
-          (map[iso] ||= []).push({ id: null, text, color: personColor(c.childNames.join(" & ")), icon: "🧩", category: "club", people: c.childNames, record_id: null });
+          (map[iso] ||= []).push({
+            id: null,
+            text,
+            color: personColor(c.childNames.join(" & ")),
+            icon: "🧩",
+            category: "club",
+            people: c.childNames,
+            record_id: null,
+            record_ids: [],
+          });
         }
       });
     });
@@ -164,6 +187,11 @@ export default function MiniCalendarCard() {
     setEditingId(it.id);
     const rec = it.record_id ? records.find((x) => x.id === it.record_id) : undefined;
     setEditRecordDraft(rec ? { id: rec.id, hours: rec.hours != null ? String(rec.hours) : "", time_from: rec.time_from ?? "", time_to: rec.time_to ?? "" } : null);
+    // Tracked separately from editRecordDraft above (which is only ever the
+    // single clean-link case, for editing hours) -- a reminder merged from
+    // several daycare sessions still needs every one of its records removed
+    // on delete, see record_ids (0085).
+    setEditingRecordIds([...new Set([it.record_id, ...it.record_ids].filter((x): x is string => !!x))]);
   }
 
   async function saveAdd() {
@@ -209,17 +237,22 @@ export default function MiniCalendarCard() {
     load();
   }
 
-  async function deleteEditing() {
+  function deleteEditing() {
     if (!editingId) return;
-    const confirmMsg = editRecordDraft ? "Remove this entry? This also removes it from Entries/Expenses." : "Remove this entry?";
-    if (!confirm(confirmMsg)) return;
-    const recordId = editRecordDraft?.id;
+    setPendingDelete({ id: editingId, text: draft.text, recordIds: editingRecordIds });
+  }
+
+  async function confirmDeleteEditing() {
+    const target = pendingDelete;
+    if (!target) return;
+    setPendingDelete(null);
     await Promise.all([
-      fetch(`/api/reminders?id=${editingId}`, { method: "DELETE" }),
-      recordId ? fetch(`/api/records?id=${recordId}`, { method: "DELETE" }) : Promise.resolve(),
+      fetch(`/api/reminders?id=${target.id}`, { method: "DELETE" }),
+      target.recordIds.length ? fetch(`/api/records?ids=${target.recordIds.join(",")}`, { method: "DELETE" }) : Promise.resolve(),
     ]);
     setEditingId(null);
     setEditRecordDraft(null);
+    setEditingRecordIds([]);
     load();
   }
 
@@ -459,6 +492,16 @@ export default function MiniCalendarCard() {
       <p className="hint" style={{ marginTop: 8, marginBottom: 0 }}>
         <Link href="/dashboard/calendar">Open full calendar ↗</Link>
       </p>
+
+      {pendingDelete && (
+        <ConfirmDialog
+          title="Remove this reminder?"
+          itemLabel={pendingDelete.text}
+          alsoRemoves={pendingDelete.recordIds.length ? ["Entries / Expenses"] : []}
+          onConfirm={confirmDeleteEditing}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
     </div>
   );
 }

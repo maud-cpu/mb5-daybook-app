@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { daycareAmount, describeExpense, describeMeds, expenseTotals, gbp, sortChildren, today } from "@/lib/domain";
-import { BUCKETS, Bucket, Child, DAYCARE_REASONS, EntryRecord, FLAGS, livesHereOf, Rates } from "@/lib/types";
+import { BUCKETS, Bucket, Child, DAYCARE_REASONS, EntryRecord, FLAGS, livesHereOf, Rates, Reminder } from "@/lib/types";
 import ComposeEmail from "@/components/ComposeEmail";
 import PhotoField from "@/components/PhotoField";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { useHouseholdNames } from "@/lib/useHouseholdNames";
 
 const ERANGES: [string, string][] = [
@@ -46,7 +47,17 @@ export default function EntriesScreen() {
   const [sendPreset, setSendPreset] = useState<{ child: string; entryId: string } | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [pendingDelete, setPendingDelete] = useState<{ ids: string[]; label: string; alsoRemoves: string[] } | null>(null);
   const { authorOf, myId } = useHouseholdNames();
+
+  // Whether any reminder (Calendar) points back at this record -- the
+  // single clean-link record_id, or record_ids (0085) for one merged from
+  // several daycare sessions -- so deleting it here can warn about that
+  // before it happens instead of the carer finding out after the fact.
+  function hasLinkedReminder(recordId: string): boolean {
+    return reminders.some((r) => r.record_id === recordId || r.record_ids?.includes(recordId));
+  }
 
   function sendToCarer(child: string, entryId: string) {
     setSendPreset({ child, entryId });
@@ -55,7 +66,7 @@ export default function EntriesScreen() {
 
   async function load() {
     setLoading(true);
-    const [recordsRes, kidsRes, hhKidsRes, { data: r }] = await Promise.all([
+    const [recordsRes, kidsRes, hhKidsRes, { data: r }, remindersRes] = await Promise.all([
       fetch("/api/records").then((res) => res.json()),
       fetch("/api/children").then((res) => res.json()),
       // A child in "Children in your household" can be an actual foster
@@ -64,10 +75,12 @@ export default function EntriesScreen() {
       // other child. They live in the household by definition.
       fetch("/api/household-children").then((res) => res.json()),
       supabase.from("shared_rates").select("*").single(),
+      fetch("/api/reminders").then((res) => res.json()),
     ]);
     const kids = kidsRes.children;
     const hhKids = hhKidsRes.children;
     setRecords((recordsRes.records as EntryRecord[]) ?? []);
+    setReminders((remindersRes.reminders as Reminder[]) ?? []);
     setChildren(
       sortChildren([
         ...((kids as Child[]) ?? []),
@@ -117,15 +130,9 @@ export default function EntriesScreen() {
     setChildFilter((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
   }
 
-  async function del(id: string) {
-    if (!confirm("Delete this entry?")) return;
-    const res = await fetch(`/api/records?id=${id}`, { method: "DELETE" });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      alert("Couldn't delete: " + (data.error || "unknown error"));
-      return;
-    }
-    setRecords((prev) => prev.filter((r) => r.id !== id));
+  function del(id: string) {
+    const rec = records.find((r) => r.id === id);
+    setPendingDelete({ ids: [id], label: rec?.text || "this entry", alsoRemoves: hasLinkedReminder(id) ? ["Calendar"] : [] });
   }
 
   function toggleSelected(id: string) {
@@ -141,17 +148,27 @@ export default function EntriesScreen() {
     setSelected(new Set(shown.map((r) => r.id)));
   }
 
-  async function deleteSelected() {
+  function deleteSelected() {
     if (!selected.size) return;
-    if (!confirm(`Delete ${selected.size} entr${selected.size > 1 ? "ies" : "y"}? This can't be undone.`)) return;
     const ids = [...selected];
-    const res = await fetch(`/api/records?ids=${ids.join(",")}`, { method: "DELETE" });
+    setPendingDelete({
+      ids,
+      label: `${selected.size} entr${selected.size > 1 ? "ies" : "y"}`,
+      alsoRemoves: ids.some((id) => hasLinkedReminder(id)) ? ["Calendar"] : [],
+    });
+  }
+
+  async function confirmDelete() {
+    const target = pendingDelete;
+    if (!target) return;
+    setPendingDelete(null);
+    const res = await fetch(`/api/records?ids=${target.ids.join(",")}`, { method: "DELETE" });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       alert("Couldn't delete: " + (data.error || "unknown error"));
       return;
     }
-    setRecords((prev) => prev.filter((r) => !selected.has(r.id)));
+    setRecords((prev) => prev.filter((r) => !target.ids.includes(r.id)));
     setSelected(new Set());
     setSelectMode(false);
   }
@@ -322,6 +339,17 @@ export default function EntriesScreen() {
           </>
         )}
       </div>
+
+      {pendingDelete && (
+        <ConfirmDialog
+          title={pendingDelete.ids.length > 1 ? `Delete ${pendingDelete.label}?` : "Delete this entry?"}
+          itemLabel={pendingDelete.ids.length === 1 ? pendingDelete.label : undefined}
+          alsoRemoves={pendingDelete.alsoRemoves}
+          confirmLabel="Delete"
+          onConfirm={confirmDelete}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
     </div>
   );
 }

@@ -15,6 +15,7 @@ import {
 } from "@/lib/types";
 import { addDays, clubText, groupClubsByOccurrence, mondayStartWeekday, occurrenceDates, personColor } from "@/lib/calendarHelpers";
 import PeoplePicker, { PersonOption } from "@/components/PeoplePicker";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import PersonTags, { PersonDot } from "@/components/PersonTags";
 import { useHouseholdNames } from "@/lib/useHouseholdNames";
 
@@ -151,6 +152,7 @@ export default function CalendarScreen() {
   const [peopleFilter, setPeopleFilter] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [showSourceFor, setShowSourceFor] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Reminder | null>(null);
   const [feedToken, setFeedToken] = useState("");
   const [showPhoneSubscribe, setShowPhoneSubscribe] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
@@ -441,12 +443,17 @@ export default function CalendarScreen() {
     load();
   }
 
-  async function deleteOne(r: Reminder) {
+  function deleteOne(r: Reminder) {
+    setPendingDelete(r);
+  }
+
+  async function confirmDeleteOne() {
+    const r = pendingDelete;
+    if (!r) return;
+    setPendingDelete(null);
     // record_ids (0085) covers a reminder merged from several daycare
     // sessions -- record_id alone is only ever the single clean-link case.
     const recordIds = [...new Set([r.record_id, ...(r.record_ids || [])].filter((x): x is string => !!x))];
-    const confirmMsg = recordIds.length ? `Remove "${r.text}"? This also removes it from Entries/Expenses.` : `Remove "${r.text}"?`;
-    if (!confirm(confirmMsg)) return;
     setEditingId(null);
     const [remRes] = await Promise.all([
       fetch(`/api/reminders?id=${r.id}`, { method: "DELETE" }).then((res) => res.json()),
@@ -1004,6 +1011,18 @@ export default function CalendarScreen() {
           })}
         </div>
       </div>
+
+      {pendingDelete && (
+        <ConfirmDialog
+          title="Remove this reminder?"
+          itemLabel={pendingDelete.text}
+          alsoRemoves={
+            [pendingDelete.record_id, ...(pendingDelete.record_ids || [])].filter(Boolean).length ? ["Entries / Expenses"] : []
+          }
+          onConfirm={confirmDeleteOne}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
     </div>
   );
 }
