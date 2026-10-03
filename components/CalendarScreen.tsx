@@ -442,12 +442,15 @@ export default function CalendarScreen() {
   }
 
   async function deleteOne(r: Reminder) {
-    const confirmMsg = r.record_id ? `Remove "${r.text}"? This also removes it from Entries/Expenses.` : `Remove "${r.text}"?`;
+    // record_ids (0085) covers a reminder merged from several daycare
+    // sessions -- record_id alone is only ever the single clean-link case.
+    const recordIds = [...new Set([r.record_id, ...(r.record_ids || [])].filter((x): x is string => !!x))];
+    const confirmMsg = recordIds.length ? `Remove "${r.text}"? This also removes it from Entries/Expenses.` : `Remove "${r.text}"?`;
     if (!confirm(confirmMsg)) return;
     setEditingId(null);
     const [remRes] = await Promise.all([
       fetch(`/api/reminders?id=${r.id}`, { method: "DELETE" }).then((res) => res.json()),
-      r.record_id ? fetch(`/api/records?id=${r.record_id}`, { method: "DELETE" }) : Promise.resolve(),
+      recordIds.length ? fetch(`/api/records?ids=${recordIds.join(",")}`, { method: "DELETE" }) : Promise.resolve(),
     ]);
     if (remRes?.error) alert(`Couldn't remove "${r.text}": ${remRes.error}`);
     load();

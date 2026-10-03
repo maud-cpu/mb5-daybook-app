@@ -703,6 +703,12 @@ export default function CaptureScreen() {
         people: string[];
         recordId: string | null;
         recordAmbiguous: boolean;
+        // Every contributing daycare record, not just the single clean-link
+        // case above -- so a merged reminder (two sessions, same date/
+        // category/text) can still be found and removed if ANY one of its
+        // records is later deleted, instead of being left behind forever
+        // once record_id itself falls back to null.
+        recordIds: string[];
       }
     >();
     const reminderOrder: string[] = [];
@@ -726,6 +732,7 @@ export default function CaptureScreen() {
             people: [],
             recordId: null,
             recordAmbiguous: false,
+            recordIds: [],
           };
           reminderGroups.set(key, group);
           reminderOrder.push(key);
@@ -741,6 +748,8 @@ export default function CaptureScreen() {
         if (p.bucket === "expenses" && p.kind === "daycare") {
           if (group.recordId === null && !group.recordAmbiguous) group.recordId = inserted?.[idx] ?? null;
           else group.recordAmbiguous = true;
+          const recId = inserted?.[idx];
+          if (recId) group.recordIds.push(recId);
         }
       });
     const reminderRows = reminderOrder.map((k) => {
@@ -754,6 +763,7 @@ export default function CaptureScreen() {
         time_from: g.timeFrom || null,
         time_to: g.timeTo || null,
         record_id: g.recordAmbiguous ? null : g.recordId,
+        record_ids: g.recordIds,
       };
     });
     if (reminderRows.length) {

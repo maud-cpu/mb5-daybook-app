@@ -72,7 +72,11 @@ export async function DELETE(req: NextRequest) {
   // A record deleted from Entries/Expenses shouldn't leave a stale calendar
   // reminder still pointing at it -- delete the reminder alongside it, the
   // same as deleting from the calendar already removes the record (see
-  // CalendarScreen/MiniCalendarCard's deleteOne/deleteEditing).
+  // CalendarScreen/MiniCalendarCard's deleteOne/deleteEditing). record_id
+  // only ever covers a reminder cleanly linked to one record; record_ids
+  // (0085) also catches one that merged several daycare sessions into a
+  // single reminder, where record_id itself falls back to null.
   await supabase.from("reminders").delete().in("record_id", ids);
+  await supabase.from("reminders").delete().overlaps("record_ids", ids);
   return NextResponse.json({ ok: true });
 }

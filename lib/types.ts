@@ -336,6 +336,13 @@ export type Reminder = {
    * ever changing this reminder's own text/date copy. Absent for a plain
    * appointment with no backing record. */
   record_id?: string | null;
+  /** Every priced record this reminder was generated from, when there's
+   * more than one (e.g. two daycare sessions for the same child, same day,
+   * merged into one reminder) -- record_id itself falls back to null once
+   * there's more than one, so this is what the delete cascade in
+   * app/api/records/route.ts uses to still find and remove a merged
+   * reminder. Empty for the common single-record or no-record case. */
+  record_ids?: string[];
   /** Set when this came from News & Events' "To-do" action rather than
    * "Calendar" -- belongs in Up next only, never on the calendar. */
   todo_only?: boolean;
