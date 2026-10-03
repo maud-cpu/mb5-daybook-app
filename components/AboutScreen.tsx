@@ -199,6 +199,7 @@ function ChildBasicsPanel({
   onSurreyContact,
   basics,
   onBasics,
+  justFilled,
 }: {
   showMockingbird: boolean;
   mockingbird: string;
@@ -212,6 +213,9 @@ function ChildBasicsPanel({
   onSurreyContact: (v: string) => void;
   basics: Record<string, string>;
   onBasics: (key: string, value: string) => void;
+  /** Keys "Extract info" (ChildDocuments) just filled in -- highlighted so
+   * they're easy to spot among everything else on the page. */
+  justFilled?: string[];
 }) {
   return (
     <>
@@ -295,7 +299,11 @@ function ChildBasicsPanel({
               <input
                 key={f.key}
                 type={f.type || "text"}
-                style={{ marginTop: 6 }}
+                style={
+                  justFilled?.includes(f.key)
+                    ? { marginTop: 6, border: "2px solid var(--danger)", borderRadius: "var(--radius-sm)" }
+                    : { marginTop: 6 }
+                }
                 placeholder={f.placeholder ? `${f.label} — ${f.placeholder}` : f.label}
                 defaultValue={basics[f.key] || ""}
                 onBlur={(e) => onBasics(f.key, e.target.value)}
@@ -404,6 +412,15 @@ export default function AboutScreen() {
   const [familyNameDraft, setFamilyNameDraft] = useState("");
   const [visitorSearch, setVisitorSearch] = useState("");
   const [newChecklistItem, setNewChecklistItem] = useState("");
+  // Which basics boxes "Extract info" just filled in, so they can be
+  // highlighted rather than the carer having to spot them among everything
+  // else on the page. Cleared on leaving this child's panel, since it's
+  // only ever meant to flag what just happened, not a lasting marker.
+  const [justFilled, setJustFilled] = useState<string[]>([]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- clearing a highlight left over from a previous child's panel, not deriving state from props
+    setJustFilled([]);
+  }, [selected]);
 
   // A family hub on the Visitors wheel starts as nothing more than shared
   // free text on some children's `family` field -- there's no adult record
@@ -568,6 +585,7 @@ export default function AboutScreen() {
     const next = { ...current, ...patch };
     if (table === "children") setBasics((prev) => ({ ...prev, [childId]: next }));
     else setHouseholdChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, basics: next } : c)));
+    setJustFilled(Object.keys(patch));
     await fetch(table === "children" ? "/api/children" : "/api/household-children", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -1551,6 +1569,7 @@ export default function AboutScreen() {
               onSurreyContact={(v) => updateHouseholdChild(c.id, { surrey_contact: v })}
               basics={c.basics || {}}
               onBasics={(key, value) => saveHouseholdChildBasics(c.id, key, value)}
+              justFilled={justFilled}
             />
           </div>
           {closeButton()}
@@ -1668,6 +1687,7 @@ export default function AboutScreen() {
               onSurreyContact={(v) => saveChild(c.id, { surrey_contact: v })}
               basics={cb}
               onBasics={(key, value) => saveChildBasics(c.id, key, value)}
+              justFilled={justFilled}
             />
           </div>
           {closeButton()}
@@ -1763,6 +1783,7 @@ export default function AboutScreen() {
               onSurreyContact={(v) => saveChild(c.id, { surrey_contact: v })}
               basics={cb}
               onBasics={(key, value) => saveChildBasics(c.id, key, value)}
+              justFilled={justFilled}
             />
           </div>
           {closeButton()}

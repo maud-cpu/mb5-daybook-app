@@ -205,7 +205,7 @@ export default function ChildDocuments({
       {extractError && <p style={{ color: "var(--danger)", fontSize: 14 }}>{extractError}</p>}
       {filledCount > 0 && (
         <p className="hint">
-          Filled in {filledCount} empty box{filledCount === 1 ? "" : "es"} from that document.
+          Filled in {filledCount} empty box{filledCount === 1 ? "" : "es"} from that document — outlined in red below.
         </p>
       )}
       {conflicts.length > 0 && (
