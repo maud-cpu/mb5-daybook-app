@@ -25,11 +25,14 @@ const KIND_ICON: Record<Recommendation["kind"], string> = {
 // content owner approves it, it's promoted into the real catalogue below
 // (as a "Next steps (suggested)" resource) rather than living in a
 // separate list, so it gets the exact same display, search, and admin
-// editing as everything else in Training & Resources. This card is only
-// ever the intake form plus "what's mine still waiting" -- never a second
-// copy of what's already published.
+// editing as everything else in Training & Resources. This is only ever
+// the intake form plus "what's mine still waiting" -- never a second copy
+// of what's already published, which is why it stays collapsed by default
+// (same pattern as "Saved for later"/"Dismissed suggestions" below it) --
+// an always-open box with nothing in it just read as broken/empty.
 export default function ResourceRecommendations() {
   const supabase = createClient();
+  const [open, setOpen] = useState(false);
   const [mine, setMine] = useState<Recommendation[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [title, setTitle] = useState("");
@@ -84,61 +87,67 @@ export default function ResourceRecommendations() {
 
   return (
     <div className="card">
-      <h3>💡 Recommended by carers</h3>
-      <p className="hint">
-        Books, films, podcasts — anything worth another carer knowing about. Approved suggestions
-        show up in the list below, alongside everything else.
+      <p className="hint" style={{ cursor: "pointer" }} onClick={() => setOpen(!open)}>
+        {open ? "▾" : "▸"} 💡 Recommend a resource{mine.length > 0 ? ` (${mine.length} of yours pending)` : ""}
       </p>
-      {mine.length > 0 && (
-        <div style={{ marginTop: 10 }}>
-          <p className="hint">Your suggestions:</p>
-          {mine.map((r) => (
-            <div key={r.id} className="rec" style={{ opacity: 0.7 }}>
-              {KIND_ICON[r.kind]} {r.title}{" "}
-              <small className="muted">— {r.status === "pending" ? "pending review" : "not published"}</small>
+      {open && (
+        <div style={{ marginTop: 8 }}>
+          <p className="hint">
+            Books, films, podcasts — anything worth another carer knowing about. Approved suggestions show up
+            in the course list above, alongside everything else.
+          </p>
+          {mine.length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <p className="hint">Your suggestions:</p>
+              {mine.map((r) => (
+                <div key={r.id} className="rec" style={{ opacity: 0.7 }}>
+                  {KIND_ICON[r.kind]} {r.title}{" "}
+                  <small className="muted">— {r.status === "pending" ? "pending review" : "not published"}</small>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      )}
-      {!showForm ? (
-        <button className="chip add" style={{ marginTop: 8 }} onClick={() => setShowForm(true)}>
-          + Recommend a resource
-        </button>
-      ) : (
-        <div className="item" style={{ marginTop: 8 }}>
-          <div className="row">
-            <input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} style={{ flex: 2 }} />
-            <select
-              value={kind}
-              onChange={(e) => setKind(e.target.value as Recommendation["kind"])}
-              style={{ flex: "0 0 auto", width: "auto" }}
-            >
-              <option value="book">📖 Book</option>
-              <option value="movie">🎬 Movie/TV</option>
-              <option value="podcast">🎙️ Podcast</option>
-              <option value="other">💡 Other</option>
-            </select>
-          </div>
-          <textarea
-            placeholder="Why it's worth it (optional)"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            style={{ marginTop: 6 }}
-          />
-          <input
-            placeholder="Link (optional)"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            style={{ marginTop: 6 }}
-          />
-          <div style={{ marginTop: 8 }}>
-            <button className="chip on" disabled={submitting || !title.trim()} onClick={submit}>
-              Submit for review
-            </button>{" "}
-            <button className="chip" onClick={() => setShowForm(false)}>
-              Cancel
+          )}
+          {!showForm ? (
+            <button className="chip add" style={{ marginTop: 8 }} onClick={() => setShowForm(true)}>
+              + Recommend a resource
             </button>
-          </div>
+          ) : (
+            <div className="item" style={{ marginTop: 8 }}>
+              <div className="row">
+                <input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} style={{ flex: 2 }} />
+                <select
+                  value={kind}
+                  onChange={(e) => setKind(e.target.value as Recommendation["kind"])}
+                  style={{ flex: "0 0 auto", width: "auto" }}
+                >
+                  <option value="book">📖 Book</option>
+                  <option value="movie">🎬 Movie/TV</option>
+                  <option value="podcast">🎙️ Podcast</option>
+                  <option value="other">💡 Other</option>
+                </select>
+              </div>
+              <textarea
+                placeholder="Why it's worth it (optional)"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                style={{ marginTop: 6 }}
+              />
+              <input
+                placeholder="Link (optional)"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                style={{ marginTop: 6 }}
+              />
+              <div style={{ marginTop: 8 }}>
+                <button className="chip on" disabled={submitting || !title.trim()} onClick={submit}>
+                  Submit for review
+                </button>{" "}
+                <button className="chip" onClick={() => setShowForm(false)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

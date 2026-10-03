@@ -13,8 +13,9 @@ import DiaryTab from "@/components/DiaryTab";
 import HandoverTab from "@/components/HandoverTab";
 import HubLogTab from "@/components/HubLogTab";
 import AnnualReviewTab from "@/components/AnnualReviewTab";
+import FormsReference from "@/components/FormsReference";
 
-type Tab = "month" | "supervision" | "cla" | "expenses" | "meds" | "diary" | "handover" | "hub" | "annualReview";
+type Tab = "month" | "supervision" | "cla" | "expenses" | "meds" | "diary" | "handover" | "hub" | "annualReview" | "forms";
 type ChildWithBasics = Child & { basics: Record<string, string> };
 type TrainingCompletion = { title: string; completedOn: string; url: string; length: string; platform: string };
 type NewExpenseDraft = {
@@ -55,7 +56,7 @@ function fmtMonthLabel(ym: string): string {
   return new Date(ym + "-01").toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 }
 
-const TAB_VALUES: Tab[] = ["month", "supervision", "cla", "expenses", "meds", "diary", "handover", "hub", "annualReview"];
+const TAB_VALUES: Tab[] = ["month", "supervision", "cla", "expenses", "meds", "diary", "handover", "hub", "annualReview", "forms"];
 
 export default function PaperworkScreen() {
   const supabase = createClient();
@@ -247,7 +248,9 @@ export default function PaperworkScreen() {
                           ? "Handover"
                           : t === "hub"
                             ? "Hub log"
-                            : "Annual review"}
+                            : t === "annualReview"
+                              ? "Annual review"
+                              : "Forms"}
           </button>
         ))}
       </div>
@@ -542,6 +545,11 @@ export default function PaperworkScreen() {
 
       {tab === "hub" && <HubLogTab />}
       {tab === "annualReview" && <AnnualReviewTab />}
+      {tab === "forms" && (
+        <div className="card">
+          <FormsReference />
+        </div>
+      )}
     </div>
   );
 }

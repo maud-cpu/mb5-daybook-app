@@ -2,8 +2,8 @@ import { FORMS_REFERENCE } from "@/lib/types";
 
 export default function FormsReference() {
   return (
-    <details>
-      <summary>📄 Forms & documents — what a foster carer might need</summary>
+    <div>
+      <h3>📄 Forms &amp; documents — what a foster carer might need</h3>
       <div>
         {FORMS_REFERENCE.map((cat) => (
           <div key={cat.key} style={{ marginTop: 14 }}>
@@ -47,6 +47,6 @@ export default function FormsReference() {
           . Ask your SSW for the actual template if you need one, not just the policy behind it.
         </p>
       </div>
-    </details>
+    </div>
   );
 }

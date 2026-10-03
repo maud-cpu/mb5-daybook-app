@@ -5,7 +5,6 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { trainingStatus } from "@/lib/domain";
 import { withAmazonAffiliateTag } from "@/lib/amazon";
-import FormsReference from "@/components/FormsReference";
 import RatingWidget, { Feedback } from "@/components/TrainingRating";
 import ResourceRecommendations from "@/components/ResourceRecommendations";
 
@@ -77,6 +76,20 @@ const COURSE_SORTS = [
   ["length", "Length"],
 ] as const;
 
+// Carer feedback: the page read as one long, messy scroll with everything
+// mixed together -- search box, mandatory flag, suggestions and the full
+// catalogue all competing for attention at once. Splitting into explicit
+// tabs makes it immediately obvious which mode you're in, instead of
+// relying on filters quietly narrowing one shared list.
+type TrainingTab = "all" | "suggested" | "compulsory" | "inspire" | "search";
+const TRAINING_TABS: [TrainingTab, string][] = [
+  ["all", "All training & resources"],
+  ["suggested", "Suggested for you"],
+  ["compulsory", "Compulsory only"],
+  ["inspire", "Inspire me"],
+  ["search", "Search"],
+];
+
 // A stable pseudo-random number for (seed, id) -- gives a shuffled order
 // that stays put across re-renders within a page load (typing in the
 // search box shouldn't reshuffle the list), but looks different each time
@@ -123,6 +136,11 @@ export default function TrainingScreen() {
   const [courseSort, setCourseSort] = useState<(typeof COURSE_SORTS)[number][0]>("random");
   const [randomSeed] = useState(() => Math.random());
   const [mandatoryOnly, setMandatoryOnly] = useState(false);
+  const [trainingTab, setTrainingTab] = useState<TrainingTab>("all");
+  // Re-rolled by "Show me another" on the Inspire me tab -- a fresh pick
+  // each click, but stable across re-renders in between (typing elsewhere
+  // on the page shouldn't silently swap out what's showing).
+  const [inspireSeed, setInspireSeed] = useState(() => Math.random());
   const [manualTitle, setManualTitle] = useState("");
   const [manualDate, setManualDate] = useState(() => new Date().toISOString().slice(0, 10));
 
@@ -290,23 +308,29 @@ export default function TrainingScreen() {
     return true;
   }
 
-  // Mandatory and suggested courses used to live in separate boxes (one per
-  // approval stage, plus a separate "next steps" box) -- carer feedback was
-  // that this made mandatory ones harder to just find in among everything
-  // else, when a "Mandatory only" filter can do that job instead. One list,
-  // sorted the same way regardless of group.
-  const allRows = courses
-    .filter((c) => !personalTitles.has(c.title.trim().toLowerCase()) && c.id !== linkedCourse?.id && matchesFilters(c))
-    .sort((a, b) => {
+  function sortRows(rows: Course[]): Course[] {
+    return [...rows].sort((a, b) => {
       if (courseSort === "newest") return b.updated_at.localeCompare(a.updated_at);
       if (courseSort === "length") return (minutesOf(a.length) ?? 9999) - (minutesOf(b.length) ?? 9999);
       return seededRandom(randomSeed, a.id) - seededRandom(randomSeed, b.id);
     });
+  }
+
+  // Suggested-from-notes and the one deep-linked-in course get their own
+  // tabs/spot, so the general browsing tabs (All, Compulsory) leave them
+  // out rather than showing the same course twice on the page at once.
+  const notDuplicated = (c: Course) => !personalTitles.has(c.title.trim().toLowerCase()) && c.id !== linkedCourse?.id;
+  const allRows = sortRows(courses.filter(notDuplicated));
+  const compulsoryRows = sortRows(courses.filter((c) => notDuplicated(c) && isMandatory(c)));
+  // Search looks across the whole catalogue, including anything also
+  // suggested or deep-linked -- narrowing by keyword is a different job
+  // from "what hasn't been shown elsewhere yet", so it shouldn't also
+  // hide a match just because it happens to appear on another tab too.
+  const searchRows = sortRows(courses.filter(matchesFilters));
   const personalEntries = Object.entries(personal).filter(([title]) => {
     if (dismissedTitles.has(title.trim().toLowerCase())) return false;
     if (linkedCourse && title.trim().toLowerCase() === linkedCourse.title.trim().toLowerCase()) return false;
-    const course = courses.find((c) => c.title.trim().toLowerCase() === title.trim().toLowerCase());
-    return course ? matchesFilters(course) : title.toLowerCase().includes(search.trim().toLowerCase());
+    return true;
   });
   const filtersActive = Boolean(search.trim() || mediaFilter || lengthFilter || mandatoryOnly);
 
@@ -380,6 +404,172 @@ export default function TrainingScreen() {
     );
   }
 
+  function sortPicker(showStarHint: boolean) {
+    return (
+      <div className="row" style={{ margin: "0 0 10px", alignItems: "center", justifyContent: "space-between" }}>
+        <p className="hint" style={{ margin: 0 }}>
+          {showStarHint ? "Mandatory courses are marked ⭐." : ""}
+        </p>
+        <select
+          value={courseSort}
+          onChange={(e) => setCourseSort(e.target.value as (typeof COURSE_SORTS)[number][0])}
+          style={{ flex: "0 0 auto", width: "auto" }}
+        >
+          {COURSE_SORTS.map(([k, l]) => (
+            <option key={k} value={k}>
+              {l}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  }
+
+  function suggestedTab() {
+    if (personalEntries.length === 0) {
+      return (
+        <div className="card">
+          <p className="empty">
+            Nothing suggested yet — these come from something you&apos;ve actually written (e.g. a note mentioning a
+            course worth looking into), not the general catalogue.
+          </p>
+        </div>
+      );
+    }
+    return (
+      <div className="card" style={{ border: "2px solid var(--accent)" }}>
+        <h3>Suggested from your notes</h3>
+        <p className="note">These came up because of something you actually wrote, not just the general catalogue.</p>
+        {personalEntries.map(([title, info]) => {
+          const course = courses.find((c) => c.title.trim().toLowerCase() === title.trim().toLowerCase());
+          const completedOn = progress[title];
+          const status = course ? statusFor(course, completedOn) : { label: "", color: "" };
+          const url = withAmazonAffiliateTag(course ? course.url || platformUrl(course.platform) : "");
+          return (
+            <div
+              key={title}
+              className="row"
+              style={{ alignItems: "flex-start", flexWrap: "wrap", borderBottom: "1px solid #eee", padding: "6px 0" }}
+            >
+              <div style={{ flex: 1 }}>
+                <b title={title}>
+                  {course && isMandatory(course) && "⭐ "}
+                  {shortTitle(title)}
+                </b>
+                {course?.length && (
+                  <>
+                    {" "}
+                    <small className="muted">· {course.length}</small>
+                  </>
+                )}
+                {info.reasons.length > 0 && (
+                  <small className="muted" style={{ display: "block", marginTop: 2 }}>
+                    💡 {info.reasons.join(" · ")}
+                  </small>
+                )}
+                {status.label && (
+                  <>
+                    <br />
+                    <small style={{ color: status.color }}>{status.label}</small>
+                  </>
+                )}
+                {course && <RatingWidget course={course} feedback={feedback} myUserId={myUserId} onRate={rateCourse} />}
+              </div>
+              {url && (
+                <a className="chip" style={{ flex: "0 0 auto" }} href={url} target="_blank" rel="noopener noreferrer">
+                  Open ↗
+                </a>
+              )}
+              {saveButton(title)}
+              <input
+                type="date"
+                style={{ flex: "0 0 150px" }}
+                value={completedOn || ""}
+                onChange={(e) => setCompleted(title, e.target.value)}
+              />
+              <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => dismissSuggestion(title)}>
+                Dismiss
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function inspireTab() {
+    const pool = courses.filter((c) => c.id !== linkedCourse?.id);
+    const notDone = pool.filter((c) => !progress[c.title]);
+    const basis = notDone.length ? notDone : pool;
+    const pick = basis.length
+      ? [...basis].sort((a, b) => seededRandom(inspireSeed, a.id) - seededRandom(inspireSeed, b.id))[0]
+      : undefined;
+    if (!pick) {
+      return (
+        <div className="card">
+          <p className="empty">Nothing in the catalogue yet to suggest.</p>
+        </div>
+      );
+    }
+    return renderGroupCard(
+      { key: "inspire", label: "🎲 Something to try", rows: [pick] },
+      <div className="row" style={{ margin: "0 0 10px", justifyContent: "flex-end" }}>
+        <button className="chip" onClick={() => setInspireSeed(Math.random())}>
+          🔀 Show me another
+        </button>
+      </div>,
+    );
+  }
+
+  function searchTab() {
+    return (
+      <>
+        <div className="card">
+          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+            <input
+              type="text"
+              placeholder="Search by keyword…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ flex: "1 1 180px" }}
+            />
+            <select value={mediaFilter} onChange={(e) => setMediaFilter(e.target.value)} style={{ flex: "0 0 auto", width: "auto" }}>
+              <option value="">All media</option>
+              {mediaOptions.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+            <select value={lengthFilter} onChange={(e) => setLengthFilter(e.target.value)} style={{ flex: "0 0 auto", width: "auto" }}>
+              <option value="">Any length</option>
+              {LENGTH_BUCKETS.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
+            <label className="chip" style={{ flex: "0 0 auto", display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <input type="checkbox" style={{ width: "auto" }} checked={mandatoryOnly} onChange={(e) => setMandatoryOnly(e.target.checked)} />
+              ⭐ Mandatory only
+            </label>
+          </div>
+        </div>
+        {!filtersActive && (
+          <div className="card">
+            <p className="hint">Type a keyword above, or pick a filter, to search the whole catalogue.</p>
+          </div>
+        )}
+        {filtersActive && searchRows.length > 0 && renderGroupCard({ key: "search", label: "🔎 Results", rows: searchRows }, sortPicker(true))}
+        {filtersActive && searchRows.length === 0 && (
+          <div className="card">
+            <p className="empty">No training matches that search — try different keywords or clear the filters.</p>
+          </div>
+        )}
+      </>
+    );
+  }
+
   return (
     <div>
       {linkedCourse &&
@@ -390,10 +580,7 @@ export default function TrainingScreen() {
         )}
       <div className="card">
         <h3>Training &amp; Resources</h3>
-        <p className="note">
-          Enter the date you completed each course; 3-yearly ones show when they&apos;re due for renewal.
-          ⭐ marks the courses that are mandatory rather than just suggested.
-        </p>
+        <p className="note">Enter the date you completed each course; 3-yearly ones show when they&apos;re due for renewal.</p>
         <div className="chips">
           {platforms
             .filter((p) => p.url)
@@ -403,124 +590,23 @@ export default function TrainingScreen() {
               </a>
             ))}
         </div>
-        <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-          <input
-            type="text"
-            placeholder="Search by keyword…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ flex: "1 1 180px" }}
-          />
-          <select value={mediaFilter} onChange={(e) => setMediaFilter(e.target.value)} style={{ flex: "0 0 auto", width: "auto" }}>
-            <option value="">All media</option>
-            {mediaOptions.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-          <select value={lengthFilter} onChange={(e) => setLengthFilter(e.target.value)} style={{ flex: "0 0 auto", width: "auto" }}>
-            <option value="">Any length</option>
-            {LENGTH_BUCKETS.map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
-          </select>
-          <label className="chip" style={{ flex: "0 0 auto", display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <input type="checkbox" style={{ width: "auto" }} checked={mandatoryOnly} onChange={(e) => setMandatoryOnly(e.target.checked)} />
-            ⭐ Mandatory only
-          </label>
-        </div>
       </div>
-      <div className="card">
-        <FormsReference />
+
+      <div className="tabs">
+        {TRAINING_TABS.map(([k, l]) => (
+          <button key={k} className={trainingTab === k ? "on" : ""} onClick={() => setTrainingTab(k)}>
+            {l}
+            {k === "suggested" && personalEntries.length > 0 ? ` (${personalEntries.length})` : ""}
+          </button>
+        ))}
       </div>
-      <ResourceRecommendations />
-      {(() => {
-        const sortPicker = (
-          <div className="row" style={{ margin: "0 0 10px", alignItems: "center", justifyContent: "space-between" }}>
-            <p className="hint" style={{ margin: 0 }}>
-              Mandatory courses are marked ⭐.
-            </p>
-            <select
-              value={courseSort}
-              onChange={(e) => setCourseSort(e.target.value as (typeof COURSE_SORTS)[number][0])}
-              style={{ flex: "0 0 auto", width: "auto" }}
-            >
-              {COURSE_SORTS.map(([k, l]) => (
-                <option key={k} value={k}>
-                  {l}
-                </option>
-              ))}
-            </select>
-          </div>
-        );
-        const allCard = renderGroupCard({ key: "all", label: "🎓 Learn something new", rows: allRows }, sortPicker);
-        if (personalEntries.length === 0) return allCard;
-        return (
-          <>
-            <div className="card" style={{ border: "2px solid var(--accent)" }}>
-              <h3>Suggested from your notes</h3>
-              <p className="note">These came up because of something you actually wrote, not just the general list below.</p>
-              {personalEntries.map(([title, info]) => {
-            const course = courses.find((c) => c.title.trim().toLowerCase() === title.trim().toLowerCase());
-            const completedOn = progress[title];
-            const status = course ? statusFor(course, completedOn) : { label: "", color: "" };
-            const url = withAmazonAffiliateTag(course ? course.url || platformUrl(course.platform) : "");
-            return (
-              <div
-                key={title}
-                className="row"
-                style={{ alignItems: "flex-start", flexWrap: "wrap", borderBottom: "1px solid #eee", padding: "6px 0" }}
-              >
-                <div style={{ flex: 1 }}>
-                  <b title={title}>
-                    {course && isMandatory(course) && "⭐ "}
-                    {shortTitle(title)}
-                  </b>
-                  {course?.length && (
-                    <>
-                      {" "}
-                      <small className="muted">· {course.length}</small>
-                    </>
-                  )}
-                  {info.reasons.length > 0 && (
-                    <small className="muted" style={{ display: "block", marginTop: 2 }}>
-                      💡 {info.reasons.join(" · ")}
-                    </small>
-                  )}
-                  {status.label && (
-                    <>
-                      <br />
-                      <small style={{ color: status.color }}>{status.label}</small>
-                    </>
-                  )}
-                  {course && <RatingWidget course={course} feedback={feedback} myUserId={myUserId} onRate={rateCourse} />}
-                </div>
-                {url && (
-                  <a className="chip" style={{ flex: "0 0 auto" }} href={url} target="_blank" rel="noopener noreferrer">
-                    Open ↗
-                  </a>
-                )}
-                {saveButton(title)}
-                <input
-                  type="date"
-                  style={{ flex: "0 0 150px" }}
-                  value={completedOn || ""}
-                  onChange={(e) => setCompleted(title, e.target.value)}
-                />
-                <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => dismissSuggestion(title)}>
-                  Dismiss
-                </button>
-              </div>
-            );
-              })}
-            </div>
-            {allCard}
-          </>
-        );
-      })()}
+
+      {trainingTab === "all" && renderGroupCard({ key: "all", label: "🎓 All training & resources", rows: allRows }, sortPicker(true))}
+      {trainingTab === "suggested" && suggestedTab()}
+      {trainingTab === "compulsory" && renderGroupCard({ key: "compulsory", label: "⭐ Compulsory training", rows: compulsoryRows }, sortPicker(false))}
+      {trainingTab === "inspire" && inspireTab()}
+      {trainingTab === "search" && searchTab()}
+
       {Object.keys(savedTitles).length > 0 && (
         <div className="card">
           <p className="hint" style={{ cursor: "pointer" }} onClick={() => setShowSaved(!showSaved)}>
@@ -607,6 +693,7 @@ export default function TrainingScreen() {
           </div>
         );
       })()}
+      <ResourceRecommendations />
       {dismissed.length > 0 && (
         <div className="card">
           <p className="hint" style={{ cursor: "pointer" }} onClick={() => setShowDismissed(!showDismissed)}>
@@ -627,11 +714,6 @@ export default function TrainingScreen() {
                 </button>
               </div>
             ))}
-        </div>
-      )}
-      {filtersActive && personalEntries.length === 0 && allRows.length === 0 && (
-        <div className="card">
-          <p className="empty">No training matches that search — try clearing the filters above.</p>
         </div>
       )}
     </div>
