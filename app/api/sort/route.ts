@@ -269,24 +269,6 @@ function fallbackHubMatch(roster: HubRoster, text: string): { carer_names: strin
 }
 
 /**
- * Inclusive list of YYYY-MM-DD dates from start to end. Used to expand a
- * multi-night stay into one day care row per night -- see
- * isMultiNightStay below. The caller is responsible for capping `end` at
- * today, so this never needs to reason about "has this night happened
- * yet" itself.
- */
-function datesBetween(start: string, end: string): string[] {
-  const out: string[] = [];
-  let d = new Date(`${start}T00:00:00Z`);
-  const endMs = new Date(`${end}T00:00:00Z`).getTime();
-  while (d.getTime() <= endMs) {
-    out.push(d.toISOString().slice(0, 10));
-    d = new Date(d.getTime() + 24 * 60 * 60 * 1000);
-  }
-  return out;
-}
-
-/**
  * Everything in one capture batch is for the same day. If a child already
  * has an overnight daycare item in this batch, drop any separate
  * daytime-hours item for the same child -- the overnight rate already
@@ -457,7 +439,7 @@ Split into one item per separate thing, under "items".`;
     const arr = msg.parsed_output?.items;
     if (!arr || !arr.length) throw new Error("Nothing recognised");
 
-    const items: PendingItem[] = arr.flatMap((p) => {
+    const items: PendingItem[] = arr.map((p) => {
       // Belt and braces: despite the schema saying exactly one name, the AI
       // occasionally still crams more than one into "child" (e.g. "Arthur
       // and Henry") -- split it apart here rather than treating the whole
@@ -537,14 +519,16 @@ Split into one item per separate thing, under "items".`;
         .map((t) => `${t.course} — ${t.why}`)
         .join("\n");
 
+      const itemDate = typeof p.eventDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(p.eventDate) ? p.eventDate : today();
+      const itemKind = (p.kind && ["purchase", "mileage", "daycare"].includes(p.kind) ? p.kind : "purchase") as PendingItem["kind"];
       const base: PendingItem = {
         bucket: (BUCKETS[p.bucket as keyof typeof BUCKETS] ? p.bucket : "scratch") as PendingItem["bucket"],
         child,
         kids,
         also_in: [],
         text: p.text || "",
-        date: typeof p.eventDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(p.eventDate) ? p.eventDate : today(),
-        kind: (p.kind && ["purchase", "mileage", "daycare"].includes(p.kind) ? p.kind : "purchase") as PendingItem["kind"],
+        date: itemDate,
+        kind: itemKind,
         amount: p.amount ?? null,
         miles: p.miles ?? null,
         hours: p.hours ?? null,
@@ -619,27 +603,17 @@ Split into one item per separate thing, under "items".`;
                 : "other",
             }
           : null,
+        // The schema can only ever describe ONE item per child/date -- so a
+        // multi-night day care stay with a known start AND end date (e.g.
+        // "staying with us from 27 September until 14 October") carries its
+        // end date through here rather than being expanded into several
+        // items. CaptureScreen reads this to show one summary row (not one
+        // per night) and, on save, builds every night's expense row plus a
+        // calendar entry for every day of the stay -- see saveMultiNightStay.
+        stay_end_date: itemKind === "daycare" && !!p.overnight && stayEndDate && stayEndDate > itemDate ? stayEndDate : null,
       };
 
-      // The schema can only ever describe ONE item per child -- fine for a
-      // single night, but a multi-night stay with a known start AND end
-      // date (e.g. "staying with us from 27 September until 14 October")
-      // needs one dated expense row PER NIGHT to actually bill correctly.
-      // Expand here, capped at today (never invent a charge for a night
-      // that hasn't happened yet) -- the "stay ends" reminder stays on
-      // just the most recent night's row, not duplicated on every one.
-      const stayStartDate = typeof p.eventDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(p.eventDate) ? p.eventDate : "";
-      const isMultiNightStay = base.kind === "daycare" && base.overnight && !!stayStartDate && !!stayEndDate && stayEndDate > stayStartDate;
-      if (!isMultiNightStay) return [base];
-
-      const lastNight = stayEndDate < today() ? stayEndDate : today();
-      const nights = datesBetween(stayStartDate, lastNight);
-      if (nights.length <= 1) return [base];
-      return nights.map((d, i) =>
-        i === nights.length - 1
-          ? { ...base, date: d }
-          : { ...base, date: d, flag: "", flag_note: "", reminder_date: null, reminder_category: "personal", reminder_url: "", reminder_time_from: null, reminder_time_to: null },
-      );
+      return base;
     });
 
     items.forEach((item) => linkMentionedChildren(names, item));

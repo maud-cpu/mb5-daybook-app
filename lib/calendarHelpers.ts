@@ -12,6 +12,19 @@ export function addMonths(iso: string, months: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Inclusive list of every date from start to end -- used to expand a known
+// multi-night stay into one record per night (expenses, capped at today)
+// or one reminder per day (the calendar, including days still to come).
+export function datesBetween(start: string, end: string): string[] {
+  const out: string[] = [];
+  let d = start;
+  while (d <= end) {
+    out.push(d);
+    d = addDays(d, 1);
+  }
+  return out;
+}
+
 export function occurrenceDates(start: string, until: string, repeat: string): string[] {
   const step = (d: string) => (repeat === "weekly" ? addDays(d, 7) : repeat === "fortnightly" ? addDays(d, 14) : addMonths(d, 1));
   const dates = [start];

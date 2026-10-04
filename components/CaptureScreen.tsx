@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { daycareAmount, gbp, sortChildren, today } from "@/lib/domain";
+import { datesBetween } from "@/lib/calendarHelpers";
 import { withAmazonAffiliateTag } from "@/lib/amazon";
 import ThingsToDoCard from "@/components/ThingsToDoCard";
 import NewsCard from "@/components/NewsCard";
@@ -644,6 +645,105 @@ export default function CaptureScreen() {
     });
   }
 
+  // A multi-night day care stay (kind "daycare", overnight, stay_end_date
+  // set -- see lib/types.ts) still goes through the normal save below for
+  // its first night's expense row and its one "stay ends" reminder, dated
+  // the stay's END, same as any other flagged item. This fills in what
+  // that one-row-per-item pipeline can't: one more expense row for every
+  // OTHER elapsed night (capped at today -- never a future, not-yet-
+  // happened one), and one more calendar entry for every OTHER day of the
+  // stay, including days still to come -- a calendar marker carries none
+  // of the billing risk an expense row would, so there's no reason to wait
+  // for those days to actually arrive.
+  async function saveMultiNightStay(p: PendingItem, firstNightRecordId: string | null) {
+    const start = p.date || today();
+    const end = p.stay_end_date;
+    if (!end || end <= start) return;
+    const lastElapsedNight = end < today() ? end : today();
+    const elapsedNights = datesBetween(start, lastElapsedNight);
+    const extraNights = elapsedNights.slice(1);
+
+    let extraInserted: string[] = [];
+    if (extraNights.length) {
+      const extraRows = extraNights.map((d) => ({
+        bucket: "expenses" as const,
+        child: p.kids[0] || "",
+        kids: p.kids,
+        also_in: [],
+        text: p.text,
+        date: d,
+        kind: "daycare" as const,
+        amount: null,
+        miles: null,
+        hours: p.hours ?? null,
+        time_from: null,
+        time_to: null,
+        overnight: true,
+        reason: p.reason ?? "",
+        med_name: "",
+        dose: "",
+        given: null,
+        given_by: "",
+        flag: "",
+        flag_note: "",
+        training_note: "",
+        shared_with_admin: !!p.shared_with_admin,
+        photos: [],
+      }));
+      const extraRes = await fetch("/api/records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows: extraRows }),
+      });
+      if (extraRes.ok) {
+        const data = await extraRes.json();
+        extraInserted = data.ids ?? [];
+      }
+    }
+    const recordIdByDate = new Map<string, string | null>();
+    recordIdByDate.set(start, firstNightRecordId);
+    extraNights.forEach((d, idx) => recordIdByDate.set(d, extraInserted[idx] ?? null));
+
+    const who = p.kids[0] || "";
+    const daysExceptLast = datesBetween(start, end).slice(0, -1);
+    if (daysExceptLast.length) {
+      const reminderRows = daysExceptLast.map((d) => ({
+        text: `${who || "Child"} staying over`,
+        date: d,
+        category: "household",
+        people: p.kids,
+        url: null,
+        time_from: null,
+        time_to: null,
+        record_id: recordIdByDate.get(d) ?? null,
+        record_ids: [],
+      }));
+      await fetch("/api/reminders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows: reminderRows }),
+      });
+    }
+
+    // Hub log -- one entry per EXTRA elapsed night, matching the single
+    // entry the normal daycareHubRows pass below already makes for the
+    // first night.
+    if (extraNights.length) {
+      const carerNames = [
+        ...new Set(p.kids.map((k) => children.find((c) => c.name === k)?.hub_carer_name).filter((n): n is string => !!n && n.trim() !== "")),
+      ];
+      await supabase.from("hub_support_log").insert(
+        extraNights.map((d) => ({
+          date: d,
+          carer_names: carerNames.join(", "),
+          support_type: p.reason === "Emergency" ? "sleepover_emergency" : "sleepover_planned",
+          amount: p.hours ?? null,
+          notes: p.text,
+        })),
+      );
+    }
+  }
+
   async function saveAll() {
     if (!pending.length) return;
     const rows = pending.map((p) => ({
@@ -773,6 +873,9 @@ export default function CaptureScreen() {
         body: JSON.stringify({ rows: reminderRows }),
       });
     }
+    await Promise.all(
+      pending.map((p, idx) => (p.stay_end_date ? saveMultiNightStay(p, inserted?.[idx] ?? null) : Promise.resolve())),
+    );
     // Training the carer says they themselves did goes straight onto their
     // training record (Training & Resources / the Supervision report both
     // read training_progress) -- even when it isn't one of the courses in
@@ -1165,7 +1268,7 @@ export default function CaptureScreen() {
                         type="checkbox"
                         style={{ width: "auto" }}
                         checked={!!p.overnight}
-                        onChange={(e) => updatePending(i, { overnight: e.target.checked })}
+                        onChange={(e) => updatePending(i, { overnight: e.target.checked, stay_end_date: e.target.checked ? p.stay_end_date : null })}
                       />
                       overnight
                     </label>
@@ -1190,6 +1293,43 @@ export default function CaptureScreen() {
                       )}
                     </div>
                   )}
+                  {p.overnight && (
+                    <div className="row" style={{ alignItems: "center", marginTop: 4 }}>
+                      <label className="muted" style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 6 }}>
+                        <input
+                          type="checkbox"
+                          style={{ width: "auto" }}
+                          checked={!!p.stay_end_date}
+                          onChange={(e) => updatePending(i, { stay_end_date: e.target.checked ? p.date || today() : null })}
+                        />
+                        multi-night stay, back on
+                      </label>
+                      {p.stay_end_date && (
+                        <input
+                          type="date"
+                          style={{ flex: "0 0 150px" }}
+                          value={p.stay_end_date}
+                          onChange={(e) => updatePending(i, { stay_end_date: e.target.value || null })}
+                        />
+                      )}
+                    </div>
+                  )}
+                  {p.overnight &&
+                    p.stay_end_date &&
+                    (() => {
+                      const start = p.date || today();
+                      const end = p.stay_end_date;
+                      const elapsed = datesBetween(start, end < today() ? end : today());
+                      const fullSpan = datesBetween(start, end);
+                      return (
+                        <p className="note" style={{ marginTop: 4 }}>
+                          Saving this logs {elapsed.length} night{elapsed.length === 1 ? "" : "s"} of day care so
+                          far ({start} to {elapsed[elapsed.length - 1]}) and marks every day on the calendar
+                          through {end} ({fullSpan.length} day{fullSpan.length === 1 ? "" : "s"} total) — not one
+                          row to check per night.
+                        </p>
+                      );
+                    })()}
                 </>
               )}
 
