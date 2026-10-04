@@ -126,8 +126,24 @@ function eldestOf(children: Child[], kids: string[]): string {
 
 type DaycareLike = Pick<
   EntryRecord,
-  "kids" | "overnight" | "time_from" | "time_to" | "hours" | "reason"
+  "kids" | "overnight" | "time_from" | "time_to" | "hours" | "reason" | "nights"
 >;
+
+/** The £ for one night/day of overnight day care, before multiplying by
+ * how many nights a single record covers (see daycareAmount/daycareEvents). */
+function perNightRate(rates: Rates, reason: string, band: Band, first: boolean): number {
+  // "Carer respite" is a planned, care-plan-level overnight break -- paid,
+  // per the Foster Care Finances document's "Sleepover Payments" section,
+  // as the child's own weekly age-related allowance plus the carer's
+  // usual Fostering Skills Payment, divided by seven. That's a different
+  // (usually much lower) figure than the flat ad-hoc "Overnight" day-care
+  // rate, which is only right for an unplanned babysit/sleepover.
+  if (reason === "Carer respite") {
+    const weekly = AGE_ALLOWANCE_WEEKLY[band] + (rates.skills_payment_weekly ?? 0);
+    return (weekly / 7) * (first ? 1 : 0.8);
+  }
+  return rates.overnight[band] * (first ? 1 : 0.8);
+}
 
 /** Single-record estimate, used for the live "£ so far" preview while capturing. */
 export function daycareAmount(rates: Rates, children: Child[], r: DaycareLike): number {
@@ -143,19 +159,10 @@ export function daycareAmount(rates: Rates, children: Child[], r: DaycareLike): 
     group.forEach((k) => {
       const b = bandOfName(children, k);
       const first = k === eldest;
-      // "Carer respite" is a planned, care-plan-level overnight break --
-      // paid, per the Foster Care Finances document's "Sleepover
-      // Payments" section, as the child's own weekly age-related
-      // allowance plus the carer's usual Fostering Skills Payment,
-      // divided by seven. That's a different (usually much lower) figure
-      // than the flat ad-hoc "Overnight" day-care rate below, which is
-      // only right for an unplanned babysit/sleepover. Every other
-      // reason -- including a daytime respite session -- keeps using the
-      // normal rates, same as before.
-      if (r.overnight && r.reason === "Carer respite") {
-        const weekly = AGE_ALLOWANCE_WEEKLY[b] + (rates.skills_payment_weekly ?? 0);
-        total += (weekly / 7) * (first ? 1 : 0.8);
-      } else if (r.overnight) total += rates.overnight[b] * (first ? 1 : 0.8);
+      // A planned multi-night stay is ONE record covering several nights
+      // (see "nights" on EntryRecord) -- billed as that many nights at
+      // once, not held back to appear one row per elapsed night.
+      if (r.overnight) total += perNightRate(rates, r.reason, b, first) * Math.max(1, r.nights || 1);
       else if (hoursOf(r) >= 5) total += first ? rates.day_first[b] : rates.day_add[b];
       else total += hoursOf(r) * (first ? rates.hour_first : rates.hour_add);
     });
@@ -170,6 +177,7 @@ type DaycareEvent = {
   amount: number;
   recordId: string;
   reason: string;
+  nights: number | null;
 };
 
 /**
@@ -198,7 +206,7 @@ export function daycareEvents(
     kids.forEach((k) => {
       const key = `${r.date}|${k}`;
       if (!r.overnight && overnightKeys.has(key)) return;
-      events.push({ date: r.date, kid: k, overnight: r.overnight, hours: hoursOf(r), amount: 0, recordId: r.id, reason: r.reason });
+      events.push({ date: r.date, kid: k, overnight: r.overnight, hours: hoursOf(r), amount: 0, recordId: r.id, reason: r.reason, nights: r.nights });
     });
   });
 
@@ -216,14 +224,10 @@ export function daycareEvents(
   events.forEach((e) => {
     const b = bandOfName(children, e.kid);
     const first = (e as DaycareEvent & { first?: boolean }).first;
-    // Same reasoning as daycareAmount above -- a planned "Carer respite"
-    // overnight is paid as the child's own age-related allowance plus the
-    // carer's skills payment, divided by seven, not the flat ad-hoc
-    // Overnight rate.
-    if (e.overnight && e.reason === "Carer respite") {
-      const weekly = AGE_ALLOWANCE_WEEKLY[b] + (rates.skills_payment_weekly ?? 0);
-      e.amount = (weekly / 7) * (first ? 1 : 0.8);
-    } else if (e.overnight) e.amount = rates.overnight[b] * (first ? 1 : 0.8);
+    // Same reasoning as daycareAmount above -- a planned multi-night stay
+    // is ONE record covering several nights, billed as that many nights
+    // at once.
+    if (e.overnight) e.amount = perNightRate(rates, e.reason, b, !!first) * Math.max(1, e.nights || 1);
     else if (e.hours >= 5) e.amount = first ? rates.day_first[b] : rates.day_add[b];
     else e.amount = e.hours * (first ? rates.hour_first : rates.hour_add);
   });
@@ -297,7 +301,9 @@ export function describeExpense(rates: Rates, children: Child[], r: EntryRecord)
   if (r.kind === "daycare") {
     const who = r.kids.length ? joinKids(r.kids) : "⚠ no child linked — priced as one child, band 5–10";
     const when = r.overnight
-      ? "overnight"
+      ? r.nights && r.nights > 1
+        ? `${r.nights} nights`
+        : "overnight"
       : r.time_from && r.time_to
         ? `${fmtTime(r.time_from)}–${fmtTime(r.time_to)} (${hoursOf(r)} hrs)`
         : `${Number(r.hours)} hrs`;

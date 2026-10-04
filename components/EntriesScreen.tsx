@@ -485,11 +485,25 @@ function EditForm({
                     type="checkbox"
                     style={{ width: "auto" }}
                     checked={!!draft.overnight}
-                    onChange={(e) => setDraft({ ...draft, overnight: e.target.checked })}
+                    onChange={(e) => setDraft({ ...draft, overnight: e.target.checked, nights: e.target.checked ? draft.nights : null })}
                   />
                   overnight
                 </label>
+                {draft.overnight && (
+                  <input
+                    type="number"
+                    min={1}
+                    step="1"
+                    placeholder="nights"
+                    style={{ flex: "0 0 70px" }}
+                    value={draft.nights ?? ""}
+                    onChange={(e) => setDraft({ ...draft, nights: e.target.value === "" ? null : Number(e.target.value) })}
+                  />
+                )}
               </div>
+              {draft.overnight && draft.nights && draft.nights > 1 && (
+                <p className="hint">One entry covering {draft.nights} nights — a planned multi-night stay, not a single overnight.</p>
+              )}
               <select value={draft.reason} onChange={(e) => setDraft({ ...draft, reason: e.target.value })}>
                 <option value="">Reason for day care…</option>
                 {DAYCARE_REASONS.map((r) => (

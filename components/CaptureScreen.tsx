@@ -645,102 +645,36 @@ export default function CaptureScreen() {
   }
 
   // A multi-night day care stay (kind "daycare", overnight, stay_end_date
-  // set -- see lib/types.ts) still goes through the normal save below for
-  // its first night's expense row and its one "stay ends" reminder, dated
-  // the stay's END, same as any other flagged item. This fills in what
-  // that one-row-per-item pipeline can't: one more expense row for every
-  // OTHER elapsed night (capped at today -- never a future, not-yet-
-  // happened one), and one more calendar entry for every OTHER day of the
-  // stay, including days still to come -- a calendar marker carries none
-  // of the billing risk an expense row would, so there's no reason to wait
-  // for those days to actually arrive.
-  async function saveMultiNightStay(p: PendingItem, firstNightRecordId: string | null) {
+  // set -- see lib/types.ts) is ONE expense row for the whole stay --
+  // "nights" on that row (set in saveAll's main rows builder) bills every
+  // night at once, not held back one row per elapsed night. All this adds
+  // is the calendar side: one reminder for every day of the stay except
+  // the last (which the normal save below already creates, dated the
+  // stay's END, as its own "...stay with us ends" reminder) -- so there's
+  // a visible "staying over" marker on every day in between too.
+  async function saveMultiNightStay(p: PendingItem, recordId: string | null) {
     const start = p.date || today();
     const end = p.stay_end_date;
     if (!end || end <= start) return;
-    const lastElapsedNight = end < today() ? end : today();
-    const elapsedNights = datesBetween(start, lastElapsedNight);
-    const extraNights = elapsedNights.slice(1);
-
-    let extraInserted: string[] = [];
-    if (extraNights.length) {
-      const extraRows = extraNights.map((d) => ({
-        bucket: "expenses" as const,
-        child: p.kids[0] || "",
-        kids: p.kids,
-        also_in: [],
-        text: p.text,
-        date: d,
-        kind: "daycare" as const,
-        amount: null,
-        miles: null,
-        hours: p.hours ?? null,
-        time_from: null,
-        time_to: null,
-        overnight: true,
-        reason: p.reason ?? "",
-        med_name: "",
-        dose: "",
-        given: null,
-        given_by: "",
-        flag: "",
-        flag_note: "",
-        training_note: "",
-        shared_with_admin: !!p.shared_with_admin,
-        photos: [],
-      }));
-      const extraRes = await fetch("/api/records", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: extraRows }),
-      });
-      if (extraRes.ok) {
-        const data = await extraRes.json();
-        extraInserted = data.ids ?? [];
-      }
-    }
-    const recordIdByDate = new Map<string, string | null>();
-    recordIdByDate.set(start, firstNightRecordId);
-    extraNights.forEach((d, idx) => recordIdByDate.set(d, extraInserted[idx] ?? null));
-
     const who = p.kids[0] || "";
     const daysExceptLast = datesBetween(start, end).slice(0, -1);
-    if (daysExceptLast.length) {
-      const reminderRows = daysExceptLast.map((d) => ({
-        text: `${who || "Child"} staying over`,
-        date: d,
-        category: "household",
-        people: p.kids,
-        url: null,
-        time_from: null,
-        time_to: null,
-        record_id: recordIdByDate.get(d) ?? null,
-        record_ids: [],
-      }));
-      await fetch("/api/reminders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: reminderRows }),
-      });
-    }
-
-    // Hub log -- one entry per EXTRA elapsed night, matching the single
-    // entry the normal daycareHubRows pass below already makes for the
-    // first night.
-    if (extraNights.length) {
-      const carerNames = [
-        ...new Set(p.kids.map((k) => children.find((c) => c.name === k)?.hub_carer_name).filter((n): n is string => !!n && n.trim() !== "")),
-      ];
-      await supabase.from("hub_support_log").insert(
-        extraNights.map((d) => ({
-          date: d,
-          carer_names: carerNames.join(", "),
-          support_type: p.reason === "Emergency" ? "sleepover_emergency" : "sleepover_planned",
-          amount: p.hours ?? null,
-          notes: p.text,
-        })),
-      );
-    }
+    if (!daysExceptLast.length) return;
+    const reminderRows = daysExceptLast.map((d) => ({
+      text: `${who || "Child"} staying over`,
+      date: d,
+      category: "household",
+      people: p.kids,
+      url: null,
+      time_from: null,
+      time_to: null,
+      record_id: recordId,
+      record_ids: [],
+    }));
+    await fetch("/api/reminders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: reminderRows }),
+    });
   }
 
   async function saveAll() {
@@ -759,6 +693,7 @@ export default function CaptureScreen() {
       time_from: p.time_from ?? null,
       time_to: p.time_to ?? null,
       overnight: !!p.overnight,
+      nights: p.overnight && p.stay_end_date ? datesBetween(p.date || today(), p.stay_end_date).length : null,
       reason: p.reason ?? "",
       med_name: p.med_name ?? "",
       dose: p.dose ?? "",
@@ -1282,42 +1217,6 @@ export default function CaptureScreen() {
                       ))}
                     </select>
                   </div>
-                  {rates &&
-                    (() => {
-                      const perNight = daycareAmount(rates, children, p as never);
-                      // For a multi-night stay, the single-night rate above is
-                      // the per-night figure, not the bill -- show it next to
-                      // what it actually adds up to (so far, and once the
-                      // whole stay is logged), or it reads as "the wrong
-                      // amount" next to a summary talking about 8/18 nights.
-                      const nights = p.overnight && p.stay_end_date ? datesBetween(p.date || today(), p.stay_end_date).length : 1;
-                      const elapsedNights =
-                        p.overnight && p.stay_end_date
-                          ? datesBetween(p.date || today(), p.stay_end_date < today() ? p.stay_end_date : today()).length
-                          : 1;
-                      return (
-                        <div className="calc">
-                          {nights > 1 ? (
-                            <>
-                              {gbp(perNight)} per night × {elapsedNights} night{elapsedNights === 1 ? "" : "s"} so far ={" "}
-                              {gbp(perNight * elapsedNights)}
-                              {elapsedNights < nights && (
-                                <span className="note" style={{ display: "block", fontWeight: "normal" }}>
-                                  {nights} nights once the whole stay&apos;s logged = {gbp(perNight * nights)}
-                                </span>
-                              )}
-                            </>
-                          ) : (
-                            gbp(perNight)
-                          )}
-                          {!p.overnight && !p.time_from && !p.time_to && !p.hours && (
-                            <span className="note" style={{ color: "#a66d00", display: "block", fontWeight: "normal" }}>
-                              ⚠ No hours or times given yet, so this is £0.00 — add them above.
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })()}
                   {p.overnight && (
                     <div className="row" style={{ alignItems: "center", marginTop: 4 }}>
                       <label className="muted" style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 6 }}>
@@ -1339,20 +1238,29 @@ export default function CaptureScreen() {
                       )}
                     </div>
                   )}
-                  {p.overnight &&
-                    p.stay_end_date &&
+                  {rates &&
                     (() => {
-                      const start = p.date || today();
-                      const end = p.stay_end_date;
-                      const elapsed = datesBetween(start, end < today() ? end : today());
-                      const fullSpan = datesBetween(start, end);
+                      const nights = p.overnight && p.stay_end_date ? datesBetween(p.date || today(), p.stay_end_date).length : 1;
+                      const perNight = daycareAmount(rates, children, { ...p, nights: 1 } as never);
                       return (
-                        <p className="note" style={{ marginTop: 4 }}>
-                          Saving this logs {elapsed.length} night{elapsed.length === 1 ? "" : "s"} of day care so
-                          far ({start} to {elapsed[elapsed.length - 1]}) and marks every day on the calendar
-                          through {end} ({fullSpan.length} day{fullSpan.length === 1 ? "" : "s"} total) — not one
-                          row to check per night.
-                        </p>
+                        <div className="calc">
+                          {nights > 1 ? (
+                            <>
+                              {gbp(perNight)} per night × {nights} nights = {gbp(perNight * nights)}
+                              <span className="note" style={{ display: "block", fontWeight: "normal" }}>
+                                One entry for the whole stay ({p.date || today()} to {p.stay_end_date}), billed in
+                                full now — plus a &quot;staying over&quot; calendar entry on every one of those days.
+                              </span>
+                            </>
+                          ) : (
+                            gbp(perNight)
+                          )}
+                          {!p.overnight && !p.time_from && !p.time_to && !p.hours && (
+                            <span className="note" style={{ color: "#a66d00", display: "block", fontWeight: "normal" }}>
+                              ⚠ No hours or times given yet, so this is £0.00 — add them above.
+                            </span>
+                          )}
+                        </div>
                       );
                     })()}
                 </>

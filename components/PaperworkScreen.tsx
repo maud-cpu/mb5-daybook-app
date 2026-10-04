@@ -446,6 +446,7 @@ export default function PaperworkScreen() {
                           time_to: newExpense.time_to || null,
                           hours: newExpense.hours ? Number(newExpense.hours) : null,
                           reason: newExpense.reason,
+                          nights: null,
                         }),
                       )}
                     </div>

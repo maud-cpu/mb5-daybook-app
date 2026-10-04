@@ -283,6 +283,10 @@ export type EntryRecord = {
   time_from: string | null;
   time_to: string | null;
   overnight: boolean;
+  /** How many nights a single overnight day care row covers -- a planned
+   * multi-night stay is one row for the whole stay, billed in full, not
+   * one row per night. Null/1 for an ordinary single-night entry. */
+  nights: number | null;
   reason: string;
   med_name: string;
   dose: string;
