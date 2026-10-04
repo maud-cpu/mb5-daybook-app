@@ -1283,16 +1283,42 @@ export default function CaptureScreen() {
                       ))}
                     </select>
                   </div>
-                  {rates && (
-                    <div className="calc">
-                      {gbp(daycareAmount(rates, children, p as never))}
-                      {!p.overnight && !p.time_from && !p.time_to && !p.hours && (
-                        <span className="note" style={{ color: "#a66d00", display: "block", fontWeight: "normal" }}>
-                          ⚠ No hours or times given yet, so this is £0.00 — add them above.
-                        </span>
-                      )}
-                    </div>
-                  )}
+                  {rates &&
+                    (() => {
+                      const perNight = daycareAmount(rates, children, p as never);
+                      // For a multi-night stay, the single-night rate above is
+                      // the per-night figure, not the bill -- show it next to
+                      // what it actually adds up to (so far, and once the
+                      // whole stay is logged), or it reads as "the wrong
+                      // amount" next to a summary talking about 8/18 nights.
+                      const nights = p.overnight && p.stay_end_date ? datesBetween(p.date || today(), p.stay_end_date).length : 1;
+                      const elapsedNights =
+                        p.overnight && p.stay_end_date
+                          ? datesBetween(p.date || today(), p.stay_end_date < today() ? p.stay_end_date : today()).length
+                          : 1;
+                      return (
+                        <div className="calc">
+                          {nights > 1 ? (
+                            <>
+                              {gbp(perNight)} per night × {elapsedNights} night{elapsedNights === 1 ? "" : "s"} so far ={" "}
+                              {gbp(perNight * elapsedNights)}
+                              {elapsedNights < nights && (
+                                <span className="note" style={{ display: "block", fontWeight: "normal" }}>
+                                  {nights} nights once the whole stay&apos;s logged = {gbp(perNight * nights)}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            gbp(perNight)
+                          )}
+                          {!p.overnight && !p.time_from && !p.time_to && !p.hours && (
+                            <span className="note" style={{ color: "#a66d00", display: "block", fontWeight: "normal" }}>
+                              ⚠ No hours or times given yet, so this is £0.00 — add them above.
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   {p.overnight && (
                     <div className="row" style={{ alignItems: "center", marginTop: 4 }}>
                       <label className="muted" style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 6 }}>
