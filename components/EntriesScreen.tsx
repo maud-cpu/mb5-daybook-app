@@ -37,10 +37,12 @@ export default function EntriesScreen() {
   const [children, setChildren] = useState<Child[]>([]);
   const [rates, setRates] = useState<Rates | null>(null);
   const [tab, setTab] = useState<"all" | Bucket>("all");
-  // A record linked in from elsewhere (e.g. "edit this expense" from
-  // Paperwork) might be older than the default 7-day window -- widen it so
-  // that record is actually in the visible list for its edit form to show.
-  const [erange, setErange] = useState(() => (searchParams.get("edit") ? "all" : "7d"));
+  // Defaults to "all" -- a 7-day (or any narrower) default silently hid
+  // anything older, which is exactly how an 18-night stay logged a week
+  // ago, or an expense nobody's claimed in months, went unnoticed. Nothing
+  // should disappear from view just because time passed; the dropdown
+  // below still lets her narrow it down when she actually wants to.
+  const [erange, setErange] = useState("all");
   const [childFilter, setChildFilter] = useState<string[]>([]);
   const [editId, setEditId] = useState<string | null>(searchParams.get("edit"));
   const [loading, setLoading] = useState(true);

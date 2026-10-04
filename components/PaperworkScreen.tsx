@@ -330,7 +330,11 @@ export default function PaperworkScreen() {
 
       {tab === "expenses" && rates && (
         <div className="card">
-          <h3>Expenses — {fmtMonthLabel(thisMonth)}</h3>
+          <h3>Expenses</h3>
+          <p className="note">
+            Everything you haven&apos;t ticked &quot;Claimed&quot; yet, however old — nothing drops out of view just
+            because it&apos;s been a while since you last claimed.
+          </p>
 
           <p>
             <a href="https://cfportal.surreycc.gov.uk/" target="_blank" rel="noopener noreferrer">
@@ -458,12 +462,20 @@ export default function PaperworkScreen() {
           )}
 
           {(() => {
-            const all = monthRecs.filter((r) => r.bucket === "expenses");
+            // Deliberately not scoped to thisMonth (unlike monthRecs, used by
+            // the Month/Medication tabs) -- an expense doesn't stop mattering
+            // just because it's no longer the current month, and this is the
+            // one screen actually used to claim money back. Oldest first so
+            // the longest-neglected claims surface at the top, not buried
+            // under more recent ones.
+            const all = records
+              .filter((r) => r.bucket === "expenses" && (!childFilter.length || r.kids.some((k) => childFilter.includes(k))))
+              .sort((a, b) => a.date.localeCompare(b.date));
             const unclaimed = all.filter((r) => !r.claimed);
-            const claimed = all.filter((r) => r.claimed);
+            const claimed = [...all.filter((r) => r.claimed)].reverse();
             return (
               <>
-                {unclaimed.length === 0 && <p className="empty">Nothing unclaimed this month.</p>}
+                {unclaimed.length === 0 && <p className="empty">Nothing unclaimed.</p>}
                 {unclaimed.map((r) => (
                   <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}>
                     <span style={{ flex: 1 }}>
@@ -478,7 +490,7 @@ export default function PaperworkScreen() {
                   </div>
                 ))}
                 <div className="total" style={{ marginTop: 10 }}>
-                  {gbp(expenseTotals(rates, children, unclaimed).total)} unclaimed
+                  {gbp(expenseTotals(rates, children, unclaimed).total)} unclaimed in total
                 </div>
                 {claimed.length > 0 && (
                   <>
