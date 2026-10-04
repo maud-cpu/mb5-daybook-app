@@ -1241,12 +1241,19 @@ export default function CaptureScreen() {
                   {rates &&
                     (() => {
                       const nights = p.overnight && p.stay_end_date ? datesBetween(p.date || today(), p.stay_end_date).length : 1;
-                      const perNight = daycareAmount(rates, children, { ...p, nights: 1 } as never);
+                      // Pass the real nights count, not a forced 1 -- the
+                      // rate itself (respite vs ad-hoc Overnight) depends on
+                      // whether this is actually a multi-night stay, so
+                      // forcing nights to 1 here would silently price the
+                      // preview at the wrong rate even though saving uses
+                      // the right one.
+                      const total = daycareAmount(rates, children, { ...p, nights } as never);
+                      const perNight = total / nights;
                       return (
                         <div className="calc">
                           {nights > 1 ? (
                             <>
-                              {gbp(perNight)} per night × {nights} nights = {gbp(perNight * nights)}
+                              {gbp(perNight)} per night × {nights} nights = {gbp(total)}
                               <span className="note" style={{ display: "block", fontWeight: "normal" }}>
                                 One entry for the whole stay ({p.date || today()} to {p.stay_end_date}), billed in
                                 full now — plus a &quot;staying over&quot; calendar entry on every one of those days.

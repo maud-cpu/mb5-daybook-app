@@ -131,14 +131,17 @@ type DaycareLike = Pick<
 
 /** The £ for one night/day of overnight day care, before multiplying by
  * how many nights a single record covers (see daycareAmount/daycareEvents). */
-function perNightRate(rates: Rates, reason: string, band: Band, first: boolean): number {
-  // "Carer respite" is a planned, care-plan-level overnight break -- paid,
-  // per the Foster Care Finances document's "Sleepover Payments" section,
-  // as the child's own weekly age-related allowance plus the carer's
-  // usual Fostering Skills Payment, divided by seven. That's a different
-  // (usually much lower) figure than the flat ad-hoc "Overnight" day-care
-  // rate, which is only right for an unplanned babysit/sleepover.
-  if (reason === "Carer respite") {
+function perNightRate(rates: Rates, reason: string, nights: number, band: Band, first: boolean): number {
+  // A planned overnight break -- paid, per the Foster Care Finances
+  // document's "Sleepover Payments" section, as the child's own weekly
+  // age-related allowance plus the carer's usual Fostering Skills
+  // Payment, divided by seven. That's a different (usually much lower)
+  // figure than the flat ad-hoc "Overnight" day-care rate, which is only
+  // right for a single unplanned babysit/sleepover -- so this applies
+  // whenever the reason is explicitly "Carer respite" OR the entry
+  // already spans more than one night, since a multi-night stay is by
+  // definition the planned kind, not an unplanned one-off.
+  if (reason === "Carer respite" || nights > 1) {
     const weekly = AGE_ALLOWANCE_WEEKLY[band] + (rates.skills_payment_weekly ?? 0);
     return (weekly / 7) * (first ? 1 : 0.8);
   }
@@ -148,6 +151,7 @@ function perNightRate(rates: Rates, reason: string, band: Band, first: boolean):
 /** Single-record estimate, used for the live "£ so far" preview while capturing. */
 export function daycareAmount(rates: Rates, children: Child[], r: DaycareLike): number {
   const kids = r.kids.length ? r.kids : ["?"];
+  const nights = Math.max(1, r.nights || 1);
   let total = 0;
   const byFamily: Record<string, string[]> = {};
   kids.forEach((k) => {
@@ -162,7 +166,7 @@ export function daycareAmount(rates: Rates, children: Child[], r: DaycareLike): 
       // A planned multi-night stay is ONE record covering several nights
       // (see "nights" on EntryRecord) -- billed as that many nights at
       // once, not held back to appear one row per elapsed night.
-      if (r.overnight) total += perNightRate(rates, r.reason, b, first) * Math.max(1, r.nights || 1);
+      if (r.overnight) total += perNightRate(rates, r.reason, nights, b, first) * nights;
       else if (hoursOf(r) >= 5) total += first ? rates.day_first[b] : rates.day_add[b];
       else total += hoursOf(r) * (first ? rates.hour_first : rates.hour_add);
     });
@@ -224,10 +228,11 @@ export function daycareEvents(
   events.forEach((e) => {
     const b = bandOfName(children, e.kid);
     const first = (e as DaycareEvent & { first?: boolean }).first;
+    const nights = Math.max(1, e.nights || 1);
     // Same reasoning as daycareAmount above -- a planned multi-night stay
     // is ONE record covering several nights, billed as that many nights
     // at once.
-    if (e.overnight) e.amount = perNightRate(rates, e.reason, b, !!first) * Math.max(1, e.nights || 1);
+    if (e.overnight) e.amount = perNightRate(rates, e.reason, nights, b, !!first) * nights;
     else if (e.hours >= 5) e.amount = first ? rates.day_first[b] : rates.day_add[b];
     else e.amount = e.hours * (first ? rates.hour_first : rates.hour_add);
   });
