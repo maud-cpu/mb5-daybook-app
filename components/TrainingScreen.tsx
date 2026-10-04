@@ -61,17 +61,18 @@ function isMandatory(c: Course): boolean {
   return c.group_key !== "next";
 }
 
-// Read/watch/listen for the Inspire me tab -- keyed off the same
+// Book/article/watch/listen for the Inspire me tab -- keyed off the same
 // "<Medium>, <duration>" convention the admin bulk-import/edit tools
 // already write (see AdminSharedContent.tsx's KIND_TO_LENGTH map and its
 // "Video, 3 min" / "Book, ~250 pages" placeholders), so no new data is
 // needed, just reading what's already there a different way. Anything
 // that doesn't match a known medium (an in-person workshop, a bare
-// "Online", a row with no length set at all) falls outside all three --
-// counted as neither a book, a video, nor a podcast.
-function mediumBucket(c: Course): "read" | "watch" | "listen" | null {
+// "Online", a row with no length set at all) falls outside all four --
+// counted as neither a book, an article, a video, nor a podcast.
+function mediumBucket(c: Course): "book" | "article" | "watch" | "listen" | null {
   const m = mediumOf(c).toLowerCase();
-  if (/book|article|read|text|document|pdf/.test(m)) return "read";
+  if (/book/.test(m)) return "book";
+  if (/article|read|text|document|pdf/.test(m)) return "article";
   if (/podcast|audio/.test(m)) return "listen";
   if (/video|movie|film|tv|webinar/.test(m)) return "watch";
   return null;
@@ -97,13 +98,14 @@ const COURSE_SORTS = [
 // catalogue all competing for attention at once. Splitting into explicit
 // tabs makes it immediately obvious which mode you're in, instead of
 // relying on filters quietly narrowing one shared list.
-type TrainingTab = "all" | "suggested" | "compulsory" | "inspire" | "search" | "log";
+type TrainingTab = "all" | "suggested" | "compulsory" | "inspire" | "search" | "saved" | "log";
 const TRAINING_TABS: [TrainingTab, string][] = [
   ["all", "All training & resources"],
   ["suggested", "Suggested for you"],
   ["compulsory", "Compulsory only"],
   ["inspire", "Inspire me"],
   ["search", "Search"],
+  ["saved", "Saved for later"],
   ["log", "Log a training"],
 ];
 
@@ -149,7 +151,6 @@ export default function TrainingScreen() {
   const [dismissed, setDismissed] = useState<{ title: string; dismissed_at: string }[]>([]);
   const [showDismissed, setShowDismissed] = useState(false);
   const [savedTitles, setSavedTitles] = useState<Record<string, string>>({});
-  const [showSaved, setShowSaved] = useState(false);
   const [courseSort, setCourseSort] = useState<(typeof COURSE_SORTS)[number][0]>("random");
   const [randomSeed] = useState(() => Math.random());
   const [mandatoryOnly, setMandatoryOnly] = useState(false);
@@ -533,10 +534,16 @@ export default function TrainingScreen() {
       </div>
     );
 
-    const buckets = (["read", "watch", "listen"] as const)
+    const BUCKET_LABELS = {
+      book: "📖 One book to read",
+      article: "📰 One article to read",
+      watch: "🎬 One to watch",
+      listen: "🎙️ One to listen to",
+    } as const;
+    const buckets = (["book", "article", "watch", "listen"] as const)
       .map((kind) => ({
         kind,
-        label: kind === "read" ? "📖 One to read" : kind === "watch" ? "🎬 One to watch" : "🎙️ One to listen to",
+        label: BUCKET_LABELS[kind],
         pick: pickFrom(basis.filter((c) => mediumBucket(c) === kind)),
       }))
       .filter((b) => b.pick);
@@ -561,6 +568,43 @@ export default function TrainingScreen() {
         {reroll}
         {buckets.map((b) => renderGroupCard({ key: b.kind, label: b.label, rows: b.pick ? [b.pick] : [] }))}
       </>
+    );
+  }
+
+  function savedTab() {
+    const entries = Object.entries(savedTitles).sort((a, b) => b[1].localeCompare(a[1]));
+    if (!entries.length) {
+      return (
+        <div className="card">
+          <p className="empty">Nothing saved yet — tap 🔖 Save for later on any course to add it here.</p>
+        </div>
+      );
+    }
+    return (
+      <div className="card">
+        <h3>🔖 Saved for later</h3>
+        {entries.map(([title, savedAt]) => {
+          const course = courses.find((c) => c.title.trim().toLowerCase() === title.trim().toLowerCase());
+          const url = course ? withAmazonAffiliateTag(course.url || platformUrl(course.platform)) : "";
+          return (
+            <div key={title} className="rec" style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+              <span style={{ flex: 1 }}>
+                <b title={title}>{shortTitle(title)}</b>
+                <br />
+                <small className="muted">saved {new Date(savedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</small>
+              </span>
+              {url && (
+                <a className="chip" style={{ flex: "0 0 auto" }} href={url} target="_blank" rel="noopener noreferrer">
+                  Open ↗
+                </a>
+              )}
+              <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => toggleSaved(title)}>
+                Unsave
+              </button>
+            </div>
+          );
+        })}
+      </div>
     );
   }
 
@@ -691,6 +735,7 @@ export default function TrainingScreen() {
           <button key={k} className={trainingTab === k ? "on" : ""} onClick={() => setTrainingTab(k)}>
             {l}
             {k === "suggested" && personalEntries.length > 0 ? ` (${personalEntries.length})` : ""}
+            {k === "saved" && Object.keys(savedTitles).length > 0 ? ` (${Object.keys(savedTitles).length})` : ""}
           </button>
         ))}
       </div>
@@ -701,40 +746,8 @@ export default function TrainingScreen() {
       {trainingTab === "inspire" && inspireTab()}
       {trainingTab === "search" && searchTab()}
       {trainingTab === "log" && logTab()}
+      {trainingTab === "saved" && savedTab()}
 
-      {Object.keys(savedTitles).length > 0 && (
-        <div className="card">
-          <p className="hint" style={{ cursor: "pointer" }} onClick={() => setShowSaved(!showSaved)}>
-            {showSaved ? "▾" : "▸"} Saved for later ({Object.keys(savedTitles).length}) — tap to {showSaved ? "hide" : "show"}
-          </p>
-          {showSaved &&
-            Object.entries(savedTitles)
-              .sort((a, b) => b[1].localeCompare(a[1]))
-              .map(([title, savedAt]) => {
-                const course = courses.find((c) => c.title.trim().toLowerCase() === title.trim().toLowerCase());
-                const url = course ? withAmazonAffiliateTag(course.url || platformUrl(course.platform)) : "";
-                return (
-                  <div key={title} className="rec" style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
-                    <span style={{ flex: 1 }}>
-                      <b title={title}>{shortTitle(title)}</b>
-                      <br />
-                      <small className="muted">
-                        saved {new Date(savedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                      </small>
-                    </span>
-                    {url && (
-                      <a className="chip" style={{ flex: "0 0 auto" }} href={url} target="_blank" rel="noopener noreferrer">
-                        Open ↗
-                      </a>
-                    )}
-                    <button className="chip" style={{ flex: "0 0 auto" }} onClick={() => toggleSaved(title)}>
-                      Unsave
-                    </button>
-                  </div>
-                );
-              })}
-        </div>
-      )}
       <ResourceRecommendations />
       {dismissed.length > 0 && (
         <div className="card">
