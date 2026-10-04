@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { gbp, today } from "@/lib/domain";
-import { BANDS, Rates } from "@/lib/types";
+import { BANDS, Rates, SKILLS_PAYMENT_OPTIONS } from "@/lib/types";
 import ChangePasswordCard from "@/components/ChangePasswordCard";
 import TwoFactorCard from "@/components/TwoFactorCard";
 
@@ -13,9 +13,11 @@ export default function RatesScreen() {
   const supabase = createClient();
   const [rates, setRates] = useState<Rates | null>(null);
   const [rota, setRota] = useState<RotaRow[]>([]);
+  const [household, setHousehold] = useState<Record<string, unknown> | null>(null);
   const [rescanMsg, setRescanMsg] = useState("");
   const [rescanning, setRescanning] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [savedMsg, setSavedMsg] = useState("");
 
   async function rescan() {
     setRescanning(true);
@@ -30,17 +32,31 @@ export default function RatesScreen() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: r, error }, { data: rt }] = await Promise.all([
+      const [{ data: r, error }, { data: rt }, householdRes] = await Promise.all([
         supabase.from("shared_rates").select("*").single(),
         supabase.from("shared_rota").select("date, name, phone").order("date"),
+        fetch("/api/household").then((res) => res.json()),
       ]);
       if (error) setLoadError(error.message);
       setRates(r as Rates);
       setRota((rt as RotaRow[]) ?? []);
+      setHousehold(householdRes.household ?? {});
     }
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function setSkillsPaymentWeekly(weekly: number) {
+    const next = { ...(household ?? {}), skills_payment_weekly: weekly };
+    setHousehold(next);
+    await fetch("/api/household", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(next),
+    });
+    setSavedMsg("Saved");
+    setTimeout(() => setSavedMsg(""), 2000);
+  }
 
   const tonight = rota.find((r) => r.date === today());
 
@@ -93,6 +109,31 @@ export default function RatesScreen() {
           priced as a family — the eldest gets the first-child rate, the rest get the additional-child rate.
         </p>
         <p className="hint">This is set by your admin and applies to everyone.</p>
+      </div>
+
+      <div className="card">
+        <h3>My Fostering Skills Payment</h3>
+        <p className="note">
+          Personal to you, not set by your admin — used to price a day care item logged with &quot;Carer respite&quot;
+          as the reason. A planned respite/sleepover stay is paid as the child&apos;s own weekly age-related
+          allowance plus this, divided by seven — a different (usually much lower) figure than the flat Overnight
+          rate above, which is only right for an unplanned babysit.
+        </p>
+        <select
+          value={(household?.skills_payment_weekly as number | undefined) ?? 0}
+          onChange={(e) => setSkillsPaymentWeekly(Number(e.target.value))}
+        >
+          {SKILLS_PAYMENT_OPTIONS.map(([label, amount]) => (
+            <option key={label} value={amount}>
+              {label} — {gbp(amount)}/wk
+            </option>
+          ))}
+        </select>
+        {savedMsg && <span className="hint"> {savedMsg}</span>}
+        <p className="hint" style={{ marginTop: 6 }}>
+          Specialist schemes (One-to-One, Mockingbird Hub Home Carer, Hope, Parent &amp; Child, Emergency Duty) use
+          the Specialist rate instead.
+        </p>
       </div>
 
       <div className="card">
@@ -155,22 +196,6 @@ export default function RatesScreen() {
           <p className="note">
             £150/year towards specialist house insurance (covering deliberate theft, malicious damage, fostered
             children&apos;s possessions) if you care for a child aged 11 or over.
-          </p>
-        </details>
-
-        <details>
-          <summary>Fostering Skills Payment</summary>
-          <p className="note">Weekly, per child in placement:</p>
-          <table style={{ width: "100%", marginTop: 6 }}>
-            <tbody>
-              <tr><td>Level 1</td><td>£0.00</td></tr>
-              <tr><td>Level 2</td><td>£113.46</td></tr>
-              <tr><td>Level 3</td><td>£226.92</td></tr>
-            </tbody>
-          </table>
-          <p className="note" style={{ marginTop: 6 }}>
-            Specialist schemes (One-to-One, Mockingbird Hub Home Carer, Hope, Parent &amp; Child, Emergency Duty)
-            pay £578.76/week instead, plus the child&apos;s age-related allowance.
           </p>
         </details>
 

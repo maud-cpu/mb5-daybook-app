@@ -1,0 +1,12 @@
+-- The carer's own weekly Fostering Skills Payment (Level 1/2/3/Specialist)
+-- -- personal to this household, unlike shared_rates (the admin's single
+-- rate card shared across every household in the content group), since
+-- different carers hold different skill levels.
+--
+-- Used to work out the correct "Carer respite" day-care rate (see
+-- daycareAmount in lib/domain.ts): the Foster Care Finances document pays
+-- a planned respite/sleepover stay as (the child's own weekly age-related
+-- allowance + this skills payment) / 7 -- a different, usually much
+-- lower, figure than the flat ad-hoc "Overnight" day-care rate already in
+-- shared_rates, which is only right for an unplanned/ad-hoc babysit.
+alter table household add column if not exists skills_payment_weekly numeric not null default 0;

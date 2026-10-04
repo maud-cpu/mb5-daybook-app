@@ -70,7 +70,7 @@ export default function EntriesScreen() {
 
   async function load() {
     setLoading(true);
-    const [recordsRes, kidsRes, hhKidsRes, { data: r }, remindersRes] = await Promise.all([
+    const [recordsRes, kidsRes, hhKidsRes, { data: r }, remindersRes, householdRes] = await Promise.all([
       fetch("/api/records").then((res) => res.json()),
       fetch("/api/children").then((res) => res.json()),
       // A child in "Children in your household" can be an actual foster
@@ -80,6 +80,7 @@ export default function EntriesScreen() {
       fetch("/api/household-children").then((res) => res.json()),
       supabase.from("shared_rates").select("*").single(),
       fetch("/api/reminders").then((res) => res.json()),
+      fetch("/api/household").then((res) => res.json()),
     ]);
     const kids = kidsRes.children;
     const hhKids = hhKidsRes.children;
@@ -91,7 +92,10 @@ export default function EntriesScreen() {
         ...(((hhKids as Pick<Child, "id" | "name" | "born" | "category">[]) ?? []).map((h) => ({ ...h, family: "", lives_here: true }) as Child)),
       ]),
     );
-    setRates(r as Rates);
+    // skills_payment_weekly is personal to this carer, not part of the
+    // shared_rates card -- merged in here so a "Carer respite" day care
+    // item prices correctly (see daycareAmount in lib/domain.ts).
+    setRates(r ? { ...(r as Rates), skills_payment_weekly: householdRes.household?.skills_payment_weekly ?? 0 } : null);
     setLoading(false);
   }
 

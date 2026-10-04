@@ -197,11 +197,17 @@ export default function CaptureScreen() {
     loadChildren();
     loadClubs();
     loadSchoolAdmin();
-    supabase
-      .from("shared_rates")
-      .select("*")
-      .single()
-      .then(({ data }) => setRates(data as Rates));
+    Promise.all([supabase.from("shared_rates").select("*").single(), fetch("/api/household").then((r) => r.json())]).then(
+      ([{ data: rateRow }, { household: data }]) => {
+        // skills_payment_weekly is personal to this carer, not part of the
+        // shared_rates card -- merged in here so a "Carer respite" day
+        // care item prices correctly (see daycareAmount in lib/domain.ts).
+        setRates(rateRow ? { ...(rateRow as Rates), skills_payment_weekly: data?.skills_payment_weekly ?? 0 } : null);
+        if (data?.is_mockingbird && data.hub_leader_name) {
+          setHubLeader({ name: data.hub_leader_name, email: data.hub_leader_email || "" });
+        }
+      },
+    );
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
       supabase
@@ -211,13 +217,6 @@ export default function CaptureScreen() {
         .single()
         .then(({ data }) => setFirstName((data?.display_name || "").trim().split(/\s+/)[0] || ""));
     });
-    fetch("/api/household")
-      .then((r) => r.json())
-      .then(({ household: data }) => {
-        if (data?.is_mockingbird && data.hub_leader_name) {
-          setHubLeader({ name: data.hub_leader_name, email: data.hub_leader_email || "" });
-        }
-      });
     Promise.all([
       supabase.from("shared_training_catalog").select("title, platform, url, length"),
       supabase.from("shared_training_platforms").select("name, url"),

@@ -143,7 +143,7 @@ export default function PaperworkScreen() {
 
   useEffect(() => {
     async function load() {
-      const [recordsRes, kidsRes, hhKidsRes, { data: r }, { data: training }, { data: catalog }] = await Promise.all([
+      const [recordsRes, kidsRes, hhKidsRes, { data: r }, { data: training }, { data: catalog }, householdRes] = await Promise.all([
         fetch("/api/records").then((res) => res.json()),
         fetch("/api/children").then((res) => res.json()),
         // A child in "Children in your household" can be an actual foster
@@ -157,6 +157,7 @@ export default function PaperworkScreen() {
         // the link/length along for a completed course in the supervision
         // report, so it's not just a title someone has to search for again.
         supabase.from("shared_training_catalog").select("title, url, length, platform"),
+        fetch("/api/household").then((res) => res.json()),
       ]);
       const kids = kidsRes.children;
       const hhKids = hhKidsRes.children;
@@ -169,7 +170,10 @@ export default function PaperworkScreen() {
           )),
         ]),
       );
-      setRates(r as Rates);
+      // skills_payment_weekly is personal to this carer, not part of the
+      // shared_rates card -- merged in here so a "Carer respite" day care
+      // item prices correctly (see daycareAmount in lib/domain.ts).
+      setRates(r ? { ...(r as Rates), skills_payment_weekly: householdRes.household?.skills_payment_weekly ?? 0 } : null);
       const catalogByTitle = new Map(
         ((catalog as { title: string; url: string; length: string; platform: string }[] | null) ?? []).map((c) => [
           c.title.trim().toLowerCase(),
@@ -441,6 +445,7 @@ export default function PaperworkScreen() {
                           time_from: newExpense.time_from || null,
                           time_to: newExpense.time_to || null,
                           hours: newExpense.hours ? Number(newExpense.hours) : null,
+                          reason: newExpense.reason,
                         }),
                       )}
                     </div>

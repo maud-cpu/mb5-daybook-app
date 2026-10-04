@@ -98,7 +98,38 @@ export type Rates = {
   day_first: Record<Band, number>;
   day_add: Record<Band, number>;
   overnight: Record<Band, number>;
+  /** The signed-in carer's own weekly Fostering Skills Payment -- NOT a
+   * shared_rates column (that table is one card shared by every household
+   * in the content group; this is personal to each one). Merged in
+   * client-side from household.skills_payment_weekly (see 0087_skills_
+   * payment.sql) wherever `rates` is loaded, so daycareAmount can price a
+   * "Carer respite" item correctly without every caller passing it
+   * separately. 0/undefined if the carer hasn't set their level yet. */
+  skills_payment_weekly?: number;
 };
+
+// Weekly age-related fostering allowance by band, from the Foster Care
+// Finances document (reviewed annually -- check RatesScreen's own copy of
+// this document if these ever look out of date). Used alongside the
+// carer's own skills_payment_weekly to price a "Carer respite" day care
+// item -- see daycareAmount in lib/domain.ts.
+export const AGE_ALLOWANCE_WEEKLY: Record<Band, number> = {
+  "0-4": 218.08,
+  "5-10": 247.35,
+  "11-13": 329.76,
+  "14-18": 383.12,
+};
+
+// The Fostering Skills Payment levels a carer can be approved at -- flat
+// weekly amounts, independent of any child's own age band. "Specialist"
+// covers One-to-One, Mockingbird Hub Home Carer, Hope, Parent & Child and
+// Emergency Duty schemes.
+export const SKILLS_PAYMENT_OPTIONS = [
+  ["Level 1", 0],
+  ["Level 2", 113.46],
+  ["Level 3", 226.92],
+  ["Specialist", 578.76],
+] as const;
 
 export type Child = {
   id: string;

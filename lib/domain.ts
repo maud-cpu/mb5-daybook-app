@@ -1,4 +1,4 @@
-import { Band, Child, EntryRecord, Rates } from "@/lib/types";
+import { AGE_ALLOWANCE_WEEKLY, Band, Child, EntryRecord, Rates } from "@/lib/types";
 
 export function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -126,7 +126,7 @@ function eldestOf(children: Child[], kids: string[]): string {
 
 type DaycareLike = Pick<
   EntryRecord,
-  "kids" | "overnight" | "time_from" | "time_to" | "hours"
+  "kids" | "overnight" | "time_from" | "time_to" | "hours" | "reason"
 >;
 
 /** Single-record estimate, used for the live "£ so far" preview while capturing. */
@@ -143,7 +143,19 @@ export function daycareAmount(rates: Rates, children: Child[], r: DaycareLike): 
     group.forEach((k) => {
       const b = bandOfName(children, k);
       const first = k === eldest;
-      if (r.overnight) total += rates.overnight[b] * (first ? 1 : 0.8);
+      // "Carer respite" is a planned, care-plan-level overnight break --
+      // paid, per the Foster Care Finances document's "Sleepover
+      // Payments" section, as the child's own weekly age-related
+      // allowance plus the carer's usual Fostering Skills Payment,
+      // divided by seven. That's a different (usually much lower) figure
+      // than the flat ad-hoc "Overnight" day-care rate below, which is
+      // only right for an unplanned babysit/sleepover. Every other
+      // reason -- including a daytime respite session -- keeps using the
+      // normal rates, same as before.
+      if (r.overnight && r.reason === "Carer respite") {
+        const weekly = AGE_ALLOWANCE_WEEKLY[b] + (rates.skills_payment_weekly ?? 0);
+        total += (weekly / 7) * (first ? 1 : 0.8);
+      } else if (r.overnight) total += rates.overnight[b] * (first ? 1 : 0.8);
       else if (hoursOf(r) >= 5) total += first ? rates.day_first[b] : rates.day_add[b];
       else total += hoursOf(r) * (first ? rates.hour_first : rates.hour_add);
     });
@@ -157,6 +169,7 @@ type DaycareEvent = {
   overnight: boolean;
   amount: number;
   recordId: string;
+  reason: string;
 };
 
 /**
@@ -185,7 +198,7 @@ export function daycareEvents(
     kids.forEach((k) => {
       const key = `${r.date}|${k}`;
       if (!r.overnight && overnightKeys.has(key)) return;
-      events.push({ date: r.date, kid: k, overnight: r.overnight, hours: hoursOf(r), amount: 0, recordId: r.id });
+      events.push({ date: r.date, kid: k, overnight: r.overnight, hours: hoursOf(r), amount: 0, recordId: r.id, reason: r.reason });
     });
   });
 
@@ -203,7 +216,14 @@ export function daycareEvents(
   events.forEach((e) => {
     const b = bandOfName(children, e.kid);
     const first = (e as DaycareEvent & { first?: boolean }).first;
-    if (e.overnight) e.amount = rates.overnight[b] * (first ? 1 : 0.8);
+    // Same reasoning as daycareAmount above -- a planned "Carer respite"
+    // overnight is paid as the child's own age-related allowance plus the
+    // carer's skills payment, divided by seven, not the flat ad-hoc
+    // Overnight rate.
+    if (e.overnight && e.reason === "Carer respite") {
+      const weekly = AGE_ALLOWANCE_WEEKLY[b] + (rates.skills_payment_weekly ?? 0);
+      e.amount = (weekly / 7) * (first ? 1 : 0.8);
+    } else if (e.overnight) e.amount = rates.overnight[b] * (first ? 1 : 0.8);
     else if (e.hours >= 5) e.amount = first ? rates.day_first[b] : rates.day_add[b];
     else e.amount = e.hours * (first ? rates.hour_first : rates.hour_add);
   });
