@@ -652,13 +652,13 @@ export default function CaptureScreen() {
   // the last (which the normal save below already creates, dated the
   // stay's END, as its own "...stay with us ends" reminder) -- so there's
   // a visible "staying over" marker on every day in between too.
-  async function saveMultiNightStay(p: PendingItem, recordId: string | null) {
+  async function saveMultiNightStay(p: PendingItem, recordId: string | null): Promise<{ ok: boolean; error?: string }> {
     const start = p.date || today();
     const end = p.stay_end_date;
-    if (!end || end <= start) return;
+    if (!end || end <= start) return { ok: true };
     const who = p.kids[0] || "";
     const daysExceptLast = datesBetween(start, end).slice(0, -1);
-    if (!daysExceptLast.length) return;
+    if (!daysExceptLast.length) return { ok: true };
     const reminderRows = daysExceptLast.map((d) => ({
       text: `${who || "Child"} staying over`,
       date: d,
@@ -670,11 +670,16 @@ export default function CaptureScreen() {
       record_id: recordId,
       record_ids: [],
     }));
-    await fetch("/api/reminders", {
+    const res = await fetch("/api/reminders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ rows: reminderRows }),
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return { ok: false, error: data.error || "unknown error" };
+    }
+    return { ok: true };
   }
 
   async function saveAll() {
@@ -801,15 +806,23 @@ export default function CaptureScreen() {
       };
     });
     if (reminderRows.length) {
-      await fetch("/api/reminders", {
+      const remRes = await fetch("/api/reminders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rows: reminderRows }),
       });
+      if (!remRes.ok) {
+        const data = await remRes.json().catch(() => ({}));
+        showToast("Saved, but calendar reminder failed: " + (data.error || "unknown error"));
+      }
     }
-    await Promise.all(
-      pending.map((p, idx) => (p.stay_end_date ? saveMultiNightStay(p, inserted?.[idx] ?? null) : Promise.resolve())),
+    const multiNightResults = await Promise.all(
+      pending.map((p, idx) => (p.stay_end_date ? saveMultiNightStay(p, inserted?.[idx] ?? null) : null)),
     );
+    const multiNightError = multiNightResults.find((r) => r && !r.ok);
+    if (multiNightError) {
+      showToast("Saved, but calendar entries for the stay failed: " + multiNightError.error);
+    }
     // Training the carer says they themselves did goes straight onto their
     // training record (Training & Resources / the Supervision report both
     // read training_progress) -- even when it isn't one of the courses in
