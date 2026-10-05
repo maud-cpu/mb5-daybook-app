@@ -831,7 +831,10 @@ export default function CaptureScreen() {
     const multiNightCount = multiNightResults.reduce((n, r) => n + (r?.count ?? 0), 0);
     if (multiNightCount) toastParts.push(`saved ${multiNightCount} stay-night reminder(s) ok`);
     if (multiNightError) toastParts.push(`stay reminders failed: ${multiNightError.error}`);
-    if (toastParts.length) showToast("Calendar: " + toastParts.join("; "));
+    // alert() instead of the toast (which auto-dismisses in 1.8s, too fast
+    // to read) -- this pauses here until dismissed, so there's no chance
+    // of missing it. Remove alongside the rest of this diagnostic.
+    if (toastParts.length) alert("Calendar: " + toastParts.join("; "));
     // Training the carer says they themselves did goes straight onto their
     // training record (Training & Resources / the Supervision report both
     // read training_progress) -- even when it isn't one of the courses in
