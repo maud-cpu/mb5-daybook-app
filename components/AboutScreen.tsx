@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ageOf, today } from "@/lib/domain";
 import { BASICS_SECTIONS, RepeatableSubfield } from "@/lib/basics";
-import { Child, GENDER_OPTIONS, LIVES_CATS, livesHereOf, MB_OPTIONS, NON_PLACEMENT_CATEGORIES, VISITS_CATS } from "@/lib/types";
+import { Child, GENDER_OPTIONS, LIVES_CATS, livesHereOf, MB_OPTIONS, NON_PLACEMENT_CATEGORIES, SocialWorker, VISITS_CATS } from "@/lib/types";
 import { personColor } from "@/lib/calendarHelpers";
 import { confirmUseExisting, findPersonByName, findPersonInEitherChildTable } from "@/lib/findOrCreate";
 import ChildSchoolAdmin from "@/components/ChildSchoolAdmin";
@@ -180,7 +180,110 @@ type HouseholdChild = {
   hub_carer_email: string;
   surrey_contact: string;
   gender: string;
+  csw_contact_id?: string | null;
 };
+
+// Replaces the "Child's social worker" free-text name/phone/email trio with
+// a pick-from-the-shared-directory control (see 0090_shared_social_workers.sql)
+// -- the fix for the same social worker's details being re-typed, and
+// drifting out of sync, across every child they cover.
+function CswPicker({
+  socialWorkers,
+  cswContactId,
+  onCswContact,
+  onAddSocialWorker,
+}: {
+  socialWorkers: SocialWorker[];
+  cswContactId: string | null | undefined;
+  onCswContact: (id: string | null) => void;
+  onAddSocialWorker: (sw: { name: string; phone: string; email: string }) => Promise<SocialWorker | null>;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState({ name: "", phone: "", email: "" });
+  const [error, setError] = useState("");
+  const linked = socialWorkers.find((s) => s.id === cswContactId);
+
+  async function submitNew() {
+    if (!draft.name.trim()) return;
+    setError("");
+    const created = await onAddSocialWorker(draft);
+    if (!created) {
+      setError("Couldn't add — you may need to ask whoever manages this for your group to add them instead.");
+      return;
+    }
+    onCswContact(created.id);
+    setDraft({ name: "", phone: "", email: "" });
+    setAdding(false);
+  }
+
+  return (
+    <div style={{ marginTop: 10 }}>
+      <small className="muted">Child&apos;s social worker</small>
+      <select
+        style={{ marginTop: 6 }}
+        value={cswContactId || ""}
+        onChange={(e) => {
+          if (e.target.value === "__add__") {
+            setAdding(true);
+            return;
+          }
+          onCswContact(e.target.value || null);
+        }}
+      >
+        <option value="">— not set —</option>
+        {socialWorkers.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.name}
+          </option>
+        ))}
+        <option value="__add__">+ Add someone new…</option>
+      </select>
+      {linked && (
+        <p className="hint" style={{ marginTop: 4 }}>
+          {[linked.phone, linked.email].filter(Boolean).join(" · ") || "no phone/email on file for them yet"}
+        </p>
+      )}
+      {adding && (
+        <div className="item" style={{ marginTop: 8 }}>
+          <input placeholder="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+          <input
+            type="tel"
+            placeholder="Phone"
+            style={{ marginTop: 6 }}
+            value={draft.phone}
+            onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
+          />
+          <input
+            type="email"
+            placeholder="Email"
+            style={{ marginTop: 6 }}
+            value={draft.email}
+            onChange={(e) => setDraft({ ...draft, email: e.target.value })}
+          />
+          {error && (
+            <p className="note" style={{ color: "var(--danger)", marginTop: 6 }}>
+              {error}
+            </p>
+          )}
+          <div style={{ marginTop: 8 }}>
+            <button className="chip on" onClick={submitNew}>
+              Add &amp; link
+            </button>{" "}
+            <button
+              className="chip"
+              onClick={() => {
+                setAdding(false);
+                setError("");
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Shared by every list a child can appear in (lives here, visits, or in your
 // household but not an active placement) -- Mockingbird/hub-carer details,
@@ -200,6 +303,10 @@ function ChildBasicsPanel({
   basics,
   onBasics,
   justFilled,
+  socialWorkers,
+  cswContactId,
+  onCswContact,
+  onAddSocialWorker,
 }: {
   showMockingbird: boolean;
   mockingbird: string;
@@ -216,6 +323,16 @@ function ChildBasicsPanel({
   /** Keys "Extract info" (ChildDocuments) just filled in -- highlighted so
    * they're easy to spot among everything else on the page. */
   justFilled?: string[];
+  /** The content group's shared CSW directory (see 0090_shared_social_workers.sql) --
+   * one list, shared by every child, instead of each child holding its own
+   * separate copy of the same social worker's name/phone/email. */
+  socialWorkers: SocialWorker[];
+  cswContactId: string | null | undefined;
+  onCswContact: (id: string | null) => void;
+  /** Adds a new entry to the shared directory and returns it (or null on
+   * failure) -- only the admin/content owner can actually do this; a carer
+   * without that permission gets a clear error instead of a silent no-op. */
+  onAddSocialWorker: (sw: { name: string; phone: string; email: string }) => Promise<SocialWorker | null>;
 }) {
   return (
     <>
@@ -266,7 +383,15 @@ function ChildBasicsPanel({
         <div key={section.title} style={{ marginBottom: 12, marginTop: 12 }}>
           <b style={{ fontSize: 14 }}>{section.title}</b>
           {section.fields.map((f) =>
-            f.repeatableFields ? (
+            f.key === "csw_phone" || f.key === "csw_email" ? null : f.key === "csw" ? (
+              <CswPicker
+                key="csw"
+                socialWorkers={socialWorkers}
+                cswContactId={cswContactId}
+                onCswContact={onCswContact}
+                onAddSocialWorker={onAddSocialWorker}
+              />
+            ) : f.repeatableFields ? (
               <div key={f.key} style={{ marginTop: 10 }}>
                 <small className="muted">{f.label}</small>
                 <RepeatableField
@@ -366,6 +491,7 @@ export default function AboutScreen() {
   const [basics, setBasics] = useState<Record<string, Record<string, string>>>({});
   const [household, setHousehold] = useState<Household>(emptyHousehold);
   const [adults, setAdults] = useState<Adult[]>([]);
+  const [socialWorkers, setSocialWorkers] = useState<SocialWorker[]>([]);
   const [newAdult, setNewAdult] = useState({ name: "", phone: "", email: "", role: ADULT_ROLES[0], gender: "" });
   const [adultError, setAdultError] = useState("");
   // Shared across every "remove" action below (adult/visitor/child) -- these
@@ -437,12 +563,13 @@ export default function AboutScreen() {
   }
 
   async function load() {
-    const [childrenRes, householdChildrenRes, householdRes, adultsRes, visitorsRes] = await Promise.all([
+    const [childrenRes, householdChildrenRes, householdRes, adultsRes, visitorsRes, socialWorkersRes] = await Promise.all([
       fetch("/api/children").then((r) => r.json()),
       fetch("/api/household-children").then((r) => r.json()),
       fetch("/api/household").then((r) => r.json()),
       fetch("/api/household-adults").then((r) => r.json()),
       fetch("/api/household-visitors").then((r) => r.json()),
+      fetch("/api/social-workers").then((r) => r.json()),
     ]);
     setHouseholdChildren((householdChildrenRes.children as HouseholdChild[]) ?? []);
     setVisitors((visitorsRes.visitors as Visitor[]) ?? []);
@@ -453,6 +580,7 @@ export default function AboutScreen() {
     setBasics(b);
     if (householdRes.household) setHousehold(householdRes.household as Household);
     setAdults((adultsRes.adults as Adult[]) ?? []);
+    setSocialWorkers((socialWorkersRes.socialWorkers as SocialWorker[]) ?? []);
   }
 
   useEffect(() => {
@@ -603,6 +731,19 @@ export default function AboutScreen() {
       body: JSON.stringify({ id: childId, patch: { basics: next } }),
     });
     flashSaved();
+  }
+
+  async function addSocialWorker(sw: { name: string; phone: string; email: string }): Promise<SocialWorker | null> {
+    const res = await fetch("/api/social-workers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(sw),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const created = data.socialWorker as SocialWorker;
+    setSocialWorkers((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+    return created;
   }
 
   function flashSaved() {
@@ -1581,6 +1722,10 @@ export default function AboutScreen() {
               basics={c.basics || {}}
               onBasics={(key, value) => saveHouseholdChildBasics(c.id, key, value)}
               justFilled={justFilled}
+              socialWorkers={socialWorkers}
+              cswContactId={c.csw_contact_id}
+              onCswContact={(id) => updateHouseholdChild(c.id, { csw_contact_id: id })}
+              onAddSocialWorker={addSocialWorker}
             />
           </div>
           {closeButton()}
@@ -1699,6 +1844,10 @@ export default function AboutScreen() {
               basics={cb}
               onBasics={(key, value) => saveChildBasics(c.id, key, value)}
               justFilled={justFilled}
+              socialWorkers={socialWorkers}
+              cswContactId={c.csw_contact_id}
+              onCswContact={(id) => saveChild(c.id, { csw_contact_id: id })}
+              onAddSocialWorker={addSocialWorker}
             />
           </div>
           {closeButton()}
@@ -1795,6 +1944,10 @@ export default function AboutScreen() {
               basics={cb}
               onBasics={(key, value) => saveChildBasics(c.id, key, value)}
               justFilled={justFilled}
+              socialWorkers={socialWorkers}
+              cswContactId={c.csw_contact_id}
+              onCswContact={(id) => saveChild(c.id, { csw_contact_id: id })}
+              onAddSocialWorker={addSocialWorker}
             />
           </div>
           {closeButton()}
