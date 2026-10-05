@@ -164,19 +164,6 @@ export type Child = {
    * for a visiting child, not "category". Always "" for a household child
    * (lives_here true), where "category" already holds this directly. */
   placement_category: string;
-  /** Links to a shared_social_workers row instead of holding the CSW's own
-   * name/phone/email directly -- see 0090_shared_social_workers.sql. Null
-   * means no CSW linked yet. */
-  csw_contact_id?: string | null;
-};
-
-/** One entry in the content group's shared CSW directory (0090_shared_social_workers.sql) --
- * managed by the admin, linked to by any number of children via csw_contact_id. */
-export type SocialWorker = {
-  id: string;
-  name: string;
-  phone: string;
-  email: string;
 };
 
 // Used so generated documents (Handover, diary drafts) can use the right

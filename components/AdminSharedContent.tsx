@@ -7,7 +7,6 @@ import { AMAZON_ASSOCIATES_TAG } from "@/lib/amazon";
 import NewsAdmin from "@/components/NewsAdmin";
 import HubCalendarAdmin from "@/components/HubCalendarAdmin";
 import ResourceRecommendationsAdmin from "@/components/ResourceRecommendationsAdmin";
-import SocialWorkersAdmin from "@/components/SocialWorkersAdmin";
 
 type RotaRow = { date: string; name: string; phone: string };
 type Course = {
@@ -633,7 +632,6 @@ export default function AdminSharedContent() {
       <NewsAdmin showToast={showToast} />
       <HubCalendarAdmin showToast={showToast} />
       <ResourceRecommendationsAdmin showToast={showToast} />
-      <SocialWorkersAdmin showToast={showToast} />
       <div className="card">
         <h3>Rates — {rates.label}</h3>
         <label>Label</label>

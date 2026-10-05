@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     .from("children")
     .insert(insert)
     .select(
-      "id, user_id, name, born, family, basics, created_at, category, lives_here, mockingbird, hub_carer_name, hub_carer_phone, hub_carer_email, surrey_contact, gender, placement_end_date, household_owner_id, linked_visitor_id, placement_category, csw_contact_id",
+      "id, user_id, name, born, family, basics, created_at, category, lives_here, mockingbird, hub_carer_name, hub_carer_phone, hub_carer_email, surrey_contact, gender, placement_end_date, household_owner_id, linked_visitor_id, placement_category",
     )
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

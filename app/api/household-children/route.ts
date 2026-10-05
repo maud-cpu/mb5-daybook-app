@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     .from("household_children")
     .insert(insert)
     .select(
-      "id, user_id, name, born, notes, created_at, category, basics, mockingbird, hub_carer_name, hub_carer_phone, hub_carer_email, surrey_contact, gender, household_owner_id, csw_contact_id",
+      "id, user_id, name, born, notes, created_at, category, basics, mockingbird, hub_carer_name, hub_carer_phone, hub_carer_email, surrey_contact, gender, household_owner_id",
     )
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
