@@ -684,6 +684,16 @@ export default function CaptureScreen() {
 
   async function saveAll() {
     if (!pending.length) return;
+    // Temporary diagnostic (remove alongside the rest of this debugging
+    // pass): the last test showed no sign the reminder code path ran at
+    // all, despite the review screen showing flag "reminder" and a
+    // stay_end_date moments before Save was clicked -- this dumps exactly
+    // what saveAll actually sees on each pending item, to rule out (or
+    // confirm) a stale/lost value between review and save.
+    alert(
+      "DEBUG pending at save: " +
+        JSON.stringify(pending.map((p) => ({ flag: p.flag, stay_end_date: p.stay_end_date, kind: p.kind, bucket: p.bucket }))),
+    );
     const rows = pending.map((p) => ({
       bucket: p.bucket,
       child: p.kids[0] || "",
