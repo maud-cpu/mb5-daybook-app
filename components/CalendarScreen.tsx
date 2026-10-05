@@ -154,6 +154,13 @@ export default function CalendarScreen() {
   const [showSourceFor, setShowSourceFor] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Reminder | null>(null);
   const [feedToken, setFeedToken] = useState("");
+  // Distinguishes "haven't heard back from /api/household yet" from
+  // "heard back, and there's genuinely no token" -- a household row
+  // whose calendar_feed_token column migration hasn't reached this
+  // database yet (or whose schema cache hasn't picked it up) looks
+  // exactly like the former forever, with no way out, unless the two
+  // are told apart.
+  const [feedTokenLoaded, setFeedTokenLoaded] = useState(false);
   const [showPhoneSubscribe, setShowPhoneSubscribe] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [copyMsg, setCopyMsg] = useState("");
@@ -162,7 +169,10 @@ export default function CalendarScreen() {
   useEffect(() => {
     fetch("/api/household")
       .then((r) => r.json())
-      .then(({ household }) => setFeedToken(household?.calendar_feed_token || ""));
+      .then(({ household }) => {
+        setFeedToken(household?.calendar_feed_token || "");
+        setFeedTokenLoaded(true);
+      });
   }, []);
 
   async function load() {
@@ -315,8 +325,7 @@ export default function CalendarScreen() {
     setExtracting(false);
   }
 
-  async function regenerateFeedLink() {
-    if (!confirm("Get a new link? Your old one will stop working on any device already subscribed to it.")) return;
+  async function setNewFeedToken() {
     setRegenerating(true);
     const newToken = crypto.randomUUID();
     await fetch("/api/household", {
@@ -326,6 +335,11 @@ export default function CalendarScreen() {
     });
     setFeedToken(newToken);
     setRegenerating(false);
+  }
+
+  async function regenerateFeedLink() {
+    if (!confirm("Get a new link? Your old one will stop working on any device already subscribed to it.")) return;
+    await setNewFeedToken();
   }
 
   function copyFeedLink(url: string) {
@@ -518,6 +532,12 @@ export default function CalendarScreen() {
                   if this one&apos;s ever shared somewhere you didn&apos;t mean it to be.
                 </p>
               </>
+            ) : feedTokenLoaded ? (
+              <p className="hint">
+                <button className="chip" disabled={regenerating} onClick={setNewFeedToken}>
+                  {regenerating ? "Generating…" : "Set up a link"}
+                </button>
+              </p>
             ) : (
               <p className="muted">Loading…</p>
             )}
