@@ -652,13 +652,13 @@ export default function CaptureScreen() {
   // the last (which the normal save below already creates, dated the
   // stay's END, as its own "...stay with us ends" reminder) -- so there's
   // a visible "staying over" marker on every day in between too.
-  async function saveMultiNightStay(p: PendingItem, recordId: string | null): Promise<{ ok: boolean; error?: string }> {
+  async function saveMultiNightStay(p: PendingItem, recordId: string | null): Promise<{ ok: boolean; error?: string; count: number }> {
     const start = p.date || today();
     const end = p.stay_end_date;
-    if (!end || end <= start) return { ok: true };
+    if (!end || end <= start) return { ok: true, count: 0 };
     const who = p.kids[0] || "";
     const daysExceptLast = datesBetween(start, end).slice(0, -1);
-    if (!daysExceptLast.length) return { ok: true };
+    if (!daysExceptLast.length) return { ok: true, count: 0 };
     const reminderRows = daysExceptLast.map((d) => ({
       text: `${who || "Child"} staying over`,
       date: d,
@@ -677,9 +677,9 @@ export default function CaptureScreen() {
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      return { ok: false, error: data.error || "unknown error" };
+      return { ok: false, error: data.error || "unknown error", count: reminderRows.length };
     }
-    return { ok: true };
+    return { ok: true, count: reminderRows.length };
   }
 
   async function saveAll() {
@@ -805,6 +805,12 @@ export default function CaptureScreen() {
         record_ids: g.recordIds,
       };
     });
+    // Temporary diagnostic (remove once the "calendar stays empty" bug is
+    // found): a single combined toast at the end, covering both reminder
+    // paths, so it's never hidden by a later showToast overwriting it --
+    // confirms whether each POST fired and the server said it inserted, to
+    // tell apart "never tried" from "inserted but not showing up".
+    const toastParts: string[] = [];
     if (reminderRows.length) {
       const remRes = await fetch("/api/reminders", {
         method: "POST",
@@ -813,16 +819,19 @@ export default function CaptureScreen() {
       });
       if (!remRes.ok) {
         const data = await remRes.json().catch(() => ({}));
-        showToast("Saved, but calendar reminder failed: " + (data.error || "unknown error"));
+        toastParts.push(`reminder POST failed: ${data.error || "unknown error"}`);
+      } else {
+        toastParts.push(`saved ${reminderRows.length} reminder(s) ok`);
       }
     }
     const multiNightResults = await Promise.all(
       pending.map((p, idx) => (p.stay_end_date ? saveMultiNightStay(p, inserted?.[idx] ?? null) : null)),
     );
     const multiNightError = multiNightResults.find((r) => r && !r.ok);
-    if (multiNightError) {
-      showToast("Saved, but calendar entries for the stay failed: " + multiNightError.error);
-    }
+    const multiNightCount = multiNightResults.reduce((n, r) => n + (r?.count ?? 0), 0);
+    if (multiNightCount) toastParts.push(`saved ${multiNightCount} stay-night reminder(s) ok`);
+    if (multiNightError) toastParts.push(`stay reminders failed: ${multiNightError.error}`);
+    if (toastParts.length) showToast("Calendar: " + toastParts.join("; "));
     // Training the carer says they themselves did goes straight onto their
     // training record (Training & Resources / the Supervision report both
     // read training_progress) -- even when it isn't one of the courses in
