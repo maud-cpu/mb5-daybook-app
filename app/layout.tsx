@@ -9,8 +9,8 @@ import "./globals.css";
 const lexend = Lexend({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--font-lexend" });
 
 export const metadata: Metadata = {
-  title: "MB5 Day Book",
-  description: "Private fostering diary for MB5 carers",
+  title: "Foster Carer Log",
+  description: "Private fostering diary and record log",
 };
 
 // Without this, a phone browser has no idea the page is meant to fit its

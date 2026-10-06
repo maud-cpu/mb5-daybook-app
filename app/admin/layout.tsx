@@ -15,7 +15,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div style={{ padding: "16px 16px 40px", maxWidth: 800, margin: "0 auto" }}>
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <h1 style={{ fontSize: 19 }}>MB5 Day Book — Admin</h1>
+        <h1 style={{ fontSize: 19 }}>Foster Carer Log — Admin</h1>
         <SignOutButton />
       </header>
       <div className="tabs">

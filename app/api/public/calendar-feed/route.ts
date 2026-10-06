@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
   if (error) return new NextResponse("Couldn't load that calendar — the link may be out of date.", { status: 404 });
 
   const body =
-    "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//MB5 Day Book//EN\r\nCALSCALE:GREGORIAN\r\nX-WR-CALNAME:MB5 Day Book\r\n" +
+    "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Foster Carer Log//EN\r\nCALSCALE:GREGORIAN\r\nX-WR-CALNAME:Foster Carer Log\r\n" +
     ((data as FeedRow[]) ?? []).map(icsEventFor).join("\r\n") +
     "\r\nEND:VCALENDAR\r\n";
 

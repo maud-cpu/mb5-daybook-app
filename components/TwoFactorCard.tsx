@@ -6,11 +6,11 @@ import { createClient } from "@/lib/supabase/client";
 type Status = "loading" | "off" | "enrolling" | "codes" | "on";
 
 function downloadCodes(codes: string[]) {
-  const text = `MB5 Day Book -- two-factor backup codes\nGenerated ${new Date().toLocaleDateString("en-GB")}\nEach code works once. Keep this somewhere safe.\n\n${codes.join("\n")}\n`;
+  const text = `Foster Carer Log -- two-factor backup codes\nGenerated ${new Date().toLocaleDateString("en-GB")}\nEach code works once. Keep this somewhere safe.\n\n${codes.join("\n")}\n`;
   const blob = new Blob([text], { type: "text/plain" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "mb5-daybook-backup-codes.txt";
+  a.download = "foster-carer-log-backup-codes.txt";
   document.body.appendChild(a);
   a.click();
   a.remove();

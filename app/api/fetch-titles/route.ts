@@ -163,7 +163,7 @@ async function fetchTitle(url: string): Promise<{ title: string; length: string;
     const timeout = setTimeout(() => controller.abort(), 6000);
     const res = await fetch(url, {
       signal: controller.signal,
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; MB5DayBook/1.0)" },
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; FosterCarerLog/1.0)" },
     });
     clearTimeout(timeout);
     if (res.ok) {

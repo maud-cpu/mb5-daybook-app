@@ -11,7 +11,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <AutoLock>
       <header className="topbar">
-        <h1>MB5 Day Book</h1>
+        <h1>Foster Carer Log</h1>
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
           <span
             className="muted"

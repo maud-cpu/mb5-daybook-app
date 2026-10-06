@@ -135,7 +135,7 @@ export default function LoginPage() {
   if (mfaFactorId) {
     return (
       <div style={{ padding: 24, maxWidth: 400, margin: "60px auto 0" }}>
-        <h1 style={{ fontSize: 22, textAlign: "center" }}>MB5 Day Book</h1>
+        <h1 style={{ fontSize: 22, textAlign: "center" }}>Foster Carer Log</h1>
         <p className="muted" style={{ textAlign: "center", marginBottom: 20 }}>
           {useBackupCode ? "Enter one of your backup codes" : "Enter the code from your authenticator app"}
         </p>
@@ -190,7 +190,7 @@ export default function LoginPage() {
   if (recovery) {
     return (
       <div style={{ padding: 24, maxWidth: 400, margin: "60px auto 0" }}>
-        <h1 style={{ fontSize: 22, textAlign: "center" }}>MB5 Day Book</h1>
+        <h1 style={{ fontSize: 22, textAlign: "center" }}>Foster Carer Log</h1>
         <p className="muted" style={{ textAlign: "center", marginBottom: 20 }}>
           Set a new password
         </p>
@@ -223,7 +223,7 @@ export default function LoginPage() {
 
   return (
     <div style={{ padding: 24, maxWidth: 400, margin: "60px auto 0" }}>
-      <h1 style={{ fontSize: 22, textAlign: "center" }}>MB5 Day Book</h1>
+      <h1 style={{ fontSize: 22, textAlign: "center" }}>Foster Carer Log</h1>
       <p className="muted" style={{ textAlign: "center", marginBottom: 20 }}>
         Sign in with the details you were given
       </p>

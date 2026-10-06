@@ -238,13 +238,13 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
   function downloadIcs() {
     if (!allReminders.length) return;
     const ics =
-      "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//MB5 Day Book//EN\r\n" +
+      "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Foster Carer Log//EN\r\n" +
       allReminders.map(icsEventFor).join("\r\n") +
       "\r\nEND:VCALENDAR\r\n";
     const blob = new Blob([ics], { type: "text/calendar" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "mb5-reminders.ics";
+    a.download = "foster-carer-log-reminders.ics";
     document.body.appendChild(a);
     a.click();
     a.remove();
