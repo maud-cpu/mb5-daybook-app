@@ -57,23 +57,36 @@ export default function QuickAccessButtons() {
 
   async function load(kind: "phone" | "email") {
     setLoading(true);
-    const [{ data: rota }, { data: rotaHours }, householdRes, childrenRes, householdChildrenRes, contactsRes] = await Promise.all([
+    const [{ data: rota }, { data: rotaHours }, householdRes, childrenRes, householdChildrenRes, contactsRes, remindersRes] = await Promise.all([
       kind === "phone" ? supabase.from("shared_rota").select("name, phone").eq("date", today()).maybeSingle() : Promise.resolve({ data: null }),
       kind === "phone" ? supabase.from("shared_rota_hours").select("weekday_hours, weekend_hours").maybeSingle() : Promise.resolve({ data: null }),
       fetch("/api/household").then((r) => r.json()),
       fetch("/api/children").then((r) => r.json()),
       fetch("/api/household-children").then((r) => r.json()),
       fetch("/api/contacts").then((r) => r.json()),
+      fetch("/api/reminders").then((r) => r.json()),
     ]);
     const household = householdRes.household;
     const children = childrenRes.children;
     const householdChildren = householdChildrenRes.children;
     const contacts = contactsRes.contacts;
 
+    // A visiting child's social worker is only worth surfacing here on a day
+    // they're actually around -- otherwise this list grows one CSW/manager/
+    // IRO entry per visiting child ever added, most of them irrelevant on
+    // any given day. "Today" is read off today's reminders' own people list
+    // (a stay, an appointment, a club pickup -- whatever put them on the
+    // calendar today also counts as "here"). A child who lives here isn't
+    // filtered at all -- they're always relevant.
+    const presentToday = new Set<string>();
+    ((remindersRes.reminders as { date: string; done: boolean; people: string[] }[] | null) ?? [])
+      .filter((r) => r.date === today() && !r.done)
+      .forEach((r) => r.people.forEach((p) => presentToday.add(p)));
+
     const allKids = sortChildren([
       ...((children as { name: string; basics: Record<string, string>; family?: string; lives_here?: boolean | null }[] | null) ?? []),
       ...((householdChildren as { name: string; basics: Record<string, string> }[] | null) ?? []).map((c) => ({ ...c, lives_here: true })),
-    ]);
+    ]).filter((c) => c.lives_here === true || presentToday.has(c.name));
     const out: Item[] = [];
     if (kind === "phone") {
       if (rota?.phone) {
@@ -93,6 +106,15 @@ export default function QuickAccessButtons() {
         if (pm) out.push({ label: `${c.name}'s CSW's manager`, name: c.basics?.cswm || "", value: pm });
         const pi = c.basics?.iro_phone;
         if (pi) out.push({ label: `${c.name}'s IRO`, name: c.basics?.iro || "", value: pi });
+        // A visiting child's OWN carer (if that's someone other than you)
+        // has their own SSW, a different person from your own -- surfaced
+        // by that carer's name ("Helen's SSW"), since that's who's actually
+        // being called, not described as "Eli's carer's SSW".
+        const psw = c.basics?.carer_ssw_phone || extractPhone(c.basics?.carer_ssw);
+        if (psw) {
+          const carer = c.basics?.carer_name?.trim();
+          out.push({ label: carer ? `${carer}'s SSW` : `${c.name}'s carer's SSW`, name: c.basics?.carer_ssw || "", value: psw });
+        }
       });
       (contacts as { label: string; name: string; phone: string }[] | null)
         ?.filter((c) => c.phone)
@@ -108,6 +130,11 @@ export default function QuickAccessButtons() {
         if (em) out.push({ label: `${c.name}'s CSW's manager`, name: c.basics?.cswm || "", value: em });
         const ei = c.basics?.iro_email;
         if (ei) out.push({ label: `${c.name}'s IRO`, name: c.basics?.iro || "", value: ei });
+        const esw = c.basics?.carer_ssw_email || extractEmail(c.basics?.carer_ssw);
+        if (esw) {
+          const carer = c.basics?.carer_name?.trim();
+          out.push({ label: carer ? `${carer}'s SSW` : `${c.name}'s carer's SSW`, name: c.basics?.carer_ssw || "", value: esw });
+        }
       });
       const seen = new Set(out.map((o) => o.value.toLowerCase()));
       (contacts as { label: string; name: string; email: string }[] | null)

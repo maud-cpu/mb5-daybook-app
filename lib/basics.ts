@@ -72,6 +72,14 @@ export const BASICS_SECTIONS: BasicsSection[] = [
       { key: "iro_phone", label: "IRO phone", type: "tel" },
       { key: "iro_email", label: "IRO email", type: "email" },
       { key: "duty", label: "Team duty line" },
+      // For a child who visits (sleepover/daycare) and lives with a
+      // different carer day-to-day -- that carer's own SSW, not this
+      // household's, so it's reachable quickly while the child is here
+      // without digging through notes to find who to call.
+      { key: "carer_name", label: "Their own carer's name (if not you)" },
+      { key: "carer_ssw", label: "Their carer's SSW" },
+      { key: "carer_ssw_phone", label: "Their carer's SSW phone", type: "tel" },
+      { key: "carer_ssw_email", label: "Their carer's SSW email", type: "email" },
     ],
   },
   {

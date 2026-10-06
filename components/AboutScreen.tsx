@@ -200,6 +200,7 @@ function ChildBasicsPanel({
   basics,
   onBasics,
   justFilled,
+  siblings,
 }: {
   showMockingbird: boolean;
   mockingbird: string;
@@ -216,7 +217,28 @@ function ChildBasicsPanel({
   /** Keys "Extract info" (ChildDocuments) just filled in -- highlighted so
    * they're easy to spot among everything else on the page. */
   justFilled?: string[];
+  /** Every other child on file, each with their own basics -- lets any
+   * section (Social work team, Health, Education, ...) be filled in one go
+   * from a sibling who already has it, instead of re-typing the same GP or
+   * CSW for every child in the same family. */
+  siblings?: { id: string; name: string; basics: Record<string, string> }[];
 }) {
+  const [copiedKeys, setCopiedKeys] = useState<string[]>([]);
+
+  function copySection(fields: { key: string }[], siblingId: string) {
+    const sib = siblings?.find((s) => s.id === siblingId);
+    if (!sib) return;
+    const keys: string[] = [];
+    fields.forEach((f) => {
+      const v = sib.basics[f.key];
+      if (v) {
+        onBasics(f.key, v);
+        keys.push(f.key);
+      }
+    });
+    setCopiedKeys(keys);
+  }
+
   return (
     <>
       {showMockingbird && (
@@ -264,9 +286,29 @@ function ChildBasicsPanel({
       )}
       {BASICS_SECTIONS.map((section) => (
         <div key={section.title} style={{ marginBottom: 12, marginTop: 12 }}>
-          <b style={{ fontSize: 14 }}>{section.title}</b>
-          {section.fields.map((f) =>
-            f.repeatableFields ? (
+          <div className="row" style={{ alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+            <b style={{ fontSize: 14 }}>{section.title}</b>
+            {!!siblings?.length && (
+              <select
+                style={{ width: "auto", fontSize: 11.5, padding: "3px 6px", marginTop: 0 }}
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) copySection(section.fields, e.target.value);
+                  e.target.value = "";
+                }}
+              >
+                <option value="">Copy from…</option>
+                {siblings.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+          {section.fields.map((f) => {
+            const highlighted = !!justFilled?.includes(f.key) || copiedKeys.includes(f.key);
+            return f.repeatableFields ? (
               <div key={f.key} style={{ marginTop: 10 }}>
                 <small className="muted">{f.label}</small>
                 <RepeatableField
@@ -297,19 +339,20 @@ function ChildBasicsPanel({
               </select>
             ) : (
               <input
-                key={f.key}
+                // Keyed on the value too, not just the field -- otherwise,
+                // being an uncontrolled input (defaultValue below only ever
+                // applies on first mount), a value copied in via "Copy
+                // from…" would save correctly but never actually show here
+                // without a full page reload.
+                key={`${f.key}:${basics[f.key] || ""}`}
                 type={f.type || "text"}
-                style={
-                  justFilled?.includes(f.key)
-                    ? { marginTop: 6, border: "2px solid var(--danger)", borderRadius: "var(--radius-sm)" }
-                    : { marginTop: 6 }
-                }
+                style={highlighted ? { marginTop: 6, border: "2px solid var(--danger)", borderRadius: "var(--radius-sm)" } : { marginTop: 6 }}
                 placeholder={f.placeholder ? `${f.label} — ${f.placeholder}` : f.label}
                 defaultValue={basics[f.key] || ""}
                 onBlur={(e) => onBasics(f.key, e.target.value)}
               />
-            ),
-          )}
+            );
+          })}
         </div>
       ))}
     </>
@@ -608,6 +651,17 @@ export default function AboutScreen() {
   function flashSaved() {
     setSavedAt(new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }));
     setTimeout(() => setSavedAt(""), 1500);
+  }
+
+  // Every other child on file (either list -- siblings are often split
+  // across "lives here" and "visits"), for ChildBasicsPanel's "Copy from…"
+  // control -- siblings sharing a GP, a CSW, a school, etc. only need it
+  // typed once, on whichever of them it was added to first.
+  function siblingsFor(childId: string): { id: string; name: string; basics: Record<string, string> }[] {
+    return [
+      ...children.filter((c) => c.id !== childId).map((c) => ({ id: c.id, name: c.name, basics: basics[c.id] || {} })),
+      ...householdChildren.filter((c) => c.id !== childId).map((c) => ({ id: c.id, name: c.name, basics: c.basics || {} })),
+    ];
   }
 
   async function addAdult() {
@@ -1581,6 +1635,7 @@ export default function AboutScreen() {
               basics={c.basics || {}}
               onBasics={(key, value) => saveHouseholdChildBasics(c.id, key, value)}
               justFilled={justFilled}
+              siblings={siblingsFor(c.id)}
             />
           </div>
           {closeButton()}
@@ -1699,6 +1754,7 @@ export default function AboutScreen() {
               basics={cb}
               onBasics={(key, value) => saveChildBasics(c.id, key, value)}
               justFilled={justFilled}
+              siblings={siblingsFor(c.id)}
             />
           </div>
           {closeButton()}
@@ -1795,6 +1851,7 @@ export default function AboutScreen() {
               basics={cb}
               onBasics={(key, value) => saveChildBasics(c.id, key, value)}
               justFilled={justFilled}
+              siblings={siblingsFor(c.id)}
             />
           </div>
           {closeButton()}
