@@ -14,6 +14,13 @@ export default function LoginPage() {
   const [newPassword, setNewPassword] = useState("");
   const [newPassword2, setNewPassword2] = useState("");
   const [recoveryMsg, setRecoveryMsg] = useState("");
+  // Requesting the reset email -- separate from `recovery` above, which is
+  // the step AFTER someone's clicked the link in that email and is setting
+  // their actual new password. This is just the "send me that link" step,
+  // which previously had no way to reach it at all.
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotMsg, setForgotMsg] = useState("");
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
   const [mfaCode, setMfaCode] = useState("");
   const [mfaError, setMfaError] = useState("");
@@ -109,6 +116,24 @@ export default function LoginPage() {
     router.refresh();
   }
 
+  async function handleForgotPassword(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setForgotMsg("");
+    const supabase = createClient();
+    const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+      redirectTo: `${window.location.origin}/login`,
+    });
+    setBusy(false);
+    // Never reveal whether that email actually has an account -- same
+    // message either way, so this can't be used to check who's a carer here.
+    setForgotMsg(
+      error
+        ? "Couldn't send that right now — try again in a moment."
+        : "If that email has an account, a reset link has been sent — check your inbox (and spam folder).",
+    );
+  }
+
   async function handleSetPassword(e: React.FormEvent) {
     e.preventDefault();
     if (newPassword !== newPassword2) {
@@ -187,6 +212,43 @@ export default function LoginPage() {
     );
   }
 
+  if (forgotMode) {
+    return (
+      <div style={{ padding: 24, maxWidth: 400, margin: "60px auto 0" }}>
+        <h1 style={{ fontSize: 22, textAlign: "center" }}>Foster Carer Log</h1>
+        <p className="muted" style={{ textAlign: "center", marginBottom: 20 }}>
+          Reset your password
+        </p>
+        <form className="card" onSubmit={handleForgotPassword}>
+          <label>Email</label>
+          <input
+            type="email"
+            required
+            autoComplete="email"
+            value={forgotEmail}
+            onChange={(e) => setForgotEmail(e.target.value)}
+          />
+          {forgotMsg && <p className="hint" style={{ marginTop: 8 }}>{forgotMsg}</p>}
+          <button className="btn" type="submit" disabled={busy}>
+            {busy ? "Sending…" : "Send reset link"}
+          </button>
+        </form>
+        <p className="hint" style={{ textAlign: "center" }}>
+          <button
+            type="button"
+            onClick={() => {
+              setForgotMode(false);
+              setForgotMsg("");
+            }}
+            style={{ background: "none", border: "none", color: "var(--grey)", textDecoration: "underline", cursor: "pointer", fontSize: 13 }}
+          >
+            Back to sign in
+          </button>
+        </p>
+      </div>
+    );
+  }
+
   if (recovery) {
     return (
       <div style={{ padding: 24, maxWidth: 400, margin: "60px auto 0" }}>
@@ -250,6 +312,18 @@ export default function LoginPage() {
           {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>
+      <p className="hint" style={{ textAlign: "center" }}>
+        <button
+          type="button"
+          onClick={() => {
+            setForgotEmail(email);
+            setForgotMode(true);
+          }}
+          style={{ background: "none", border: "none", color: "var(--grey)", textDecoration: "underline", cursor: "pointer", fontSize: 13 }}
+        >
+          Forgotten your password?
+        </button>
+      </p>
       <p className="hint" style={{ textAlign: "center" }}>
         No account yet? Ask whoever set up your fostering hub for a login.
       </p>
