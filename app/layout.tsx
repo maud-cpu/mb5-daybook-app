@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Lexend } from "next/font/google";
 import "./globals.css";
 
@@ -11,6 +11,16 @@ const lexend = Lexend({ subsets: ["latin"], weight: ["400", "500", "600", "700",
 export const metadata: Metadata = {
   title: "MB5 Day Book",
   description: "Private fostering diary for MB5 carers",
+};
+
+// Without this, a phone browser has no idea the page is meant to fit its
+// actual screen -- it falls back to assuming a ~980px desktop layout and
+// shrinks that to fit, which is what made everything render tiny with a
+// horizontal scrollbar even though every media query here already handles
+// a real narrow viewport correctly.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
