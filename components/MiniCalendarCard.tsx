@@ -369,11 +369,14 @@ export default function MiniCalendarCard() {
               </p>
             )}
             {selectedItems.length > 0 && (
-              // Capped and scrollable -- a busy day (several clubs, a
-              // reminder or two, something just added from Capture) could
-              // otherwise grow this list tall enough to push the whole card
-              // taller than the note box next to it on desktop.
-              <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 3, maxHeight: 160, overflowY: "auto" }}>
+              // Scrollable, not cropped -- a busy day (several clubs, a
+              // reminder or two, something just added from Capture) grows
+              // this list rather than pushing the whole card taller than the
+              // note box next to it on desktop; each entry wraps instead of
+              // being cut off mid-sentence, so a long one (a school trip's
+              // full kit list, a meeting's dial-in details) stays readable
+              // without having to leave this card to see the rest of it.
+              <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 3, maxHeight: 220, overflowY: "auto" }}>
                 {selectedItems.map((it, idx) => (
                   <button
                     key={idx}
@@ -389,9 +392,8 @@ export default function MiniCalendarCard() {
                       fontSize: 12,
                       fontWeight: 600,
                       lineHeight: 1.3,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
+                      whiteSpace: "normal",
+                      wordBreak: "break-word",
                       textAlign: "left",
                       cursor: it.id ? "pointer" : "default",
                       font: "inherit",
