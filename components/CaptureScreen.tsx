@@ -67,12 +67,50 @@ function openLabel(length: string): string {
   return "Open course ↗";
 }
 
+// The Web Speech API (dictation for the note box) isn't in TypeScript's
+// standard DOM lib -- only Chrome/Edge/Safari ship it, under a vendor-
+// prefixed name on some of those, and support is still inconsistent enough
+// that it's fed through as plain speech-to-text rather than anything fancier
+// (no custom grammars, no server round-trip) to keep it working everywhere
+// it's available at all.
+interface SpeechRecognitionResult {
+  isFinal: boolean;
+  [index: number]: { transcript: string };
+}
+interface SpeechRecognitionResultList {
+  length: number;
+  [index: number]: SpeechRecognitionResult;
+}
+interface SpeechRecognitionEvent extends Event {
+  resultIndex: number;
+  results: SpeechRecognitionResultList;
+}
+interface SpeechRecognitionLike extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start: () => void;
+  stop: () => void;
+  onresult: ((e: SpeechRecognitionEvent) => void) | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+}
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+
 export default function CaptureScreen() {
   const supabase = createClient();
   const [children, setChildren] = useState<Child[]>([]);
   const [rates, setRates] = useState<Rates | null>(null);
   const [cap, setCap] = useState("");
   const [busy, setBusy] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(false);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  // Read inside the recognition's own onresult callback, which closes over
+  // whatever `cap` was AT SETUP TIME, not whatever it is when speech
+  // actually comes in (dictation always starts from the box's current text,
+  // including anything typed before tapping the mic).
+  const capAtListenStartRef = useRef("");
   const [pending, setPending] = useState<PendingItem[]>([]);
   const [warning, setWarning] = useState("");
   // "Check before saving" renders well below the fold once the calendar/
@@ -81,6 +119,47 @@ export default function CaptureScreen() {
   // it the moment new items land makes it impossible to miss.
   const pendingReviewRef = useRef<HTMLDivElement | null>(null);
   const justSortedRef = useRef(false);
+
+  useEffect(() => {
+    const w = window as unknown as { SpeechRecognition?: SpeechRecognitionCtor; webkitSpeechRecognition?: SpeechRecognitionCtor };
+    const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
+    if (!Ctor) return;
+    const recognition = new Ctor();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.lang = "en-GB";
+    recognition.onresult = (e) => {
+      let finalText = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
+      }
+      if (finalText.trim()) {
+        const base = capAtListenStartRef.current;
+        const next = (base ? base.trim() + " " : "") + finalText.trim();
+        capAtListenStartRef.current = next;
+        setCap(next);
+      }
+    };
+    recognition.onend = () => setListening(false);
+    recognition.onerror = () => setListening(false);
+    recognitionRef.current = recognition;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-off feature detection on mount, not state synced from an external source
+    setVoiceSupported(true);
+    return () => recognition.stop();
+  }, []);
+
+  function toggleListening() {
+    if (!recognitionRef.current) return;
+    if (listening) {
+      recognitionRef.current.stop();
+      setListening(false);
+      return;
+    }
+    capAtListenStartRef.current = cap;
+    recognitionRef.current.start();
+    setListening(true);
+  }
+
   useEffect(() => {
     if (justSortedRef.current && pending.length > 0) {
       justSortedRef.current = false;
@@ -1031,14 +1110,35 @@ export default function CaptureScreen() {
       </h2>
       <div className="capture-top-grid">
         <div className="card" style={{ display: "flex", flexDirection: "column" }}>
-          <h3>Tell me anything</h3>
+          <div className="row" style={{ alignItems: "center", justifyContent: "space-between" }}>
+            <h3 style={{ margin: 0 }}>Tell me anything</h3>
+            {voiceSupported && (
+              <button
+                type="button"
+                className="chip"
+                onClick={toggleListening}
+                title={listening ? "Stop dictating" : "Dictate instead of typing"}
+                style={listening ? { background: "var(--danger)", color: "#fff", borderColor: "var(--danger)" } : undefined}
+              >
+                {listening ? "⏹ Stop" : "🎙️ Dictate"}
+              </button>
+            )}
+          </div>
           <textarea
             placeholder="A note, a command — 'diary', 'supervision', 'expenses', 'social worker', 'incident', 'just record', or 'add parents evening to the calendar on the 12th' — or ask a question, e.g. 'what time does Eli go to bed?'"
             value={cap}
             onChange={(e) => setCap(e.target.value)}
-            style={{ flex: 1, minHeight: 340 }}
+            style={{ flex: 1, minHeight: 340, marginTop: 6 }}
           />
-          <button className="btn" disabled={busy || !cap.trim()} onClick={isQuestion(cap) ? askQuestion : sortIt}>
+          {listening && <p className="hint">🎙️ Listening — speak your note, then tap Stop.</p>}
+          <button
+            className="btn"
+            disabled={busy || !cap.trim()}
+            onClick={() => {
+              if (listening) toggleListening();
+              (isQuestion(cap) ? askQuestion : sortIt)();
+            }}
+          >
             {busy ? (isQuestion(cap) ? "Thinking…" : "Sorting…") : isQuestion(cap) ? "❓ Answer" : "Sort it"}
           </button>
           {(askAnswer || askError) && (
