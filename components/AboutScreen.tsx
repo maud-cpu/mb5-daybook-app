@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ageOf, today } from "@/lib/domain";
-import { BASICS_SECTIONS, RepeatableSubfield } from "@/lib/basics";
+import { BASICS_SECTIONS, BasicsSection, RepeatableSubfield } from "@/lib/basics";
 import { Child, GENDER_OPTIONS, LIVES_CATS, livesHereOf, MB_OPTIONS, NON_PLACEMENT_CATEGORIES, VISITS_CATS } from "@/lib/types";
 import { personColor } from "@/lib/calendarHelpers";
 import { confirmUseExisting, findPersonByName, findPersonInEitherChildTable } from "@/lib/findOrCreate";
@@ -224,19 +224,37 @@ function ChildBasicsPanel({
   siblings?: { id: string; name: string; basics: Record<string, string> }[];
 }) {
   const [copiedKeys, setCopiedKeys] = useState<string[]>([]);
+  // A section copied from a sibling isn't saved straight away -- siblings
+  // sharing a CSW/GP doesn't mean every detail matches exactly (different
+  // extension number, one detail out of date), so this is shown as an
+  // editable, distinctly-coloured preview the carer has to actively confirm
+  // (or cancel, or tweak first) rather than silently overwriting on select.
+  const [pendingCopy, setPendingCopy] = useState<{ sectionTitle: string; siblingName: string; values: Record<string, string> } | null>(null);
 
-  function copySection(fields: { key: string }[], siblingId: string) {
+  function startCopySection(section: BasicsSection, siblingId: string) {
     const sib = siblings?.find((s) => s.id === siblingId);
     if (!sib) return;
-    const keys: string[] = [];
-    fields.forEach((f) => {
-      const v = sib.basics[f.key];
-      if (v) {
-        onBasics(f.key, v);
-        keys.push(f.key);
-      }
-    });
+    const values: Record<string, string> = {};
+    section.fields
+      .filter((f) => !f.repeatableFields && !f.checklist)
+      .forEach((f) => {
+        const v = sib.basics[f.key];
+        if (v) values[f.key] = v;
+      });
+    if (!Object.keys(values).length) return;
+    setPendingCopy({ sectionTitle: section.title, siblingName: sib.name, values });
+  }
+
+  function confirmCopy() {
+    if (!pendingCopy) return;
+    const keys = Object.keys(pendingCopy.values);
+    keys.forEach((k) => onBasics(k, pendingCopy.values[k]));
     setCopiedKeys(keys);
+    setPendingCopy(null);
+  }
+
+  function cancelCopy() {
+    setPendingCopy(null);
   }
 
   return (
@@ -284,77 +302,122 @@ function ChildBasicsPanel({
           />
         </>
       )}
-      {BASICS_SECTIONS.map((section) => (
-        <div key={section.title} style={{ marginBottom: 12, marginTop: 12 }}>
-          <div className="row" style={{ alignItems: "center", justifyContent: "space-between", gap: 6 }}>
-            <b style={{ fontSize: 14 }}>{section.title}</b>
-            {!!siblings?.length && (
-              <select
-                style={{ width: "auto", fontSize: 11.5, padding: "3px 6px", marginTop: 0 }}
-                value=""
-                onChange={(e) => {
-                  if (e.target.value) copySection(section.fields, e.target.value);
-                  e.target.value = "";
-                }}
-              >
-                <option value="">Copy from…</option>
-                {siblings.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+      {BASICS_SECTIONS.map((section) => {
+        const pending = pendingCopy?.sectionTitle === section.title ? pendingCopy : null;
+        return (
+          <div key={section.title} style={{ marginBottom: 12, marginTop: 12 }}>
+            <div className="row" style={{ alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+              <b style={{ fontSize: 14 }}>{section.title}</b>
+              {!!siblings?.length && !pending && (
+                <select
+                  style={{ width: "auto", fontSize: 11.5, padding: "3px 6px", marginTop: 0 }}
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value) startCopySection(section, e.target.value);
+                    e.target.value = "";
+                  }}
+                >
+                  <option value="">Copy from…</option>
+                  {siblings.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+            {pending && (
+              <div className="note" style={{ marginTop: 6, background: "#eaf3ff", borderColor: "var(--accent)" }}>
+                Copying from {pending.siblingName} — shown in blue below. Check/edit anything that&apos;s different,
+                then confirm.
+                <div style={{ marginTop: 6 }}>
+                  <button className="chip on" onClick={confirmCopy}>
+                    Confirm copy
+                  </button>{" "}
+                  <button className="chip" onClick={cancelCopy}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
             )}
-          </div>
-          {section.fields.map((f) => {
-            const highlighted = !!justFilled?.includes(f.key) || copiedKeys.includes(f.key);
-            return f.repeatableFields ? (
-              <div key={f.key} style={{ marginTop: 10 }}>
-                <small className="muted">{f.label}</small>
-                <RepeatableField
+            {section.fields.map((f) => {
+              const highlighted = !!justFilled?.includes(f.key) || copiedKeys.includes(f.key);
+              const pendingValue = pending && f.key in pending.values ? pending.values[f.key] : undefined;
+              if (pendingValue !== undefined) {
+                const pendingStyle = { marginTop: 6, border: "2px solid var(--accent)", background: "#eaf3ff", borderRadius: "var(--radius-sm)" };
+                return f.select ? (
+                  <select
+                    key={f.key}
+                    style={pendingStyle}
+                    value={pendingValue}
+                    onChange={(e) => setPendingCopy((prev) => (prev ? { ...prev, values: { ...prev.values, [f.key]: e.target.value } } : prev))}
+                  >
+                    <option value="">{f.label}…</option>
+                    {f.select.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    key={f.key}
+                    type={f.type || "text"}
+                    style={pendingStyle}
+                    placeholder={f.placeholder ? `${f.label} — ${f.placeholder}` : f.label}
+                    value={pendingValue}
+                    onChange={(e) => setPendingCopy((prev) => (prev ? { ...prev, values: { ...prev.values, [f.key]: e.target.value } } : prev))}
+                  />
+                );
+              }
+              return f.repeatableFields ? (
+                <div key={f.key} style={{ marginTop: 10 }}>
+                  <small className="muted">{f.label}</small>
+                  <RepeatableField
+                    value={basics[f.key] || ""}
+                    onChange={(v) => onBasics(f.key, v)}
+                    subfields={f.repeatableFields}
+                    addLabel={f.addLabel || "add another"}
+                  />
+                </div>
+              ) : f.checklist ? (
+                <div key={f.key} style={{ marginTop: 10 }}>
+                  <small className="muted">{f.label}</small>
+                  <YesNoChecklist value={basics[f.key] || ""} onChange={(v) => onBasics(f.key, v)} items={f.checklist} />
+                </div>
+              ) : f.select ? (
+                <select
+                  key={f.key}
+                  style={{ marginTop: 6 }}
                   value={basics[f.key] || ""}
-                  onChange={(v) => onBasics(f.key, v)}
-                  subfields={f.repeatableFields}
-                  addLabel={f.addLabel || "add another"}
+                  onChange={(e) => onBasics(f.key, e.target.value)}
+                >
+                  <option value="">{f.label}…</option>
+                  {f.select.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  // Keyed on the value too, not just the field -- otherwise,
+                  // being an uncontrolled input (defaultValue below only
+                  // ever applies on first mount), a value just confirmed
+                  // in from "Copy from…" would save correctly but never
+                  // actually show here without a full page reload.
+                  key={`${f.key}:${basics[f.key] || ""}`}
+                  type={f.type || "text"}
+                  style={highlighted ? { marginTop: 6, border: "2px solid var(--danger)", borderRadius: "var(--radius-sm)" } : { marginTop: 6 }}
+                  placeholder={f.placeholder ? `${f.label} — ${f.placeholder}` : f.label}
+                  defaultValue={basics[f.key] || ""}
+                  onBlur={(e) => onBasics(f.key, e.target.value)}
                 />
-              </div>
-            ) : f.checklist ? (
-              <div key={f.key} style={{ marginTop: 10 }}>
-                <small className="muted">{f.label}</small>
-                <YesNoChecklist value={basics[f.key] || ""} onChange={(v) => onBasics(f.key, v)} items={f.checklist} />
-              </div>
-            ) : f.select ? (
-              <select
-                key={f.key}
-                style={{ marginTop: 6 }}
-                value={basics[f.key] || ""}
-                onChange={(e) => onBasics(f.key, e.target.value)}
-              >
-                <option value="">{f.label}…</option>
-                {f.select.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                // Keyed on the value too, not just the field -- otherwise,
-                // being an uncontrolled input (defaultValue below only ever
-                // applies on first mount), a value copied in via "Copy
-                // from…" would save correctly but never actually show here
-                // without a full page reload.
-                key={`${f.key}:${basics[f.key] || ""}`}
-                type={f.type || "text"}
-                style={highlighted ? { marginTop: 6, border: "2px solid var(--danger)", borderRadius: "var(--radius-sm)" } : { marginTop: 6 }}
-                placeholder={f.placeholder ? `${f.label} — ${f.placeholder}` : f.label}
-                defaultValue={basics[f.key] || ""}
-                onBlur={(e) => onBasics(f.key, e.target.value)}
-              />
-            );
-          })}
-        </div>
-      ))}
+              );
+            })}
+          </div>
+        );
+      })}
     </>
   );
 }
