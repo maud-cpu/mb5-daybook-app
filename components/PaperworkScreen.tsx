@@ -14,8 +14,9 @@ import HandoverTab from "@/components/HandoverTab";
 import HubLogTab from "@/components/HubLogTab";
 import AnnualReviewTab from "@/components/AnnualReviewTab";
 import FormsReference from "@/components/FormsReference";
+import LifeSummaryTab from "@/components/LifeSummaryTab";
 
-type Tab = "month" | "supervision" | "cla" | "expenses" | "meds" | "diary" | "handover" | "hub" | "annualReview" | "forms";
+type Tab = "month" | "supervision" | "cla" | "life" | "expenses" | "meds" | "diary" | "handover" | "hub" | "annualReview" | "forms";
 type ChildWithBasics = Child & { basics: Record<string, string> };
 type TrainingCompletion = { title: string; completedOn: string; url: string; length: string; platform: string };
 type NewExpenseDraft = {
@@ -56,7 +57,7 @@ function fmtMonthLabel(ym: string): string {
   return new Date(ym + "-01").toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 }
 
-const TAB_VALUES: Tab[] = ["month", "supervision", "cla", "expenses", "meds", "diary", "handover", "hub", "annualReview", "forms"];
+const TAB_VALUES: Tab[] = ["month", "supervision", "cla", "life", "expenses", "meds", "diary", "handover", "hub", "annualReview", "forms"];
 
 export default function PaperworkScreen() {
   const supabase = createClient();
@@ -242,19 +243,21 @@ export default function PaperworkScreen() {
                 ? "Supervision"
                 : t === "cla"
                   ? "CLA prep"
-                  : t === "expenses"
-                    ? "Expenses"
-                    : t === "meds"
-                      ? "Medication"
-                      : t === "diary"
-                        ? "Diary for SW"
-                        : t === "handover"
-                          ? "Handover"
-                          : t === "hub"
-                            ? "Hub log"
-                            : t === "annualReview"
-                              ? "Annual review"
-                              : "Forms"}
+                  : t === "life"
+                    ? "How's life"
+                    : t === "expenses"
+                      ? "Expenses"
+                      : t === "meds"
+                        ? "Medication"
+                        : t === "diary"
+                          ? "Diary for SW"
+                          : t === "handover"
+                            ? "Handover"
+                            : t === "hub"
+                              ? "Hub log"
+                              : t === "annualReview"
+                                ? "Annual review"
+                                : "Forms"}
           </button>
         ))}
       </div>
@@ -331,6 +334,8 @@ export default function PaperworkScreen() {
       )}
 
       {tab === "cla" && <ClaPrepReport childList={claChildren} records={records} />}
+
+      {tab === "life" && <LifeSummaryTab childList={children} />}
 
       {tab === "expenses" && rates && (
         <div className="card">
