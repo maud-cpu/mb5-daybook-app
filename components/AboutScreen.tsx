@@ -1154,13 +1154,24 @@ export default function AboutScreen() {
       (partnersByPrimaryId[v.linked_visitor_id] ||= []).push(v);
     }
   });
+  // A search has to reach the children nested under a group too, not just
+  // the group's own label -- otherwise searching a visiting child's own
+  // name (e.g. "Eli") hides them whenever their linked adult's name or
+  // their family label doesn't happen to contain it, which read as "that
+  // name doesn't exist" even though the child is right there, one level in.
   const visitorGroups = VISITOR_ROLES.map((role) => ({
     role,
-    items: primaryVisitors.filter(
-      (v) => v.role === role && (matchesSearch(v.name) || (partnersByPrimaryId[v.id] || []).some((p) => matchesSearch(p.name))),
-    ),
+    items: primaryVisitors.filter((v) => {
+      if (v.role !== role) return false;
+      const partners = partnersByPrimaryId[v.id] || [];
+      if (matchesSearch(v.name) || partners.some((p) => matchesSearch(p.name))) return true;
+      const kids = [...(childrenByVisitorId[v.id] || []), ...partners.flatMap((p) => childrenByVisitorId[p.id] || [])];
+      return kids.some((c) => matchesSearch(c.name));
+    }),
   })).filter((g) => g.items.length > 0);
-  const visibleFamilyGroups = Object.entries(visitingByFamily).filter(([fam]) => matchesSearch(fam));
+  const visibleFamilyGroups = Object.entries(visitingByFamily).filter(
+    ([fam, kids]) => matchesSearch(fam) || kids.some((c) => matchesSearch(c.name)),
+  );
   const visibleUngrouped = visitingUngrouped.filter((c) => matchesSearch(c.name));
   const sswVisible = matchesSearch(sswLabel);
   const annualReviewVisible = matchesSearch("annual review");
