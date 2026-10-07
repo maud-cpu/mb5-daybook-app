@@ -201,6 +201,7 @@ function ChildBasicsPanel({
   onBasics,
   justFilled,
   siblings,
+  onShareSection,
 }: {
   showMockingbird: boolean;
   mockingbird: string;
@@ -221,7 +222,11 @@ function ChildBasicsPanel({
    * section (Social work team, Health, Education, ...) be filled in one go
    * from a sibling who already has it, instead of re-typing the same GP or
    * CSW for every child in the same family. */
-  siblings?: { id: string; name: string; basics: Record<string, string> }[];
+  siblings?: { id: string; name: string; basics: Record<string, string>; table: "children" | "household_children" }[];
+  /** The reverse direction -- a sibling with nothing in a given section gets
+   * offered what's filled in here, instead of relying on remembering to go
+   * copy it across from their own profile. */
+  onShareSection?: (siblingId: string, siblingTable: "children" | "household_children", siblingName: string, sectionTitle: string, values: Record<string, string>) => void;
 }) {
   const [copiedKeys, setCopiedKeys] = useState<string[]>([]);
   // A section copied from a sibling isn't saved straight away -- siblings
@@ -340,6 +345,34 @@ function ChildBasicsPanel({
                 </div>
               </div>
             )}
+            {!pending &&
+              onShareSection &&
+              (() => {
+                const copyableFields = section.fields.filter((f) => !f.repeatableFields && !f.checklist);
+                const values: Record<string, string> = {};
+                copyableFields.forEach((f) => {
+                  if (basics[f.key]) values[f.key] = basics[f.key];
+                });
+                if (!Object.keys(values).length) return null;
+                const blankSiblings = (siblings ?? []).filter((s) => copyableFields.every((f) => !s.basics[f.key]));
+                if (!blankSiblings.length) return null;
+                return (
+                  <div className="hint" style={{ marginTop: 6 }}>
+                    💡 {blankSiblings.map((s) => s.name).join(", ")} don&apos;t have {section.title.toLowerCase()} details yet —{" "}
+                    {blankSiblings.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        className="chip"
+                        style={{ padding: "2px 8px", fontSize: 11.5 }}
+                        onClick={() => onShareSection(s.id, s.table, s.name, section.title, values)}
+                      >
+                        Share with {s.name}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
             {section.fields.map((f) => {
               const highlighted = !!justFilled?.includes(f.key) || copiedKeys.includes(f.key);
               const pendingValue = pending && f.key in pending.values ? pending.values[f.key] : undefined;
@@ -719,12 +752,37 @@ export default function AboutScreen() {
   // Every other child on file (either list -- siblings are often split
   // across "lives here" and "visits"), for ChildBasicsPanel's "Copy from…"
   // control -- siblings sharing a GP, a CSW, a school, etc. only need it
-  // typed once, on whichever of them it was added to first.
-  function siblingsFor(childId: string): { id: string; name: string; basics: Record<string, string> }[] {
+  // typed once, on whichever of them it was added to first. Carries which
+  // table each sibling actually lives in, so a value shared INTO them (the
+  // reverse direction -- offering to share what THIS child has with a
+  // sibling who has nothing there yet) is saved through the right API.
+  function siblingsFor(childId: string): { id: string; name: string; basics: Record<string, string>; table: "children" | "household_children" }[] {
     return [
-      ...children.filter((c) => c.id !== childId).map((c) => ({ id: c.id, name: c.name, basics: basics[c.id] || {} })),
-      ...householdChildren.filter((c) => c.id !== childId).map((c) => ({ id: c.id, name: c.name, basics: c.basics || {} })),
+      ...children.filter((c) => c.id !== childId).map((c) => ({ id: c.id, name: c.name, basics: basics[c.id] || {}, table: "children" as const })),
+      ...householdChildren
+        .filter((c) => c.id !== childId)
+        .map((c) => ({ id: c.id, name: c.name, basics: c.basics || {}, table: "household_children" as const })),
     ];
+  }
+
+  // The reverse of "Copy from…": a sibling who has nothing in this section
+  // yet gets offered what the carer just filled in here, rather than relying
+  // on her to remember to go copy it across herself. Same confirm-before-
+  // save rule as the pull direction -- a plain confirm() showing exactly
+  // what's about to be written, since this writes to a child whose own form
+  // isn't the one open right now.
+  function shareSectionWithSibling(
+    siblingId: string,
+    siblingTable: "children" | "household_children",
+    siblingName: string,
+    sectionTitle: string,
+    values: Record<string, string>,
+  ) {
+    const summary = Object.entries(values)
+      .map(([, v]) => v)
+      .join("\n");
+    if (!confirm(`Give ${siblingName} the same ${sectionTitle} details?\n\n${summary}`)) return;
+    saveBasicsBulk(siblingId, siblingTable, values);
   }
 
   async function addAdult() {
@@ -1699,6 +1757,7 @@ export default function AboutScreen() {
               onBasics={(key, value) => saveHouseholdChildBasics(c.id, key, value)}
               justFilled={justFilled}
               siblings={siblingsFor(c.id)}
+              onShareSection={shareSectionWithSibling}
             />
           </div>
           {closeButton()}
@@ -1818,6 +1877,7 @@ export default function AboutScreen() {
               onBasics={(key, value) => saveChildBasics(c.id, key, value)}
               justFilled={justFilled}
               siblings={siblingsFor(c.id)}
+              onShareSection={shareSectionWithSibling}
             />
           </div>
           {closeButton()}
@@ -1915,6 +1975,7 @@ export default function AboutScreen() {
               onBasics={(key, value) => saveChildBasics(c.id, key, value)}
               justFilled={justFilled}
               siblings={siblingsFor(c.id)}
+              onShareSection={shareSectionWithSibling}
             />
           </div>
           {closeButton()}
