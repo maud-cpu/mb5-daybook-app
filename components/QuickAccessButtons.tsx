@@ -194,6 +194,7 @@ export default function QuickAccessButtons() {
         done: false,
         done_at: null,
         category: "club",
+        needs_action: true,
         child: "",
         people: c.childNames,
         amount: null,

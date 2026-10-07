@@ -367,6 +367,12 @@ export type Reminder = {
   done: boolean;
   done_at: string | null;
   category: string;
+  /** False for a plain calendar/presence marker (a child staying over, a
+   * one-off day care session) that nothing needs doing about -- kept off
+   * Up next so ticking it off there can't be mistaken for a to-do checkbox
+   * and silently mark it done. True (the default) for everything else,
+   * including a genuine to-do like paying an invoice or returning a form. */
+  needs_action: boolean;
   /** @deprecated superseded by people -- still a real column, but no longer written to */
   child: string;
   people: string[];
@@ -731,6 +737,12 @@ export type PendingItem = Partial<EntryRecord> & {
   reminder_date?: string | null;
   /** When flag is "reminder": which REMINDER_CATEGORIES this is, e.g. "medical" for a GP/dentist appointment. */
   reminder_category?: string;
+  /** When flag is "reminder": false for a plain presence/calendar marker
+   * (a stay-end date or a one-off day care booking, forced onto the
+   * calendar automatically) that nothing needs doing about -- kept out of
+   * Up next. True (the default) when the text itself describes something
+   * to actually do. */
+  reminder_needs_action?: boolean;
   /** When flag is "reminder" and the text gave a specific time (a start time, or a start-end range), HH:MM. Null/empty if the text gave no time of its own. */
   reminder_time_from?: string | null;
   reminder_time_to?: string | null;

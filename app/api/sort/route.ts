@@ -478,8 +478,13 @@ Split into one item per separate thing, under "items".`;
       // full with kind/kids/overnight/hours -- see the schema comment on
       // stayEndDate for why that compound instruction wasn't reliable.
       const stayEndDate = typeof p.stayEndDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(p.stayEndDate) ? p.stayEndDate : "";
+      // Tracks whether this reminder exists only to put a presence/calendar
+      // marker on the calendar, as opposed to the model itself deciding the
+      // text describes something to actually do -- see reminder_needs_action.
+      let forcedPresenceOnly = false;
       if (stayEndDate && flag !== "reminder") {
         flag = "reminder";
+        forcedPresenceOnly = true;
         const who = [child, ...others].filter(Boolean)[0] || "";
         flagNote = who ? `${who}'s stay with us ends` : "Stay with us ends";
       }
@@ -495,6 +500,7 @@ Split into one item per separate thing, under "items".`;
           : "";
       if (futureDaycareDate && flag !== "reminder") {
         flag = "reminder";
+        forcedPresenceOnly = true;
         const who = [child, ...others].filter(Boolean).join(" & ");
         const when = p.overnight ? "overnight" : timeFrom && timeTo ? `${timeFrom}–${timeTo}` : p.hours ? `${p.hours} hrs` : "";
         flagNote = `Looking after ${who || "a child"}${when ? ` — ${when}` : ""}`;
@@ -557,6 +563,7 @@ Split into one item per separate thing, under "items".`;
           : flag === "reminder" && REMINDER_CATEGORY_KEYS.includes(p.reminderCategory)
             ? p.reminderCategory
             : "personal",
+        reminder_needs_action: flag === "reminder" ? !forcedPresenceOnly : undefined,
         reminder_url: flag === "reminder" && p.url && /^https?:\/\/\S+$/i.test(p.url.trim()) ? p.url.trim() : "",
         reminder_time_from: flag === "reminder" && timeFrom ? timeFrom : null,
         reminder_time_to: flag === "reminder" && timeTo ? timeTo : null,

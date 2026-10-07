@@ -743,6 +743,7 @@ export default function CaptureScreen() {
       date: d,
       category: "household",
       people: p.kids,
+      needs_action: false,
       url: null,
       time_from: null,
       time_to: null,
@@ -819,6 +820,7 @@ export default function CaptureScreen() {
         timeFrom: string;
         timeTo: string;
         people: string[];
+        needsAction: boolean;
         recordId: string | null;
         recordAmbiguous: boolean;
         // Every contributing daycare record, not just the single clean-link
@@ -848,6 +850,7 @@ export default function CaptureScreen() {
             timeFrom: p.reminder_time_from || "",
             timeTo: p.reminder_time_to || "",
             people: [],
+            needsAction: p.reminder_needs_action !== false,
             recordId: null,
             recordAmbiguous: false,
             recordIds: [],
@@ -877,6 +880,7 @@ export default function CaptureScreen() {
         date: g.date,
         category: g.category,
         people: g.people,
+        needs_action: g.needsAction,
         url: g.url || null,
         time_from: g.timeFrom || null,
         time_to: g.timeTo || null,

@@ -167,7 +167,7 @@ export function dueReminders(reminders: Reminder[]): DueItem[] {
   windowEnd.setDate(windowEnd.getDate() + REMINDER_ADVANCE_DAYS);
   const windowEndStr = windowEnd.toISOString().slice(0, 10);
   return reminders
-    .filter((r) => !r.done && r.date >= t && r.date <= windowEndStr)
+    .filter((r) => !r.done && r.needs_action && r.date >= t && r.date <= windowEndStr)
     .map((r) => ({
       key: "rem-" + r.id,
       urgent: false,
