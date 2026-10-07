@@ -26,15 +26,23 @@ export async function POST(req: NextRequest) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "AI drafting isn't set up yet (no ANTHROPIC_API_KEY)." }, { status: 400 });
 
+  // No row limit on the query itself -- a limit applied before filtering by
+  // child was capping the WHOLE HOUSEHOLD's most recent 400 records, so a
+  // busy household logging a lot about other children could crowd out this
+  // child's own older entries before the child filter even ran. Capped
+  // instead to this child's own most recent 300 AFTER filtering, below --
+  // bounded, but fair to a child who simply has a long, well-documented
+  // history.
   const { data: allRecords } = await supabase
     .from("records")
     .select("date, bucket, child, kids, text")
     .is("deleted_at", null)
     .in("bucket", ["diary", "supervision", "meds", "sw", "incident", "scratch"])
-    .order("date", { ascending: false })
-    .limit(400);
+    .order("date", { ascending: false });
 
-  const records = (allRecords ?? []).filter((r) => r.child === childName || (r.kids || []).includes(childName));
+  const records = (allRecords ?? [])
+    .filter((r) => r.child === childName || (r.kids || []).includes(childName))
+    .slice(0, 300);
   if (!records.length) return NextResponse.json({ error: "No entries about this child yet" }, { status: 400 });
 
   const src = records
@@ -61,7 +69,11 @@ export async function POST(req: NextRequest) {
     const anthropic = new Anthropic({ apiKey });
     const msg = await anthropic.messages.parse({
       model: "claude-sonnet-5",
-      max_tokens: 2000,
+      // 13 sections of specific, practical detail for a child with a long,
+      // well-logged placement (e.g. years of diary entries) genuinely needs
+      // more than the 2000 this used to cap at -- that's exactly what was
+      // truncating mid-draft and showing as "too long to draft in one go".
+      max_tokens: 4000,
       system: sys,
       messages: [{ role: "user", content: src }],
       output_config: { format: zodOutputFormat(HandoverDraftSchema) },
