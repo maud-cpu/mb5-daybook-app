@@ -19,6 +19,11 @@ function fmtRange(p: Period): string {
   return `${f(p.dateFrom)} – ${f(p.dateTo)}`;
 }
 
+// A sentinel id, never a real child id -- picks the "whole household"
+// option out of the same single-select chip row as individual children,
+// rather than needing a separate toggle next to it.
+const HOUSEHOLD_ID = "__household__";
+
 export default function LifeSummaryTab({ childList }: { childList: ChildOption[] }) {
   const [childId, setChildId] = useState(childList[0]?.id || "");
   const [period, setPeriod] = useState<Period>({ dateFrom: defaultFrom(), dateTo: today() });
@@ -30,13 +35,19 @@ export default function LifeSummaryTab({ childList }: { childList: ChildOption[]
 
   const householdOptions = childList.filter((c) => c.lives_here !== false);
   const visitingOptions = childList.filter((c) => c.lives_here === false);
+  const isHousehold = childId === HOUSEHOLD_ID;
   const selectedChild = childList.find((c) => c.id === childId);
+  const scopeLabel = isHousehold ? "Whole household" : selectedChild?.name;
 
   async function runOne(p: Period): Promise<Result> {
     const res = await fetch("/api/life-summary", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ childId, childName: selectedChild?.name || "", dateFrom: p.dateFrom, dateTo: p.dateTo }),
+      body: JSON.stringify(
+        isHousehold
+          ? { household: true, dateFrom: p.dateFrom, dateTo: p.dateTo }
+          : { childId, childName: selectedChild?.name || "", dateFrom: p.dateFrom, dateTo: p.dateTo },
+      ),
     });
     const data = await res.json();
     if (!res.ok || data.error) return { error: data.error || "Couldn't generate that summary" };
@@ -44,7 +55,7 @@ export default function LifeSummaryTab({ childList }: { childList: ChildOption[]
   }
 
   async function generate() {
-    if (!selectedChild || busy) return;
+    if ((!isHousehold && !selectedChild) || busy) return;
     setBusy(true);
     setResult(null);
     setCompareResult(null);
@@ -98,6 +109,9 @@ export default function LifeSummaryTab({ childList }: { childList: ChildOption[]
           <>
             <b style={{ display: "block", fontSize: 13, marginTop: 10 }}>Who</b>
             <div className="chips" style={{ marginTop: 4 }}>
+              <button className={`chip${isHousehold ? " on" : ""}`} onClick={() => setChildId(HOUSEHOLD_ID)}>
+                🏠 Whole household
+              </button>
               {householdOptions.length > 0 && visitingOptions.length > 0 && (
                 <small className="muted" style={{ flexBasis: "100%" }}>
                   Household
@@ -153,20 +167,20 @@ export default function LifeSummaryTab({ childList }: { childList: ChildOption[]
               </div>
             )}
 
-            <button className="btn" style={{ marginTop: 12 }} onClick={generate} disabled={busy || !selectedChild}>
+            <button className="btn" style={{ marginTop: 12 }} onClick={generate} disabled={busy || (!isHousehold && !selectedChild)}>
               {busy ? "Looking back…" : "Generate summary"}
             </button>
             <p className="note" style={{ marginTop: 8 }}>
               Written by AI from what you&apos;ve actually logged — it may notice a repeated pattern worth a second
               look, but it&apos;s never a diagnosis. Always use your own judgement, and raise anything concerning
-              with the child&apos;s social worker.
+              with {isHousehold ? "a child's" : "the child's"} social worker.
             </p>
           </>
         )}
       </div>
 
-      {renderResult(selectedChild ? `${selectedChild.name} — ${fmtRange(period)}` : "", result)}
-      {compareOn && renderResult(selectedChild ? `${selectedChild.name} — ${fmtRange(comparePeriod)}` : "", compareResult)}
+      {renderResult(scopeLabel ? `${scopeLabel} — ${fmtRange(period)}` : "", result)}
+      {compareOn && renderResult(scopeLabel ? `${scopeLabel} — ${fmtRange(comparePeriod)}` : "", compareResult)}
     </div>
   );
 }
