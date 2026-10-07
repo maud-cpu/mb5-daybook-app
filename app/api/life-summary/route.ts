@@ -125,10 +125,6 @@ export async function POST(req: NextRequest) {
     docRows = data ?? [];
   }
 
-  if (!notes.length && !docRows.length) {
-    return NextResponse.json({ summary: "", noteCount: 0, documentCount: 0 });
-  }
-
   const docBlocks: Anthropic.ContentBlockParam[] = [];
   let documentCount = 0;
   for (const doc of docRows) {
@@ -142,6 +138,15 @@ export async function POST(req: NextRequest) {
       docBlocks.push(...blocks);
       documentCount++;
     }
+  }
+
+  // Checked here, after actually trying to read each document, rather than
+  // on the raw row count beforehand -- a document row that exists but
+  // turned out unreadable (corrupt, an unsupported type) used to still
+  // count as "something to work with", sending the model a prompt that
+  // pointed at documents which were never actually attached.
+  if (!notes.length && !docBlocks.length) {
+    return NextResponse.json({ summary: "", noteCount: 0, documentCount: 0 });
   }
 
   const notesText = notes
@@ -182,14 +187,25 @@ Never invent or assume anything that isn't actually in the notes or documents. I
     const anthropic = new Anthropic({ apiKey });
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-5",
-      max_tokens: isHousehold ? 2400 : 1200,
+      // A household summary can genuinely need to cover several children
+      // in one response -- more headroom than a single child's narrative.
+      max_tokens: isHousehold ? 4000 : 1200,
       system: sys,
       messages: [{ role: "user", content }],
     });
     if (msg.stop_reason === "refusal") throw new Error("Couldn't summarise that");
-    const block = msg.content.find((b) => b.type === "text");
-    if (!block || block.type !== "text" || !block.text.trim()) throw new Error("Could not read the summary");
-    return NextResponse.json({ summary: block.text.trim(), noteCount: notes.length, documentCount });
+    if (msg.stop_reason === "max_tokens") throw new Error("That was too much to summarise in one go -- try a narrower date range");
+    // Concatenate every text block rather than just the first -- taking
+    // only the first silently dropped the rest of the response on the rare
+    // response made of more than one text block, which read as "nothing
+    // came back" even though the model had actually written something.
+    const text = msg.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("\n")
+      .trim();
+    if (!text) throw new Error(`Could not read the summary (stop reason: ${msg.stop_reason})`);
+    return NextResponse.json({ summary: text, noteCount: notes.length, documentCount });
   } catch (e) {
     return NextResponse.json({ error: `Couldn't summarise: ${aiErrorMessage(e, "That was too much to summarise in one go -- try a narrower date range")}` }, { status: 500 });
   }
