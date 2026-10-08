@@ -619,10 +619,16 @@ export default function AboutScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [children, householdChildren]);
 
+  // Sends only the changed fields, not the whole household object -- this
+  // row is shared by every carer in the household (see 0057's migration),
+  // so two carers editing different fields around the same time used to
+  // silently stomp each other: whichever save went second sent its own
+  // stale full copy of EVERY field, reverting anything the other carer had
+  // just saved that this browser tab hadn't refreshed to see yet. A
+  // partial patch can only ever touch the field it's actually for.
   async function saveHousehold(patch: Partial<Household>) {
-    const next = { ...household, ...patch };
-    setHousehold(next);
-    await fetch("/api/household", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(next) });
+    setHousehold((prev) => ({ ...prev, ...patch }));
+    await fetch("/api/household", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
     flashSaved();
   }
 
@@ -839,14 +845,19 @@ export default function AboutScreen() {
       setSelected(match.table === "household_children" ? `hh:${match.id}` : `child:${match.id}`);
       return;
     }
-    await fetch("/api/household-children", {
+    const res = await fetch("/api/household-children", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...newHouseholdChild, name: newHouseholdChild.name.trim(), born: newHouseholdChild.born || null }),
     });
+    const data = res.ok ? await res.json().catch(() => null) : null;
     setNewHouseholdChild({ name: "", born: "", category: "", notes: "", gender: "" });
-    setSelected(null);
     await load();
+    // Opens straight into the new child's own panel (School, Health, Social
+    // work team, etc.) instead of dropping back to the wheel -- used to
+    // need a second tap to find and open them before any of that could be
+    // filled in.
+    setSelected(data?.child?.id ? `hh:${data.child.id}` : null);
   }
 
   async function updateHouseholdChild(id: string, patch: Partial<HouseholdChild>) {
@@ -1040,22 +1051,24 @@ export default function AboutScreen() {
         gender: newVisitingChild.gender,
       }),
     });
+    const data = res.ok ? await res.json().catch(() => null) : null;
     // Anything pulled from a pasted handover document goes straight into
     // this new child's basics -- otherwise it'd only ever have lived in the
     // now-cleared textarea, undoing the whole point of extracting it.
-    if (res.ok && pendingImportBasics) {
-      const { child } = await res.json();
+    if (data?.child?.id && pendingImportBasics) {
       await fetch("/api/children", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: child.id, patch: { basics: pendingImportBasics } }),
+        body: JSON.stringify({ id: data.child.id, patch: { basics: pendingImportBasics } }),
       });
     }
     setNewVisitingChild({ name: "", born: "", category: VISITS_CATS[0][0], gender: "" });
     setImportText("");
     setPendingImportBasics(null);
-    setSelected(null);
     await load();
+    // Opens straight into the new child's own panel instead of dropping
+    // back to the wheel -- same fix as addHouseholdChild above.
+    setSelected(data?.child?.id ? `visit:${data.child.id}` : null);
   }
 
   // A full handover/sleepover document is a completely different shape of
@@ -1268,17 +1281,28 @@ export default function AboutScreen() {
             </div>
           ))}
           <div style={{ marginTop: 8 }}>
+            <p className="hint">
+              Add anyone living here who&apos;s grown up — a co-carer, a grandparent, or your own grown-up child still
+              at home (pick &quot;Adult child&quot; from the Role list below).
+            </p>
             <input placeholder="Name" value={newAdult.name} onChange={(e) => setNewAdult({ ...newAdult, name: e.target.value })} />
             <div className="row" style={{ marginTop: 6 }}>
               <input placeholder="Phone" value={newAdult.phone} onChange={(e) => setNewAdult({ ...newAdult, phone: e.target.value })} />
               <input placeholder="Email" value={newAdult.email} onChange={(e) => setNewAdult({ ...newAdult, email: e.target.value })} />
             </div>
             <div className="row" style={{ marginTop: 6 }}>
-              <select value={newAdult.role} onChange={(e) => setNewAdult({ ...newAdult, role: e.target.value })}>
-                {ADULT_ROLES.map((r) => (
-                  <option key={r}>{r}</option>
-                ))}
-              </select>
+              <label className="hint" style={{ flex: 1 }}>
+                Role
+                <select
+                  style={{ display: "block", width: "100%", marginTop: 2 }}
+                  value={newAdult.role}
+                  onChange={(e) => setNewAdult({ ...newAdult, role: e.target.value })}
+                >
+                  {ADULT_ROLES.map((r) => (
+                    <option key={r}>{r}</option>
+                  ))}
+                </select>
+              </label>
               <GenderSelect value={newAdult.gender} onChange={(v) => setNewAdult({ ...newAdult, gender: v })} />
               <button className="chip" style={{ flex: "0 0 auto" }} onClick={addAdult}>
                 + Add adult
