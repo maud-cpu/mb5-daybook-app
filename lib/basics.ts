@@ -140,6 +140,7 @@ export const BASICS_SECTIONS: BasicsSection[] = [
   {
     title: "Family & contact",
     fields: [
+      { key: "child_phone", label: "Their own mobile number", type: "tel" },
       { key: "contact", label: "Contact arrangements", placeholder: "who · how often · supervised? · where" },
       { key: "nocontact", label: "Must NOT have contact" },
       { key: "family", label: "Family / important people" },

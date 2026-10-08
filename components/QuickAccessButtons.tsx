@@ -100,6 +100,7 @@ export default function QuickAccessButtons() {
       const edtPhone = extractPhone(household?.edt);
       if (edtPhone) out.push({ label: "Emergency Duty Team", name: "", value: edtPhone });
       allKids.forEach((c) => {
+        if (c.basics?.child_phone) out.push({ label: `${c.name}'s mobile`, name: "", value: c.basics.child_phone });
         const p = c.basics?.csw_phone || extractPhone(c.basics?.csw);
         if (p) out.push({ label: `${c.name}'s CSW`, name: c.basics?.csw || "", value: p });
         const pm = c.basics?.cswm_phone || extractPhone(c.basics?.cswm);
