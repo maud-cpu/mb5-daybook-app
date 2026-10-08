@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import { firstName } from "@/lib/domain";
 
-type HubEntry = { id: string; carer_name: string; phone: string; email: string };
-type Draft = { carer_name: string; phone: string; email: string };
+type HubEntry = { id: string; carer_name: string; phone: string; email: string; ssw_name: string; ssw_phone: string; ssw_email: string };
+type Draft = { carer_name: string; phone: string; email: string; ssw_name: string; ssw_phone: string; ssw_email: string };
 
 function blankDraft(): Draft {
-  return { carer_name: "", phone: "", email: "" };
+  return { carer_name: "", phone: "", email: "", ssw_name: "", ssw_phone: "", ssw_email: "" };
 }
 
 function hubLabel(carerName: string): string {
@@ -129,6 +129,30 @@ export default function HubDirectoryAdmin({ showToast }: { showToast: (msg: stri
             style={{ marginTop: 6 }}
             onBlur={(e) => updateHub(h.id, { email: e.target.value })}
           />
+          <small className="muted" style={{ display: "block", marginTop: 8 }}>
+            The social worker who looks after this hub
+          </small>
+          <div className="row" style={{ marginTop: 4 }}>
+            <input
+              key={`ssw_name:${h.id}`}
+              placeholder="SSW name"
+              defaultValue={h.ssw_name}
+              onBlur={(e) => updateHub(h.id, { ssw_name: e.target.value })}
+            />
+            <input
+              key={`ssw_phone:${h.id}`}
+              placeholder="SSW phone"
+              defaultValue={h.ssw_phone}
+              onBlur={(e) => updateHub(h.id, { ssw_phone: e.target.value })}
+            />
+          </div>
+          <input
+            key={`ssw_email:${h.id}`}
+            placeholder="SSW email"
+            defaultValue={h.ssw_email}
+            style={{ marginTop: 6 }}
+            onBlur={(e) => updateHub(h.id, { ssw_email: e.target.value })}
+          />
         </div>
       ))}
       <div style={{ marginTop: 10 }}>
@@ -141,6 +165,19 @@ export default function HubDirectoryAdmin({ showToast }: { showToast: (msg: stri
           <input placeholder="Phone" value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} />
           <input placeholder="Email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} />
         </div>
+        <small className="muted" style={{ display: "block", marginTop: 8 }}>
+          The social worker who looks after this hub
+        </small>
+        <div className="row" style={{ marginTop: 4 }}>
+          <input placeholder="SSW name" value={draft.ssw_name} onChange={(e) => setDraft({ ...draft, ssw_name: e.target.value })} />
+          <input placeholder="SSW phone" value={draft.ssw_phone} onChange={(e) => setDraft({ ...draft, ssw_phone: e.target.value })} />
+        </div>
+        <input
+          placeholder="SSW email"
+          value={draft.ssw_email}
+          style={{ marginTop: 6 }}
+          onChange={(e) => setDraft({ ...draft, ssw_email: e.target.value })}
+        />
         <button className="chip" style={{ marginTop: 6 }} disabled={adding || !draft.carer_name.trim()} onClick={addHub}>
           + Add hub carer
         </button>

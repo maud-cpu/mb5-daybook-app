@@ -34,6 +34,8 @@ function hubLabel(carerName: string): string {
   return carerName.trim() ? `${firstName(carerName)}'s hub` : "(unnamed hub)";
 }
 
+type HubDirectoryEntry = { id: string; carer_name: string; phone: string; email: string; ssw_name: string; ssw_phone: string; ssw_email: string };
+
 // Colour by what someone actually IS, not a per-name hash -- so at a glance
 // on the bubbles or in Visitors, every foster placement reads the same
 // colour regardless of whose bubble it is, distinct from the carer's own
@@ -579,7 +581,7 @@ export default function AboutScreen() {
   // broken add button.
   const [addNotice, setAddNotice] = useState("");
   const [householdChildren, setHouseholdChildren] = useState<HouseholdChild[]>([]);
-  const [hubDirectory, setHubDirectory] = useState<{ id: string; carer_name: string; phone: string; email: string }[]>([]);
+  const [hubDirectory, setHubDirectory] = useState<HubDirectoryEntry[]>([]);
   const [newHouseholdChild, setNewHouseholdChild] = useState({ name: "", born: "", category: "", notes: "", gender: "" });
   const [visitors, setVisitors] = useState<Visitor[]>([]);
   const [newVisitor, setNewVisitor] = useState<{ name: string; phone: string; email: string; role: string; gender: string; linked_visitor_id: string | null }>({
@@ -654,7 +656,7 @@ export default function AboutScreen() {
     setBasics(b);
     if (householdRes.household) setHousehold(householdRes.household as Household);
     setAdults((adultsRes.adults as Adult[]) ?? []);
-    setHubDirectory((hubDirectoryRes.hubs as { id: string; carer_name: string; phone: string; email: string }[]) ?? []);
+    setHubDirectory((hubDirectoryRes.hubs as HubDirectoryEntry[]) ?? []);
   }
 
   useEffect(() => {
@@ -1424,6 +1426,29 @@ export default function AboutScreen() {
               </select>
             </>
           )}
+          {household.is_mockingbird &&
+            (() => {
+              // Matched back against the saved hub_leader_* fields rather
+              // than remembered from the picker above -- so this still
+              // shows correctly after a reload, and for a hub chosen before
+              // this feature existed too, as long as the name/phone/email
+              // happen to match a directory entry.
+              const matchedHub = hubDirectory.find(
+                (h) =>
+                  h.carer_name === household.hub_leader_name &&
+                  h.phone === household.hub_leader_phone &&
+                  h.email === household.hub_leader_email,
+              );
+              if (!matchedHub || !(matchedHub.ssw_name || matchedHub.ssw_phone || matchedHub.ssw_email)) return null;
+              return (
+                <p className="note" style={{ marginTop: 6 }}>
+                  <b>{hubLabel(matchedHub.carer_name)}&apos;s social worker</b> — not your own SSW above, shown here
+                  for reference only:
+                  <br />
+                  {[matchedHub.ssw_name, matchedHub.ssw_phone, matchedHub.ssw_email].filter(Boolean).join(" · ")}
+                </p>
+              );
+            })()}
           {household.is_mockingbird && (
             <div className="row" style={{ marginTop: 8 }}>
               <input

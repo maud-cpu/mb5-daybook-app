@@ -8,7 +8,7 @@ import { encryptFieldsForWrite, lazyMigrateRows } from "@/lib/encryptedTable";
 // it (needed so "Your Mockingbird" can offer the picker to anyone in the
 // household, not just the admin), so a non-admin's POST/PATCH/DELETE here
 // fails at the database with a row-level-security error, not silently.
-const ENC_FIELDS = ["carer_name", "phone", "email"];
+const ENC_FIELDS = ["carer_name", "phone", "email", "ssw_name", "ssw_phone", "ssw_email"];
 
 export async function GET() {
   const supabase = await createClient();
