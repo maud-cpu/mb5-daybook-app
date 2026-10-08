@@ -202,6 +202,7 @@ function ChildBasicsPanel({
   justFilled,
   siblings,
   onShareSection,
+  householdSsw,
 }: {
   showMockingbird: boolean;
   mockingbird: string;
@@ -227,6 +228,12 @@ function ChildBasicsPanel({
    * offered what's filled in here, instead of relying on remembering to go
    * copy it across from their own profile. */
   onShareSection?: (siblingId: string, siblingTable: "children" | "household_children", siblingName: string, sectionTitle: string, values: Record<string, string>) => void;
+  /** The carer's OWN supervising social worker (set once, household-wide,
+   * on About us -> the SSW card) -- a different person from this child's
+   * own CSW below, shown as read-only reference in Social work team so
+   * it's visible here without retyping it, never written into the child's
+   * own fields. */
+  householdSsw?: { name: string; phone: string; email: string; edt: string };
 }) {
   const [copiedKeys, setCopiedKeys] = useState<string[]>([]);
   // A section copied from a sibling isn't saved straight away -- siblings
@@ -373,6 +380,21 @@ function ChildBasicsPanel({
                   </div>
                 );
               })()}
+            {section.title === "Social work team" &&
+              householdSsw &&
+              (householdSsw.name || householdSsw.phone || householdSsw.email || householdSsw.edt) && (
+                <div className="note" style={{ marginTop: 6 }}>
+                  <b>Your supervising social worker</b> — not their own CSW above, shown here for reference only:
+                  <br />
+                  {[householdSsw.name, householdSsw.phone, householdSsw.email].filter(Boolean).join(" · ") || "—"}
+                  {householdSsw.edt && (
+                    <>
+                      <br />
+                      EDT (out of hours): {householdSsw.edt}
+                    </>
+                  )}
+                </div>
+              )}
             {section.fields.map((f) => {
               const highlighted = !!justFilled?.includes(f.key) || copiedKeys.includes(f.key);
               const pendingValue = pending && f.key in pending.values ? pending.values[f.key] : undefined;
@@ -1793,6 +1815,7 @@ export default function AboutScreen() {
               justFilled={justFilled}
               siblings={siblingsFor(c.id)}
               onShareSection={shareSectionWithSibling}
+              householdSsw={{ name: household.ssw_name, phone: household.ssw_phone, email: household.ssw_email, edt: household.edt }}
             />
           </div>
           {closeButton()}
@@ -1913,6 +1936,7 @@ export default function AboutScreen() {
               justFilled={justFilled}
               siblings={siblingsFor(c.id)}
               onShareSection={shareSectionWithSibling}
+              householdSsw={{ name: household.ssw_name, phone: household.ssw_phone, email: household.ssw_email, edt: household.edt }}
             />
           </div>
           {closeButton()}
@@ -2011,6 +2035,7 @@ export default function AboutScreen() {
               justFilled={justFilled}
               siblings={siblingsFor(c.id)}
               onShareSection={shareSectionWithSibling}
+              householdSsw={{ name: household.ssw_name, phone: household.ssw_phone, email: household.ssw_email, edt: household.edt }}
             />
           </div>
           {closeButton()}
