@@ -11,10 +11,14 @@ export const maxDuration = 120;
 // A child's document library can grow large over time (old handovers,
 // assessments, reports) -- capped so one request doesn't try to attach
 // dozens of files. Most recent first, so what's included is the most
-// likely to actually be relevant. The whole-household cap is higher since
-// it's spread across everyone, not just one child.
+// likely to actually be relevant. Household used to allow more than a
+// single child (10 vs 6) on the reasoning that it's spread across
+// everyone -- but that's backwards: a household summary already has more
+// children's worth of OUTPUT to write, so giving it MORE document input
+// to also transcribe was exactly what could blow the response past its
+// token cap even for a short, quiet date range with barely any notes.
 const MAX_DOCUMENTS_SINGLE = 6;
-const MAX_DOCUMENTS_HOUSEHOLD = 10;
+const MAX_DOCUMENTS_HOUSEHOLD = 6;
 
 // Financial records (a receipt amount, a mileage claim) carry no signal
 // about how a child's actually doing -- left out so they don't dilute the
@@ -178,12 +182,16 @@ export async function POST(req: NextRequest) {
   const sys = isHousehold
     ? `You help a UK foster carer look back at how their whole household -- every child currently in their care -- has been doing, using only their own logged notes for the period given (each note says which child or children it's about) and any documents on file for these children (which may cover a different, wider period -- treat them as background, not as things that happened during the date range itself unless they clearly say so).
 
+The notes are the main source -- base the narrative on those. The documents are background only: skim them for context that helps you understand a child, never transcribe, quote at length, or exhaustively describe what's in any one of them. If a document isn't actually relevant to what the notes say for this period, ignore it rather than summarising it anyway.
+
 Write a short, honest, factual narrative in plain British English, third person, organised child by child, using each child's name. ${householdLengthInstruction} Skip a child entirely if nothing at all was logged for them in this period rather than padding it out. No heading, no bullet points, just prose. Write any date the UK way (day before month).
 
 Where something genuinely repeats across more than one note for the same child (e.g. disrupted sleep logged several times, a recurring behaviour, a clear mood shift), name the pattern plainly and say what it's based on (e.g. "logged three times this month"). You may gently suggest what a repeated pattern COULD mean -- framed as a possibility for the carer to think about and raise with the right person, never as a diagnosis or a certainty. You are not a clinician: never state that a pattern definitely is a sign of something. If anything reads like it could be a safeguarding concern, say so plainly and suggest raising it with that child's social worker or a health professional rather than interpreting it yourself -- even in a brief summary, never drop a genuine safeguarding concern for the sake of length.
 
 Never invent or assume anything that isn't actually in the notes or documents. If there's too little here to say anything meaningful, say that plainly instead of padding it out.`
     : `You help a UK foster carer look back at how a specific child in their care has been doing, using only their own logged notes for the period given and any documents on file for this child (which may cover a different, wider period -- treat them as background, not as things that happened during the date range itself unless they clearly say so).
+
+The notes are the main source -- base the narrative on those. The documents are background only: skim them for context that helps you understand this child, never transcribe, quote at length, or exhaustively describe what's in any one of them. If a document isn't actually relevant to what the notes say for this period, ignore it rather than summarising it anyway.
 
 Write a short, honest, factual narrative in plain British English, third person, roughly chronological. ${singleLengthInstruction} No heading, no bullet points, just prose. Write any date the UK way (day before month).
 
@@ -200,12 +208,23 @@ Never invent or assume anything that isn't actually in the notes or documents. I
       // Brief still gets real headroom despite the short target length --
       // this is an output CAP, not the actual expected length, and a cap
       // too close to the target is exactly what risks truncating mid-reply.
-      max_tokens: isHousehold ? (isBrief ? 1500 : 4000) : isBrief ? 600 : 1200,
+      max_tokens: isHousehold ? (isBrief ? 2000 : 6000) : isBrief ? 600 : 1500,
       system: sys,
       messages: [{ role: "user", content }],
     });
     if (msg.stop_reason === "refusal") throw new Error("Couldn't summarise that");
-    if (msg.stop_reason === "max_tokens") throw new Error("That was too much to summarise in one go -- try a narrower date range");
+    if (msg.stop_reason === "max_tokens") {
+      // A narrower date range doesn't actually help when the real cause is
+      // documents, not notes -- they're attached regardless of the date
+      // range picked, so a quiet week with several documents on file can
+      // hit this just as easily as a long, busy one. Said plainly rather
+      // than sending someone to retry the one thing that won't fix it.
+      throw new Error(
+        docBlocks.length
+          ? "That was too much to summarise in one go -- this is likely the documents on file, not the date range, so try switching Length to Brief"
+          : "That was too much to summarise in one go -- try a narrower date range",
+      );
+    }
     // Concatenate every text block rather than just the first -- taking
     // only the first silently dropped the rest of the response on the rare
     // response made of more than one text block, which read as "nothing
