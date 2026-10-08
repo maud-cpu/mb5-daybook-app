@@ -59,6 +59,40 @@ function fmtMonthLabel(ym: string): string {
 
 const TAB_VALUES: Tab[] = ["month", "supervision", "cla", "life", "expenses", "meds", "diary", "handover", "hub", "annualReview", "forms"];
 
+// 11 tabs in one flat row read as a wall of identical pills, nothing to
+// guide which one you actually want -- grouped here under a small label
+// instead, same single click to switch, no change to the tabs themselves.
+const TAB_GROUPS: [string, Tab[]][] = [
+  ["Day-to-day", ["month", "expenses", "meds"]],
+  ["About a child", ["life", "supervision", "cla"]],
+  ["For the social worker", ["diary", "annualReview", "handover"]],
+  ["Reference", ["hub", "forms"]],
+];
+
+function tabLabel(t: Tab): string {
+  return t === "month"
+    ? "Month"
+    : t === "supervision"
+      ? "Supervision"
+      : t === "cla"
+        ? "CLA prep"
+        : t === "life"
+          ? "How's life"
+          : t === "expenses"
+            ? "Expenses"
+            : t === "meds"
+              ? "Medication"
+              : t === "diary"
+                ? "Diary for SW"
+                : t === "handover"
+                  ? "Handover"
+                  : t === "hub"
+                    ? "Hub log"
+                    : t === "annualReview"
+                      ? "Annual review"
+                      : "Forms";
+}
+
 export default function PaperworkScreen() {
   const supabase = createClient();
   const searchParams = useSearchParams();
@@ -234,33 +268,20 @@ export default function PaperworkScreen() {
 
   return (
     <div>
-      <div className="tabs">
-        {TAB_VALUES.map((t) => (
-          <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
-            {t === "month"
-              ? "Month"
-              : t === "supervision"
-                ? "Supervision"
-                : t === "cla"
-                  ? "CLA prep"
-                  : t === "life"
-                    ? "How's life"
-                    : t === "expenses"
-                      ? "Expenses"
-                      : t === "meds"
-                        ? "Medication"
-                        : t === "diary"
-                          ? "Diary for SW"
-                          : t === "handover"
-                            ? "Handover"
-                            : t === "hub"
-                              ? "Hub log"
-                              : t === "annualReview"
-                                ? "Annual review"
-                                : "Forms"}
-          </button>
-        ))}
-      </div>
+      {TAB_GROUPS.map(([label, tabs]) => (
+        <div key={label} style={{ marginBottom: 10 }}>
+          <small className="muted" style={{ display: "block", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>
+            {label}
+          </small>
+          <div className="tabs" style={{ marginBottom: 0 }}>
+            {tabs.map((t) => (
+              <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
+                {tabLabel(t)}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
 
       {["month", "supervision", "cla", "expenses", "meds"].includes(tab) && children.length > 0 && (
         <div style={{ marginTop: 10 }}>
