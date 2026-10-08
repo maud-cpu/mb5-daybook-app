@@ -7,6 +7,7 @@ import { Child } from "@/lib/types";
 type ChildOption = Pick<Child, "id" | "name" | "lives_here">;
 
 type Period = { dateFrom: string; dateTo: string };
+type Length = "brief" | "full";
 
 type Result = { summary: string; noteCount: number; documentCount: number } | { error: string } | null;
 
@@ -26,6 +27,7 @@ const HOUSEHOLD_ID = "__household__";
 
 export default function LifeSummaryTab({ childList }: { childList: ChildOption[] }) {
   const [childId, setChildId] = useState(childList[0]?.id || "");
+  const [length, setLength] = useState<Length>("full");
   const [period, setPeriod] = useState<Period>({ dateFrom: defaultFrom(), dateTo: today() });
   const [compareOn, setCompareOn] = useState(false);
   const [comparePeriod, setComparePeriod] = useState<Period>({ dateFrom: defaultFrom(), dateTo: today() });
@@ -45,8 +47,8 @@ export default function LifeSummaryTab({ childList }: { childList: ChildOption[]
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
         isHousehold
-          ? { household: true, dateFrom: p.dateFrom, dateTo: p.dateTo }
-          : { childId, childName: selectedChild?.name || "", dateFrom: p.dateFrom, dateTo: p.dateTo },
+          ? { household: true, dateFrom: p.dateFrom, dateTo: p.dateTo, length }
+          : { childId, childName: selectedChild?.name || "", dateFrom: p.dateFrom, dateTo: p.dateTo, length },
       ),
     });
     const data = await res.json();
@@ -134,6 +136,16 @@ export default function LifeSummaryTab({ childList }: { childList: ChildOption[]
                   ))}
                 </>
               )}
+            </div>
+
+            <b style={{ display: "block", fontSize: 13, marginTop: 14 }}>Length</b>
+            <div className="chips" style={{ marginTop: 4 }}>
+              <button className={`chip${length === "brief" ? " on" : ""}`} onClick={() => setLength("brief")}>
+                Brief
+              </button>
+              <button className={`chip${length === "full" ? " on" : ""}`} onClick={() => setLength("full")}>
+                Full
+              </button>
             </div>
 
             <b style={{ display: "block", fontSize: 13, marginTop: 14 }}>When</b>

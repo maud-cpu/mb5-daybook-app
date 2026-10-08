@@ -77,8 +77,9 @@ export async function POST(req: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
-  const { childId, childName, household, dateFrom, dateTo } = await req.json();
+  const { childId, childName, household, dateFrom, dateTo, length } = await req.json();
   const isHousehold = !!household;
+  const isBrief = length === "brief";
   if (!isHousehold && (!childName || typeof childName !== "string")) {
     return NextResponse.json({ error: "No child given" }, { status: 400 });
   }
@@ -167,19 +168,26 @@ export async function POST(req: NextRequest) {
     ...docBlocks,
   ];
 
+  const householdLengthInstruction = isBrief
+    ? "Exactly one sentence per child who has anything logged -- just the single most notable thing about them this period, nothing else. Leave out the closing household-wide sentence entirely unless something is genuinely significant enough to need it."
+    : "A short paragraph (or just a sentence or two, if that's all there is) for each child who has anything logged, then a final short paragraph only if there's a genuine household-wide pattern worth naming (e.g. sibling conflict, a shared routine change, something affecting the whole home).";
+  const singleLengthInstruction = isBrief
+    ? "Around 40-70 words, 2-3 sentences -- just the single most notable thing or two from the period, not a full account of everything logged."
+    : "Around 150-300 words, covering what the notes actually show: behaviour, mood, school, health, sleep, routine, contact/relationships, anything notable.";
+
   const sys = isHousehold
     ? `You help a UK foster carer look back at how their whole household -- every child currently in their care -- has been doing, using only their own logged notes for the period given (each note says which child or children it's about) and any documents on file for these children (which may cover a different, wider period -- treat them as background, not as things that happened during the date range itself unless they clearly say so).
 
-Write a short, honest, factual narrative in plain British English, third person, organised child by child -- a short paragraph (or just a sentence or two, if that's all there is) for each child who has anything logged, using their name, then a final short paragraph only if there's a genuine household-wide pattern worth naming (e.g. sibling conflict, a shared routine change, something affecting the whole home). Skip a child entirely if nothing at all was logged for them in this period rather than padding it out. No heading, no bullet points, just prose. Write any date the UK way (day before month).
+Write a short, honest, factual narrative in plain British English, third person, organised child by child, using each child's name. ${householdLengthInstruction} Skip a child entirely if nothing at all was logged for them in this period rather than padding it out. No heading, no bullet points, just prose. Write any date the UK way (day before month).
 
-Where something genuinely repeats across more than one note for the same child (e.g. disrupted sleep logged several times, a recurring behaviour, a clear mood shift), name the pattern plainly and say what it's based on (e.g. "logged three times this month"). You may gently suggest what a repeated pattern COULD mean -- framed as a possibility for the carer to think about and raise with the right person, never as a diagnosis or a certainty. You are not a clinician: never state that a pattern definitely is a sign of something. If anything reads like it could be a safeguarding concern, say so plainly and suggest raising it with that child's social worker or a health professional rather than interpreting it yourself.
+Where something genuinely repeats across more than one note for the same child (e.g. disrupted sleep logged several times, a recurring behaviour, a clear mood shift), name the pattern plainly and say what it's based on (e.g. "logged three times this month"). You may gently suggest what a repeated pattern COULD mean -- framed as a possibility for the carer to think about and raise with the right person, never as a diagnosis or a certainty. You are not a clinician: never state that a pattern definitely is a sign of something. If anything reads like it could be a safeguarding concern, say so plainly and suggest raising it with that child's social worker or a health professional rather than interpreting it yourself -- even in a brief summary, never drop a genuine safeguarding concern for the sake of length.
 
 Never invent or assume anything that isn't actually in the notes or documents. If there's too little here to say anything meaningful, say that plainly instead of padding it out.`
     : `You help a UK foster carer look back at how a specific child in their care has been doing, using only their own logged notes for the period given and any documents on file for this child (which may cover a different, wider period -- treat them as background, not as things that happened during the date range itself unless they clearly say so).
 
-Write a short, honest, factual narrative in plain British English, third person, roughly chronological -- covering what the notes actually show: behaviour, mood, school, health, sleep, routine, contact/relationships, anything notable. Around 150-300 words, no heading, no bullet points, just prose. Write any date the UK way (day before month).
+Write a short, honest, factual narrative in plain British English, third person, roughly chronological. ${singleLengthInstruction} No heading, no bullet points, just prose. Write any date the UK way (day before month).
 
-Where something genuinely repeats across more than one note (e.g. disrupted sleep logged several times, a recurring behaviour, a clear mood shift), name the pattern plainly and say what it's based on (e.g. "logged three times this month"). You may gently suggest what a repeated pattern COULD mean -- framed as a possibility for the carer to think about and raise with the right person, never as a diagnosis or a certainty. You are not a clinician: never state that a pattern definitely is a sign of something. If anything reads like it could be a safeguarding concern, say so plainly and suggest raising it with the child's social worker or a health professional rather than interpreting it yourself.
+Where something genuinely repeats across more than one note (e.g. disrupted sleep logged several times, a recurring behaviour, a clear mood shift), name the pattern plainly and say what it's based on (e.g. "logged three times this month"). You may gently suggest what a repeated pattern COULD mean -- framed as a possibility for the carer to think about and raise with the right person, never as a diagnosis or a certainty. You are not a clinician: never state that a pattern definitely is a sign of something. If anything reads like it could be a safeguarding concern, say so plainly and suggest raising it with the child's social worker or a health professional rather than interpreting it yourself -- even in a brief summary, never drop a genuine safeguarding concern for the sake of length.
 
 Never invent or assume anything that isn't actually in the notes or documents. If there's too little here to say anything meaningful, say that plainly instead of padding it out.`;
 
@@ -189,7 +197,10 @@ Never invent or assume anything that isn't actually in the notes or documents. I
       model: "claude-sonnet-5",
       // A household summary can genuinely need to cover several children
       // in one response -- more headroom than a single child's narrative.
-      max_tokens: isHousehold ? 4000 : 1200,
+      // Brief still gets real headroom despite the short target length --
+      // this is an output CAP, not the actual expected length, and a cap
+      // too close to the target is exactly what risks truncating mid-reply.
+      max_tokens: isHousehold ? (isBrief ? 1500 : 4000) : isBrief ? 600 : 1200,
       system: sys,
       messages: [{ role: "user", content }],
     });
