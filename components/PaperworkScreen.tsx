@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { daycareAmount, describeExpense, describeMeds, expenseTotals, gbp, sortChildren, today } from "@/lib/domain";
-import { addDays } from "@/lib/calendarHelpers";
+import { addDays, addMonths } from "@/lib/calendarHelpers";
 import { unreportedIncidentItems } from "@/lib/thingsToDo";
 import { BUCKETS, Bucket, Child, DAYCARE_REASONS, EntryRecord, FLAGS, FlagKey, HUB_SUPPORT_TYPES, Rates } from "@/lib/types";
 import { BASICS_SECTIONS } from "@/lib/basics";
@@ -107,6 +107,9 @@ export default function PaperworkScreen() {
   const [childFilter, setChildFilter] = useState<string[]>([]);
   const [childFilterOpen, setChildFilterOpen] = useState(false);
   const [childSearch, setChildSearch] = useState("");
+  // Medication used to only ever show the current calendar month, with no
+  // way to look back -- this is the month actually being viewed there.
+  const [medsMonthDate, setMedsMonthDate] = useState(today());
   const [trainingDone, setTrainingDone] = useState<TrainingCompletion[]>([]);
   const [addingExpense, setAddingExpense] = useState(false);
   const [newExpense, setNewExpense] = useState<NewExpenseDraft>(blankExpenseDraft());
@@ -265,6 +268,12 @@ export default function PaperworkScreen() {
   // visiting/daycare child who just happens to be in the same "children"
   // table -- lives_here is only ever explicitly false for those.
   const claChildren = children.filter((c) => c.lives_here !== false && (childFilter.length === 0 || childFilter.includes(c.name)));
+
+  const medsMonth = medsMonthDate.slice(0, 7);
+  const medsAllMonthRecs = records.filter((r) => r.bucket === "meds" && r.date.startsWith(medsMonth));
+  const medsRecs = childFilter.length
+    ? medsAllMonthRecs.filter((r) => r.kids.some((k) => childFilter.includes(k)))
+    : medsAllMonthRecs;
 
   return (
     <div>
@@ -573,15 +582,28 @@ export default function PaperworkScreen() {
 
       {tab === "meds" && (
         <div className="card">
-          <h3>Medication log — {fmtMonthLabel(thisMonth)}</h3>
-          {monthRecs.filter((r) => r.bucket === "meds").length === 0 && <p className="empty">Nothing this month.</p>}
-          {monthRecs
-            .filter((r) => r.bucket === "meds")
-            .map((r) => (
-              <div className="rec" key={r.id}>
-                {describeMeds(r)} <small className="muted">— {fmtDate(r.date)}</small>
-              </div>
-            ))}
+          <div className="row" style={{ alignItems: "center", justifyContent: "space-between" }}>
+            <h3 style={{ margin: 0 }}>Medication log — {fmtMonthLabel(medsMonth)}</h3>
+            <div className="chips" style={{ flex: "0 0 auto" }}>
+              <button className="chip" onClick={() => setMedsMonthDate(addMonths(medsMonthDate, -1))}>
+                ◂ Previous
+              </button>
+              {medsMonth !== thisMonth && (
+                <button className="chip" onClick={() => setMedsMonthDate(today())}>
+                  This month
+                </button>
+              )}
+              <button className="chip" disabled={medsMonth >= thisMonth} onClick={() => setMedsMonthDate(addMonths(medsMonthDate, 1))}>
+                Next ▸
+              </button>
+            </div>
+          </div>
+          {medsRecs.length === 0 && <p className="empty">Nothing logged in {fmtMonthLabel(medsMonth)}.</p>}
+          {medsRecs.map((r) => (
+            <div className="rec" key={r.id}>
+              {describeMeds(r)} <small className="muted">— {fmtDate(r.date)}</small>
+            </div>
+          ))}
         </div>
       )}
 
