@@ -182,6 +182,15 @@ type HouseholdChild = {
   gender: string;
 };
 
+// Maps each "their own carer" basics key (see lib/basics.ts's Social work
+// team section) to the matching key on the householdCarer prop below.
+const AUTO_CARER_FIELD_MAP = {
+  carer_name: "name",
+  carer_ssw: "ssw",
+  carer_ssw_phone: "sswPhone",
+  carer_ssw_email: "sswEmail",
+} as const;
+
 // Shared by every list a child can appear in (lives here, visits, or in your
 // household but not an active placement) -- Mockingbird/hub-carer details,
 // the Surrey contact for an SGO/adopted child, and the full basics form.
@@ -203,6 +212,7 @@ function ChildBasicsPanel({
   siblings,
   onShareSection,
   householdSsw,
+  householdCarer,
 }: {
   showMockingbird: boolean;
   mockingbird: string;
@@ -234,6 +244,13 @@ function ChildBasicsPanel({
    * it's visible here without retyping it, never written into the child's
    * own fields. */
   householdSsw?: { name: string; phone: string; email: string; edt: string };
+  /** Set only for a child who actually lives in this household -- "their
+   * own carer" and "their carer's SSW" (the fields below, meant for a
+   * VISITING child whose day-to-day carer is someone else entirely) are
+   * simply this household and its own SSW, so they're shown read-only and
+   * auto-filled from it instead of asking the carer to retype their own
+   * details about themselves. */
+  householdCarer?: { name: string; ssw: string; sswPhone: string; sswEmail: string };
 }) {
   const [copiedKeys, setCopiedKeys] = useState<string[]>([]);
   // A section copied from a sibling isn't saved straight away -- siblings
@@ -381,6 +398,10 @@ function ChildBasicsPanel({
                 );
               })()}
             {section.title === "Social work team" &&
+              // Not shown for a child who lives here -- "their carer's SSW"
+              // below is already this, auto-filled in context, so repeating
+              // it up here as well would just say the same thing twice.
+              !householdCarer &&
               householdSsw &&
               (householdSsw.name || householdSsw.phone || householdSsw.email || householdSsw.edt) && (
                 <div className="note" style={{ marginTop: 6 }}>
@@ -397,6 +418,21 @@ function ChildBasicsPanel({
               )}
             {section.fields.map((f) => {
               const highlighted = !!justFilled?.includes(f.key) || copiedKeys.includes(f.key);
+              // "Their own carer"/"their carer's SSW" only ever need asking
+              // about for a VISITING child -- for one who lives here, the
+              // answer is always this household and its own SSW, already
+              // known, so it's shown read-only instead of as a blank box
+              // asking the carer to type in their own details about
+              // themselves.
+              if (householdCarer && f.key in AUTO_CARER_FIELD_MAP) {
+                const value = householdCarer[AUTO_CARER_FIELD_MAP[f.key as keyof typeof AUTO_CARER_FIELD_MAP]];
+                return (
+                  <div key={f.key} style={{ marginTop: 6 }}>
+                    <small className="muted">{f.label} — this household, auto-filled</small>
+                    <p style={{ margin: "2px 0 0" }}>{value || "—"}</p>
+                  </div>
+                );
+              }
               const pendingValue = pending && f.key in pending.values ? pending.values[f.key] : undefined;
               if (pendingValue !== undefined) {
                 const pendingStyle = { marginTop: 6, border: "2px solid var(--accent)", background: "#eaf3ff", borderRadius: "var(--radius-sm)" };
@@ -1132,6 +1168,16 @@ export default function AboutScreen() {
   // this only ever looked for role === "Foster carer". Every adult counts
   // except a grown-up child still living at home, who isn't "the carer(s)".
   const carerAdults = adults.filter((a) => a.role !== "Adult child");
+  // Full names (not firstName-shortened like centerLabel below) -- this
+  // feeds a child's own "their own carer" field, which reads better as a
+  // proper name than a first-name-only wheel label does.
+  const carerFullNames = carerAdults.length ? carerAdults.map((a) => a.name).join(" & ") : "";
+  const householdCarerFor: { name: string; ssw: string; sswPhone: string; sswEmail: string } = {
+    name: carerFullNames,
+    ssw: household.ssw_name,
+    sswPhone: household.ssw_phone,
+    sswEmail: household.ssw_email,
+  };
 
   // Several children visiting from the same family/household (siblings on a
   // shared sleepover, a hub carer's own kids) used to each get their own
@@ -1816,6 +1862,7 @@ export default function AboutScreen() {
               siblings={siblingsFor(c.id)}
               onShareSection={shareSectionWithSibling}
               householdSsw={{ name: household.ssw_name, phone: household.ssw_phone, email: household.ssw_email, edt: household.edt }}
+              householdCarer={householdCarerFor}
             />
           </div>
           {closeButton()}
@@ -2036,6 +2083,7 @@ export default function AboutScreen() {
               siblings={siblingsFor(c.id)}
               onShareSection={shareSectionWithSibling}
               householdSsw={{ name: household.ssw_name, phone: household.ssw_phone, email: household.ssw_email, edt: household.edt }}
+              householdCarer={c.lives_here === true ? householdCarerFor : undefined}
             />
           </div>
           {closeButton()}
