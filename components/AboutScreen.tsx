@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { ageOf, today } from "@/lib/domain";
+import { ageOf, firstName, today } from "@/lib/domain";
 import { BASICS_SECTIONS, BasicsSection, RepeatableSubfield } from "@/lib/basics";
 import { Child, GENDER_OPTIONS, LIVES_CATS, livesHereOf, MB_OPTIONS, NON_PLACEMENT_CATEGORIES, VISITS_CATS } from "@/lib/types";
 import { personColor } from "@/lib/calendarHelpers";
@@ -24,12 +24,14 @@ const VISITOR_ROLES = [
   "Other",
 ];
 
-function firstName(name: string): string {
-  return (name || "").trim().split(/\s+/)[0] || "?";
-}
-
 function fmtDate(iso: string): string {
   return iso ? new Date(iso + "T12:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+}
+
+// Same derivation as HubDirectoryAdmin's own hubLabel -- always computed
+// from the hub carer's name, never stored, so the two can never disagree.
+function hubLabel(carerName: string): string {
+  return carerName.trim() ? `${firstName(carerName)}'s hub` : "(unnamed hub)";
 }
 
 // Colour by what someone actually IS, not a per-name hash -- so at a glance
@@ -577,6 +579,7 @@ export default function AboutScreen() {
   // broken add button.
   const [addNotice, setAddNotice] = useState("");
   const [householdChildren, setHouseholdChildren] = useState<HouseholdChild[]>([]);
+  const [hubDirectory, setHubDirectory] = useState<{ id: string; carer_name: string; phone: string; email: string }[]>([]);
   const [newHouseholdChild, setNewHouseholdChild] = useState({ name: "", born: "", category: "", notes: "", gender: "" });
   const [visitors, setVisitors] = useState<Visitor[]>([]);
   const [newVisitor, setNewVisitor] = useState<{ name: string; phone: string; email: string; role: string; gender: string; linked_visitor_id: string | null }>({
@@ -634,12 +637,13 @@ export default function AboutScreen() {
   }
 
   async function load() {
-    const [childrenRes, householdChildrenRes, householdRes, adultsRes, visitorsRes] = await Promise.all([
+    const [childrenRes, householdChildrenRes, householdRes, adultsRes, visitorsRes, hubDirectoryRes] = await Promise.all([
       fetch("/api/children").then((r) => r.json()),
       fetch("/api/household-children").then((r) => r.json()),
       fetch("/api/household").then((r) => r.json()),
       fetch("/api/household-adults").then((r) => r.json()),
       fetch("/api/household-visitors").then((r) => r.json()),
+      fetch("/api/hub-directory").then((r) => r.json()),
     ]);
     setHouseholdChildren((householdChildrenRes.children as HouseholdChild[]) ?? []);
     setVisitors((visitorsRes.visitors as Visitor[]) ?? []);
@@ -650,6 +654,7 @@ export default function AboutScreen() {
     setBasics(b);
     if (householdRes.household) setHousehold(householdRes.household as Household);
     setAdults((adultsRes.adults as Adult[]) ?? []);
+    setHubDirectory((hubDirectoryRes.hubs as { id: string; carer_name: string; phone: string; email: string }[]) ?? []);
   }
 
   useEffect(() => {
@@ -1398,6 +1403,27 @@ export default function AboutScreen() {
             <option value="1">Yes</option>
             <option value="0">No</option>
           </select>
+          {household.is_mockingbird && hubDirectory.length > 0 && (
+            <>
+              <p className="hint" style={{ marginTop: 8 }}>Which hub?</p>
+              <select
+                value=""
+                onChange={(e) => {
+                  const hub = hubDirectory.find((h) => h.id === e.target.value);
+                  e.target.value = "";
+                  if (!hub) return;
+                  saveHousehold({ hub_leader_name: hub.carer_name, hub_leader_phone: hub.phone, hub_leader_email: hub.email });
+                }}
+              >
+                <option value="">Pick a hub to fill in the details below…</option>
+                {hubDirectory.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {hubLabel(h.carer_name)}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
           {household.is_mockingbird && (
             <div className="row" style={{ marginTop: 8 }}>
               <input

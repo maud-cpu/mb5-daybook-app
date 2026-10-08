@@ -6,6 +6,7 @@ import { BANDS, Rates } from "@/lib/types";
 import { AMAZON_ASSOCIATES_TAG } from "@/lib/amazon";
 import NewsAdmin from "@/components/NewsAdmin";
 import HubCalendarAdmin from "@/components/HubCalendarAdmin";
+import HubDirectoryAdmin from "@/components/HubDirectoryAdmin";
 import ResourceRecommendationsAdmin from "@/components/ResourceRecommendationsAdmin";
 
 type RotaRow = { date: string; name: string; phone: string };
@@ -631,6 +632,7 @@ export default function AdminSharedContent() {
     <div style={{ marginTop: 12 }}>
       <NewsAdmin showToast={showToast} />
       <HubCalendarAdmin showToast={showToast} />
+      <HubDirectoryAdmin showToast={showToast} />
       <ResourceRecommendationsAdmin showToast={showToast} />
       <div className="card">
         <h3>Rates — {rates.label}</h3>

@@ -4,6 +4,14 @@ export function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** Just the first word of a full name -- used wherever a short, friendly
+ * label beats a full name (a wheel spoke, a hub's own auto-derived name
+ * e.g. "Maud's hub" from carer_name "Maud Example"). "?" for an empty name
+ * rather than an empty label with nothing to tap. */
+export function firstName(name: string): string {
+  return (name || "").trim().split(/\s+/)[0] || "?";
+}
+
 /**
  * The model reliably transcribes a spoken/written time but occasionally
  * miscalculates the 12-to-24-hour conversion itself (caught live: "3pm til
