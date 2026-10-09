@@ -125,3 +125,29 @@ export async function removeCarer(userId: string) {
   revalidatePath("/admin/carers");
   return { success: true };
 }
+
+// "Everyone with a login" only ever shows co-carers in the admin's own
+// household -- an account deliberately set up as a SEPARATE household (a
+// different foster family, via "Add a carer" -> Separate household) never
+// shows there again, even though this same admin created it. Looking it up
+// by email is the only way back to it: to check whether they've actually
+// signed in, reset a forgotten password, or fix whether they're sharing
+// this admin's own news/training/rota the way they were meant to.
+export async function lookupCarer(email: string) {
+  const { supabase } = await requireAdmin();
+  const { data, error } = await supabase.rpc("admin_find_account", { lookup_email: email.trim() });
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: "No account with that email." };
+  return { success: true, carer: data[0] };
+}
+
+// Repoints the target onto the CALLER's own news/training catalogue/rota --
+// never their household_owner_id, so a separate household's own children/
+// diary/calendar stay exactly as separate as they were meant to be.
+export async function shareContentWith(userId: string) {
+  const { supabase } = await requireAdmin();
+  const { error } = await supabase.rpc("admin_share_content_with", { target_user_id: userId });
+  if (error) return { error: error.message };
+  revalidatePath("/admin/carers");
+  return { success: true };
+}

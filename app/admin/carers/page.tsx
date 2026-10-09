@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/auth";
 import AddCarerForm from "@/components/AddCarerForm";
 import CarerList from "@/components/CarerList";
+import CarerLookup from "@/components/CarerLookup";
 
 export default async function CarersPage() {
   const { supabase } = await requireAdmin();
@@ -14,6 +15,7 @@ export default async function CarersPage() {
       ) : (
         <CarerList carers={data ?? []} />
       )}
+      <CarerLookup />
     </div>
   );
 }
