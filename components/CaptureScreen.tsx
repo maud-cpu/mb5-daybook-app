@@ -42,6 +42,10 @@ function greeting(): string {
   return "Good evening";
 }
 
+function fmtShort(iso: string): string {
+  return new Date(iso + "T12:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
 // A child whose own Mockingbird hub is "mb5" (this household's own) has
 // their hub_carer_* fields auto-filled from the household's own hub leader
 // (see mockingbirdHubPatch in AboutScreen.tsx) -- so the same person can
@@ -583,6 +587,36 @@ export default function CaptureScreen() {
     showToast(`Saved to ${childNames.join(" & ")}'s Clubs`);
   }
 
+  // One row per enrolled child (Ruby's and Rubynn's "Dinky Doodler Art" are
+  // two separate child_clubs rows) -- each gets its own skip_dates merged
+  // with whatever's already there (fetched fresh rather than trusted from
+  // whenever this list last loaded), so pausing one club never wipes out an
+  // earlier, unrelated pause already sitting on that same row.
+  async function saveClubPause(i: number) {
+    const entries = pending[i].club_pause;
+    if (!entries?.length) return;
+    const { clubs } = await fetch("/api/child-clubs").then((r) => r.json());
+    const skipDatesById = new Map(((clubs as { id: string; skip_dates?: string[] }[]) ?? []).map((c) => [c.id, c.skip_dates ?? []]));
+    const results = await Promise.all(
+      entries.map(async (e) => {
+        const merged = [...new Set([...(skipDatesById.get(e.clubId) ?? []), ...e.dates])].sort();
+        const res = await fetch("/api/child-clubs", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: e.clubId, patch: { skip_dates: merged } }),
+        });
+        return res.ok;
+      }),
+    );
+    if (results.some((ok) => !ok)) {
+      showToast("Couldn't update the calendar for some of that — try again");
+      return;
+    }
+    updatePending(i, { club_pause: undefined });
+    const childNames = [...new Set(entries.map((e) => e.childName))].join(" & ");
+    showToast(`Updated the calendar — ${entries[0].clubName} paused for ${childNames}`);
+  }
+
   // Appends anything not already there, comma-separated, in the same
   // free-text Likes/Dislikes fields shown on About us -- not a merge-by-name
   // list like teacher contacts, since a food note has no natural key beyond
@@ -960,6 +994,7 @@ export default function CaptureScreen() {
         const saNeeds = schoolAdminNeeds(p);
         if (saNeeds.length) jobs.push(saveSchoolAdmin(idx, saNeeds));
         if (p.hub_update) jobs.push(saveHubUpdate(idx));
+        if (p.club_pause?.length) jobs.push(saveClubPause(idx));
         return jobs;
       }),
     );
@@ -1664,6 +1699,26 @@ export default function CaptureScreen() {
                       </button>{" "}
                       <button className="chip" onClick={() => updatePending(i, { club: null })}>
                         Don&apos;t save
+                      </button>
+                    </div>
+                  );
+                })()}
+              {p.club_pause &&
+                p.club_pause.length > 0 &&
+                (() => {
+                  const names = [...new Set(p.club_pause.map((e) => e.childName))];
+                  const dates = [...new Set(p.club_pause.flatMap((e) => e.dates))].sort();
+                  return (
+                    <div className="note">
+                      <div style={{ marginBottom: 6 }}>
+                        🧩 Pause {p.club_pause[0].clubName} for {names.join(" & ")} — {dates.map(fmtShort).join(", ")} (this
+                        updates the calendar automatically with Save all):
+                      </div>
+                      <button className="chip" onClick={() => saveClubPause(i)}>
+                        Update the calendar now
+                      </button>{" "}
+                      <button className="chip" onClick={() => updatePending(i, { club_pause: undefined })}>
+                        Don&apos;t update
                       </button>
                     </div>
                   );

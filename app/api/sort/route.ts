@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { backstopFlag, FLAG_TRAINING, namesInText } from "@/lib/keywordFlags";
 import { parseClockRange, today } from "@/lib/domain";
+import { nextOccurrences } from "@/lib/calendarHelpers";
 import { BUCKETS, DAYCARE_REASONS, FlagKey, HUB_SUPPORT_TYPE_KEYS, PendingItem, REMINDER_CATEGORIES } from "@/lib/types";
 import { aiErrorMessage } from "@/lib/aiErrors";
 
@@ -131,6 +132,18 @@ const SortItemSchema = z.object({
     })
     .nullable()
     .describe("A child's regularly recurring extracurricular club/activity, only when the text describes it as a standing weekly thing"),
+  // Two flat, non-nullable fields rather than a nullable object -- same
+  // schema-size reasoning as schoolAdmin/hubCarerNames above (this schema
+  // is already near Anthropic's 16-nullable-field cap). Resolved against
+  // the actual child_clubs rows server-side, never computed by the model
+  // itself -- it only ever needs to transcribe which club and how many
+  // weeks/sessions, not work out real calendar dates.
+  clubPauseName: z.string().describe(
+    "Set ONLY when the text says an EXISTING club/activity -- one actually listed in \"Clubs on file\" below -- is off, cancelled, paused, or not happening for a number of weeks/sessions (e.g. \"no club for 3 weeks, half term\", \"gymnastics is off this week\") -- NEVER for describing a brand-new club someone is just starting (use \"club\" above for that). Copy the name exactly as given in \"Clubs on file\" below, not as the carer happened to phrase it, so it matches. Empty string otherwise.",
+  ),
+  clubPauseWeeks: z
+    .number()
+    .describe('Only set (a whole number, e.g. 3) when clubPauseName is non-empty: how many weeks/sessions it said are being skipped. A single "off this week"/one-off cancellation counts as 1. 0 when clubPauseName is empty.'),
   foodNote: z
     .object({
       likes: z.string().describe("Comma-separated foods/drinks the child likes, or empty string"),
@@ -298,10 +311,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No text given" }, { status: 400 });
   }
 
-  const [{ data: children }, { data: householdChildren }, { data: hubVisitorRows }, { data: upcomingReminderRows }, { data: recentRecordRows }] =
-    await Promise.all([
-      supabase.from("children").select("name, lives_here, linked_visitor_id").is("deleted_at", null),
-      supabase.from("household_children").select("name"),
+  const [
+    { data: children },
+    { data: householdChildren },
+    { data: hubVisitorRows },
+    { data: upcomingReminderRows },
+    { data: recentRecordRows },
+    { data: clubRows },
+  ] = await Promise.all([
+      supabase.from("children").select("id, name, lives_here, linked_visitor_id").is("deleted_at", null),
+      supabase.from("household_children").select("id, name"),
       supabase.from("household_visitors").select("id, name"),
       // A later note often refers back to something already on the calendar
       // by name only ("I'm also going to Bough Beech") without restating its
@@ -325,6 +344,11 @@ export async function POST(req: NextRequest) {
         .in("bucket", ["diary", "supervision", "sw", "scratch", "incident"])
         .order("date", { ascending: false })
         .limit(25),
+      // So a note about an EXISTING club by name ("No Dinky Doodler Art for
+      // 3 weeks, half term") can be recognised and resolved against the
+      // actual child_clubs rows for it -- which children are enrolled, and
+      // its weekday, to turn "3 weeks" into the real dates server-side.
+      supabase.from("child_clubs").select("id, child_id, club_name, weekday, skip_dates"),
     ]);
   const [{ data: allCourseRows }, { data: completedRows }] = await Promise.all([
     supabase.from("shared_training_catalog").select("title, description").eq("archived", false),
@@ -374,6 +398,32 @@ export async function POST(req: NextRequest) {
       .map((r) => `${r.date} · ${BUCKETS[r.bucket as keyof typeof BUCKETS] || r.bucket}${r.kids?.length ? " · " + r.kids.join(", ") : ""} — ${r.text}`)
       .join("\n") || "(none)";
 
+  // Every known child's own name, by id, across both tables -- used below to
+  // say which children a club on file actually belongs to.
+  const childNameById: Record<string, string> = {};
+  [...(children ?? []), ...(householdChildren ?? [])].forEach((c) => (childNameById[c.id as string] = c.name as string));
+  const WEEKDAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  type ClubRow = { id: string; child_id: string; club_name: string; weekday: number; skip_dates: string[] | null };
+  const allClubRows = (clubRows ?? []) as ClubRow[];
+  // Grouped by name only (not weekday/time like the calendar's own grouping
+  // -- the carer refers to a club by its name alone, "Dinky Doodler Art",
+  // never caring which exact weekday slot each enrolled child happens to be
+  // in), purely so the context block below lists each club once with every
+  // child enrolled, instead of once per child.
+  const clubsByName = new Map<string, { name: string; weekday: number; childNames: string[] }>();
+  allClubRows.forEach((c) => {
+    const childName = childNameById[c.child_id];
+    if (!childName || !c.club_name?.trim()) return;
+    const key = c.club_name.trim().toLowerCase();
+    const existing = clubsByName.get(key);
+    if (existing) existing.childNames.push(childName);
+    else clubsByName.set(key, { name: c.club_name.trim(), weekday: c.weekday, childNames: [childName] });
+  });
+  const clubsOnFileBlock =
+    [...clubsByName.values()]
+      .map((c) => `${c.name} (${WEEKDAY_NAMES[c.weekday] ?? "?"}s) — ${c.childNames.join(", ")}`)
+      .join("\n") || "(none)";
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     const backstop = backstopFlag(text);
@@ -413,6 +463,9 @@ Also set "flag" on any item that needs a follow-up: one of ${FLAG_KEYS.join(", "
 Separately, consider whether any courses/resources from this list are relevant to what's actually going on in the text -- not just a formal skills gap, but anything whose own title or description addresses a topic, situation, or feeling that's genuinely present in the note, whether it's about the CHILD or the carer themselves. A plain diary observation still counts: e.g. a note that a child finds a specific occasion or situation stressful (a birthday, Christmas, a transition, contact) matches a resource titled about managing exactly that for that kind of family, even though the note itself is only describing the child's day, not asking for help. List (title, with what it covers in brackets where known): ${courses.join(" | ")}. Only ever pick a title that appears verbatim in this list -- never suggest a book, article, video or course that isn't in it, even if you recognise a similarly-named real one; if nothing in the list actually fits, return an empty list rather than inventing something. Set "training" to a list of every one plausibly useful (often none, sometimes more than one), each as {"course":"<the exact title only, without the bracketed description>","why":"<one short clause, specific to why THIS course over the others>"}; empty list if none.
 Also separately: if the text identifies someone as a specific child's class teacher, class rep, or school office contact (e.g. "meeting with Miss Framp, she is Ruby's teacher", "her teacher, Mrs Smith"), set "schoolContact" to {"name":"<their name>","contact":"<email/phone if given, else empty string>"} tied to whichever known children that item is about, so it can be offered as a save to their records -- a name alone is enough, an email/phone is a bonus, not required. Only when the text actually establishes that relationship, not just any name mentioned near a school topic. Otherwise null.
 Also separately: if the text describes a child doing a club or extracurricular activity as a standing/ongoing thing (e.g. "which she does every Monday from 5.40 to 6.20pm", "he goes swimming on Wednesdays after school", "after school club for Ruby is called Camp Glide", not a one-off outing), set "club" to {"name":"<club/activity name>","weekday":"<the REGULAR/standing day it's on, or \"Not specified\" if the text doesn't say which day>","timeFrom":"HH:MM or empty string","timeTo":"HH:MM or empty string","provider":"<who runs it and/or the venue, if given, else empty string>","contactInfo":"<a phone number and/or email given for the contact, if any, else empty string>","cost":"<what it costs, if given, else empty string>","website":"<a website/booking link, if given, else empty string>","notes":"<any other useful detail given -- what to bring, term dates, etc, else empty string>"} tied to whichever known children it's for, so it can be offered as a save to their standing clubs list -- fill in every one of those sub-fields the text actually gives, not just name/day/time, since this is meant to be a complete enough record for another carer to pick up from cold. Never guess or invent a weekday that wasn't actually said -- use "Not specified" rather than picking one, the carer can fill it in later. Otherwise null. A one-off event on a specific date, INCLUDING a one-off exception or change to a regular schedule (e.g. "just this week it's moved to Saturday instead"), is a "reminder" (with "reminderCategory" "club"), not a "club" -- set that reminder for the actual one-off date/time in addition to recording the regular "club" info, since the calendar needs to reflect the exception.
+Clubs already on file (name, weekday, who's enrolled):
+${clubsOnFileBlock}
+If the text says one of THESE EXISTING clubs is off/cancelled/paused/not on for a number of weeks or sessions (e.g. "No Dinky Doodler Art for the next 3 weeks as it's half term", "gymnastics is off this week"), set "clubPauseName" to that club's name exactly as listed above and "clubPauseWeeks" to how many weeks/sessions (a one-off "off this week" is 1) -- the actual dates are worked out separately, you only need to identify which club and how many. Also add every child listed as enrolled in that club above to this item's "kids", even though the text itself may not name them -- the club itself identifies who it's for. Never set this for a brand-new club (use "club" above for that), and never invent a club name that isn't actually in the list above.
 Also separately: if the text says a specific named child likes or dislikes a particular food or drink (e.g. "Rubynn doesn't like carrots", "Ruby loves pasta"), set "foodNote" to {"likes":"<comma-separated foods, or empty string>","dislikes":"<comma-separated foods, or empty string>"} tied to whichever known children it's about, so it can be offered as a save to their Food box. Only for an actual named food/drink, not a vague statement like "fussy eater" with nothing specific said. Otherwise null.
 Also separately: if the text says the CARER THEMSELVES has attended, done, or completed a specific named training session or course (e.g. "did PDA training today", "completed the safer caring refresher", "PDA training at Arthur and Henry's school, 2-3pm") -- something already done or being done today, not a course being suggested for later -- set "completedTraining" to {"title":"<a short clear title, tidied from their own wording>","date":"<the date they did it, or today's date if not stated>"}, so it can be logged on their training record even when it isn't one of the courses listed above. Otherwise null.
 Also separately: if the text gives practical school ADMIN info -- how to pay for school lunches or other school payments (e.g. "ParentPay is the app for school dinner money and other payments", with a link if given), a homework app/portal name or link, a class rep's name/contact, a PTA/friends-of-school group's name/contact/Facebook link, the school office's phone/email, or another useful school-related link (payment portal, newsletter, booking system, uniform shop, etc) -- set "schoolAdmin" to a short, tidied-up summary of exactly what it says, so it can be offered as a save to the relevant children's School admin notes. This is about admin/logistics, not the child's own schooling, a teacher (see "schoolContact" above), or a one-off event. Empty string if nothing like that is in the text.
@@ -460,7 +513,26 @@ Split into one item per separate thing, under "items".`;
 
       const child = matchChild(names, rawChild);
       const others = rawOthers.map((o) => matchChild(names, o));
-      const kids = [...new Set([child, ...others].filter(Boolean))];
+      // Resolved here, deterministically, rather than trusting the model's
+      // own "kids" to have included everyone enrolled -- a club's actual
+      // membership (child_clubs) is exactly the kind of lookup code can do
+      // reliably and the model sometimes doesn't, same reasoning as
+      // stayEndDate/futureDaycareDate being forced below rather than relied
+      // on. Matches by name first, falling back to a loose substring match
+      // either way so a slightly different phrasing of the club's name
+      // still resolves (e.g. "Dinky Doodler" said for "Dinky Doodler Art").
+      const clubPauseName = typeof p.clubPauseName === "string" ? p.clubPauseName.trim() : "";
+      const clubPauseWeeks =
+        clubPauseName && typeof p.clubPauseWeeks === "number" && p.clubPauseWeeks > 0 ? Math.round(p.clubPauseWeeks) : 0;
+      const matchedClubRows = clubPauseName
+        ? allClubRows.filter((c) => {
+            const cn = c.club_name.trim().toLowerCase();
+            const pn = clubPauseName.toLowerCase();
+            return !!cn && (cn === pn || cn.includes(pn) || pn.includes(cn));
+          })
+        : [];
+      const clubPauseChildNames = [...new Set(matchedClubRows.map((c) => childNameById[c.child_id]).filter((n): n is string => !!n))];
+      const kids = [...new Set([child, ...others, ...clubPauseChildNames].filter(Boolean))];
       const unmatched = rawNames.filter((n) => !matchChild(names, n));
       const { from: timeFrom, to: timeTo } = parseClockRange(p.from, p.to);
       let flag: string = p.flag && (FLAG_KEYS as readonly string[]).includes(p.flag) ? p.flag : "";
@@ -568,6 +640,15 @@ Split into one item per separate thing, under "items".`;
         reminder_time_to: flag === "reminder" && timeTo ? timeTo : null,
         training_note: trainingNote,
         unmatched,
+        club_pause: clubPauseWeeks
+          ? matchedClubRows.map((c) => ({
+              clubId: c.id,
+              childId: c.child_id,
+              childName: childNameById[c.child_id] || "",
+              clubName: c.club_name,
+              dates: nextOccurrences(c.weekday, today(), clubPauseWeeks),
+            }))
+          : undefined,
         school_contact: p.schoolContact?.name ? { name: p.schoolContact.name, contact: p.schoolContact.contact || "" } : null,
         club: p.club?.name
           ? {

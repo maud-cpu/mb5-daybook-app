@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { nextOccurrences } from "@/lib/calendarHelpers";
+import { today } from "@/lib/domain";
 
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -16,18 +18,26 @@ type Club = {
   contact_name: string;
   contact_info: string;
   notes: string;
+  skip_dates: string[];
 };
+
+function fmtShort(iso: string): string {
+  return new Date(iso + "T12:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
 
 export default function ChildClubs({ childId }: { childId: string }) {
   const [clubs, setClubs] = useState<Club[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
+  const [skipWeeksDraft, setSkipWeeksDraft] = useState<Record<string, string>>({});
 
   async function load() {
     setLoaded(false);
     const { clubs: allClubs, error: err } = await fetch("/api/child-clubs").then((r) => r.json());
     if (err) setError(err);
-    setClubs(((allClubs as Club[]) ?? []).filter((c) => c.child_id === childId));
+    setClubs(
+      ((allClubs as Club[]) ?? []).filter((c) => c.child_id === childId).map((c) => ({ ...c, skip_dates: c.skip_dates ?? [] })),
+    );
     setLoaded(true);
   }
 
@@ -75,7 +85,23 @@ export default function ChildClubs({ childId }: { childId: string }) {
     }
   }
 
+  // Appended to whatever's already there (deduped), with anything already
+  // past dropped -- so this list doesn't just grow forever with old half-
+  // terms nobody will ever look at again.
+  function skipNextOccurrences(club: Club, weeks: number) {
+    if (!weeks || weeks < 1) return;
+    const upcoming = nextOccurrences(club.weekday, today(), weeks);
+    const merged = [...new Set([...club.skip_dates.filter((d) => d >= today()), ...upcoming])].sort();
+    updateClub(club.id, { skip_dates: merged });
+  }
+
+  function unskipDate(club: Club, date: string) {
+    updateClub(club.id, { skip_dates: club.skip_dates.filter((d) => d !== date) });
+  }
+
   if (!loaded) return <p className="hint">Loading…</p>;
+
+  const todayIso = today();
 
   return (
     <div style={{ marginTop: 8 }}>
@@ -142,6 +168,44 @@ export default function ChildClubs({ childId }: { childId: string }) {
             defaultValue={c.notes}
             onBlur={(e) => updateClub(c.id, { notes: e.target.value })}
           />
+          <div className="row" style={{ marginTop: 6, alignItems: "center" }}>
+            <span className="hint" style={{ flex: "0 0 auto" }}>
+              Skip the next
+            </span>
+            <input
+              type="number"
+              min={1}
+              style={{ flex: "0 0 60px" }}
+              placeholder="3"
+              value={skipWeeksDraft[c.id] ?? ""}
+              onChange={(e) => setSkipWeeksDraft((prev) => ({ ...prev, [c.id]: e.target.value }))}
+            />
+            <span className="hint" style={{ flex: "0 0 auto" }}>
+              session{Number(skipWeeksDraft[c.id]) === 1 ? "" : "s"} (e.g. half term)
+            </span>
+            <button
+              className="chip"
+              style={{ flex: "0 0 auto" }}
+              onClick={() => {
+                skipNextOccurrences(c, Number(skipWeeksDraft[c.id]));
+                setSkipWeeksDraft((prev) => ({ ...prev, [c.id]: "" }));
+              }}
+            >
+              Apply
+            </button>
+          </div>
+          {c.skip_dates.filter((d) => d >= todayIso).length > 0 && (
+            <div className="chips" style={{ marginTop: 6 }}>
+              {c.skip_dates
+                .filter((d) => d >= todayIso)
+                .sort()
+                .map((d) => (
+                  <button key={d} className="chip" title="Tap to undo -- this date will show again" onClick={() => unskipDate(c, d)}>
+                    Off {fmtShort(d)} ✕
+                  </button>
+                ))}
+            </div>
+          )}
         </div>
       ))}
       <button className="chip add" onClick={addClub}>

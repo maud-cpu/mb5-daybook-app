@@ -47,6 +47,21 @@ export function mondayStartWeekday(dateIso: string): number {
   return (jsDay + 6) % 7;
 }
 
+// The next `count` dates matching `weekday` (Monday-start, same convention
+// as a club's own weekday field), starting from and including `fromDate`
+// itself if that's a match -- used to turn "skip the next 3 occurrences"
+// into actual dates, rather than storing a vague "paused for N weeks" that
+// would need re-resolving every time it's read.
+export function nextOccurrences(weekday: number, fromDate: string, count: number): string[] {
+  const out: string[] = [];
+  let d = fromDate;
+  while (out.length < count) {
+    if (mondayStartWeekday(d) === weekday) out.push(d);
+    d = addDays(d, 1);
+  }
+  return out;
+}
+
 export function fmtClubTime(from: string, to: string): string {
   const f = (t: string) => {
     if (!t) return "";
@@ -69,11 +84,17 @@ export function clubText(clubName: string, timeFrom: string, timeTo: string): st
 // name/day/time. Without this, every calendar view shows that club twice on
 // the same day -- group the rows for one occurrence into one entry with all
 // the children's names, instead.
+//
+// skip_dates (see 0093) is unioned across every row in the group rather
+// than taken from whichever row happened to be first -- a half-term pause
+// applied to only one sibling's own row (a partial save, or one child
+// paused and not the other) would otherwise still leave the shared
+// calendar entry showing for everyone.
 export function groupClubsByOccurrence<
-  T extends { child_id: string; club_name: string; weekday: number; time_from: string; time_to: string },
->(rows: T[], childNameById: Record<string, string>): (T & { childNames: string[] })[] {
+  T extends { child_id: string; club_name: string; weekday: number; time_from: string; time_to: string; skip_dates?: string[] },
+>(rows: T[], childNameById: Record<string, string>): (T & { childNames: string[]; skipDates: Set<string> })[] {
   const order: string[] = [];
-  const groups = new Map<string, T & { childNames: string[] }>();
+  const groups = new Map<string, T & { childNames: string[]; skipDates: Set<string> }>();
   for (const row of rows) {
     const childName = childNameById[row.child_id];
     if (!childName || !row.club_name) continue;
@@ -81,8 +102,9 @@ export function groupClubsByOccurrence<
     const existing = groups.get(key);
     if (existing) {
       if (!existing.childNames.includes(childName)) existing.childNames.push(childName);
+      (row.skip_dates ?? []).forEach((d) => existing.skipDates.add(d));
     } else {
-      groups.set(key, { ...row, childNames: [childName] });
+      groups.set(key, { ...row, childNames: [childName], skipDates: new Set(row.skip_dates ?? []) });
       order.push(key);
     }
   }

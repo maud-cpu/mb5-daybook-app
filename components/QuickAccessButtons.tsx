@@ -183,9 +183,9 @@ export default function QuickAccessButtons() {
     ((kids as { id: string; name: string }[] | null) ?? []).forEach((c) => (childNameById[c.id] = c.name));
     ((hhKids as { id: string; name: string }[] | null) ?? []).forEach((c) => (childNameById[c.id] = c.name));
     const todayWeekday = mondayStartWeekday(today());
-    const clubRows = (clubs as { id: string; child_id: string; club_name: string; weekday: number; time_from: string; time_to: string }[] | null) ?? [];
+    const clubRows = (clubs as { id: string; child_id: string; club_name: string; weekday: number; time_from: string; time_to: string; skip_dates?: string[] }[] | null) ?? [];
     const clubItems: Reminder[] = groupClubsByOccurrence(clubRows, childNameById)
-      .filter((c) => c.weekday === todayWeekday)
+      .filter((c) => c.weekday === todayWeekday && !c.skipDates.has(today()))
       .map((c) => ({
         id: `club:${c.id}`,
         text: clubText(c.club_name, c.time_from, c.time_to),

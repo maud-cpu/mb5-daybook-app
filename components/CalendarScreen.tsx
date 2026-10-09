@@ -213,12 +213,14 @@ export default function CalendarScreen() {
     ((kids as { id: string; name: string }[] | null) ?? []).forEach((c) => (childNameById[c.id] = c.name));
     ((hhKids as { id: string; name: string }[] | null) ?? []).forEach((c) => (childNameById[c.id] = c.name));
     const clubReminders: Reminder[] = [];
-    const clubRows = (clubs ?? []) as { id: string; child_id: string; club_name: string; weekday: number; time_from: string; time_to: string }[];
+    const clubRows = (clubs ?? []) as { id: string; child_id: string; club_name: string; weekday: number; time_from: string; time_to: string; skip_dates?: string[] }[];
     groupClubsByOccurrence(clubRows, childNameById).forEach((c) => {
       const text = clubText(c.club_name, c.time_from, c.time_to);
       for (let d = 1; d <= daysInMonth(year, month); d++) {
         const iso = isoOf(year, month, d);
-        if (mondayStartWeekday(iso) === c.weekday) clubReminders.push(clubReminder(c.id, text, iso, c.childNames, c.time_from, c.time_to));
+        if (mondayStartWeekday(iso) === c.weekday && !c.skipDates.has(iso)) {
+          clubReminders.push(clubReminder(c.id, text, iso, c.childNames, c.time_from, c.time_to));
+        }
       }
     });
 

@@ -762,6 +762,12 @@ export type PendingItem = Partial<EntryRecord> & {
   } | null;
   /** A food like/dislike the AI spotted in the text, offered as a one-click save to the tagged child's Food box. */
   food_note?: { likes: string; dislikes: string } | null;
+  /** The text said an EXISTING club (not a new one) is off/paused for a
+   * number of sessions (e.g. half term) -- resolved server-side (never by
+   * the model) against every child_clubs row matching that name, one entry
+   * per enrolled child, with the actual dates to skip already computed.
+   * Offered as a one-click save that updates each row's skip_dates. */
+  club_pause?: { clubId: string; childId: string; childName: string; clubName: string; dates: string[] }[];
   /** Training/CPD the carer said they themselves attended or completed, saved to their training record even when it isn't in the shared catalogue. */
   completed_training?: { title: string; date: string } | null;
   /** A short summary of practical school-admin info (lunch payment app, homework portal, PTA, etc) the AI spotted in the text, offered as a one-click save to the tagged child's School admin notes. */

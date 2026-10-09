@@ -115,12 +115,12 @@ export default function MiniCalendarCard() {
         record_ids: r.record_ids ?? [],
       });
     });
-    const clubRows = (clubs ?? []) as { id: string; child_id: string; club_name: string; weekday: number; time_from: string; time_to: string }[];
+    const clubRows = (clubs ?? []) as { id: string; child_id: string; club_name: string; weekday: number; time_from: string; time_to: string; skip_dates?: string[] }[];
     groupClubsByOccurrence(clubRows, childNameById).forEach((c) => {
       const base = clubText(c.club_name, c.time_from, c.time_to);
       const text = c.childNames.length > 1 ? `${base} (${c.childNames.join(" & ")})` : base;
       days.forEach((iso) => {
-        if (mondayStartWeekday(iso) === c.weekday) {
+        if (mondayStartWeekday(iso) === c.weekday && !c.skipDates.has(iso)) {
           (map[iso] ||= []).push({
             id: null,
             text,
