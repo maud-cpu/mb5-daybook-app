@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { parseClockTime, today } from "@/lib/domain";
+import { parseClockRange, today } from "@/lib/domain";
 import { REMINDER_CATEGORIES } from "@/lib/types";
 import { aiErrorMessage } from "@/lib/aiErrors";
 
@@ -89,18 +89,21 @@ Never invent a date that isn't stated or clearly resolvable from context. If the
     });
     if (msg.stop_reason === "refusal") throw new Error("Couldn't read that");
     if (msg.stop_reason === "max_tokens") throw new Error("That was too long to read in one go");
-    const items = (msg.parsed_output?.items ?? []).map((it) => ({
-      text: it.text.trim(),
-      date: it.date,
-      category: it.category,
-      people: matchNames(names, it.people),
-      amount: it.amount,
-      repeat: it.repeat,
-      until: it.until,
-      url: it.url && /^https?:\/\/\S+$/i.test(it.url.trim()) ? it.url.trim() : null,
-      timeFrom: parseClockTime(it.timeFrom || "") || null,
-      timeTo: parseClockTime(it.timeTo || "") || null,
-    }));
+    const items = (msg.parsed_output?.items ?? []).map((it) => {
+      const { from: timeFrom, to: timeTo } = parseClockRange(it.timeFrom || "", it.timeTo || "");
+      return {
+        text: it.text.trim(),
+        date: it.date,
+        category: it.category,
+        people: matchNames(names, it.people),
+        amount: it.amount,
+        repeat: it.repeat,
+        until: it.until,
+        url: it.url && /^https?:\/\/\S+$/i.test(it.url.trim()) ? it.url.trim() : null,
+        timeFrom: timeFrom || null,
+        timeTo: timeTo || null,
+      };
+    });
     return NextResponse.json({ items });
   } catch (e) {
     return NextResponse.json(

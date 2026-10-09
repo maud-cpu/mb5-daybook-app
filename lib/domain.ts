@@ -12,6 +12,26 @@ export function firstName(name: string): string {
   return (name || "").trim().split(/\s+/)[0] || "?";
 }
 
+type ParsedClock = { hour: number; minute: string; meridiem: "am" | "pm" | undefined } | null;
+
+function parseClockParts(raw: string): ParsedClock {
+  const s = String(raw || "").trim().toLowerCase();
+  if (!s) return null;
+  const m = s.match(/^(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)?$/);
+  if (!m) return null;
+  const hour = Number(m[1]);
+  const minute = m[2] ?? "00";
+  if (hour > 23 || Number(minute) > 59) return null;
+  return { hour, minute, meridiem: m[3] as "am" | "pm" | undefined };
+}
+
+function clockPartsToString(parts: NonNullable<ParsedClock>): string {
+  let hour = parts.hour;
+  if (parts.meridiem === "pm" && hour < 12) hour += 12;
+  if (parts.meridiem === "am" && hour === 12) hour = 0;
+  return `${String(hour).padStart(2, "0")}:${parts.minute}`;
+}
+
 /**
  * The model reliably transcribes a spoken/written time but occasionally
  * miscalculates the 12-to-24-hour conversion itself (caught live: "3pm til
@@ -23,17 +43,34 @@ export function firstName(name: string): string {
  * parsing for a reminder/daycare time.
  */
 export function parseClockTime(raw: string): string {
-  const s = String(raw || "").trim().toLowerCase();
-  if (!s) return "";
-  const m = s.match(/^(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)?$/);
-  if (!m) return /^\d{2}:\d{2}$/.test(s) ? s : "";
-  let hour = Number(m[1]);
-  const minute = m[2] ?? "00";
-  const meridiem = m[3];
-  if (hour > 23 || Number(minute) > 59) return "";
-  if (meridiem === "pm" && hour < 12) hour += 12;
-  if (meridiem === "am" && hour === 12) hour = 0;
-  return `${String(hour).padStart(2, "0")}:${minute}`;
+  const s = String(raw || "").trim();
+  const parts = parseClockParts(s);
+  return parts ? clockPartsToString(parts) : /^\d{2}:\d{2}$/.test(s) ? s : "";
+}
+
+/**
+ * "6-7.30pm" said as a single range almost always means both ends share
+ * the one meridiem actually given -- a bare hour on just one side of a
+ * range isn't a separate, meridiem-less time, it's shorthand leaning on
+ * the other end's. Parsing "6" and "7.30pm" independently (the old
+ * behaviour, still what parseClockTime alone does) silently defaulted the
+ * bare side to AM, which is exactly how an evening event logged as
+ * "6-7.30pm" kept landing on the calendar as 6am-7.30pm instead of
+ * 6pm-7.30pm. Only infers across when exactly one side actually has no
+ * meridiem of its own -- two bare numbers ("3-4") or two explicit ones
+ * ("3am-4pm") are each left to mean exactly what they say.
+ */
+export function parseClockRange(fromRaw: string, toRaw: string): { from: string; to: string } {
+  const from = parseClockParts(fromRaw);
+  const to = parseClockParts(toRaw);
+  if (from && to) {
+    if (!from.meridiem && to.meridiem) from.meridiem = to.meridiem;
+    else if (!to.meridiem && from.meridiem) to.meridiem = from.meridiem;
+  }
+  return {
+    from: from ? clockPartsToString(from) : parseClockTime(fromRaw),
+    to: to ? clockPartsToString(to) : parseClockTime(toRaw),
+  };
 }
 
 export function ageOf(child: Pick<Child, "born">, on = new Date()): number | null {

@@ -4,7 +4,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { backstopFlag, FLAG_TRAINING, namesInText } from "@/lib/keywordFlags";
-import { parseClockTime, today } from "@/lib/domain";
+import { parseClockRange, today } from "@/lib/domain";
 import { BUCKETS, DAYCARE_REASONS, FlagKey, HUB_SUPPORT_TYPE_KEYS, PendingItem, REMINDER_CATEGORIES } from "@/lib/types";
 import { aiErrorMessage } from "@/lib/aiErrors";
 
@@ -73,7 +73,7 @@ const SortItemSchema = z.object({
   // Zod can validate directly, and the mapping below already treats an
   // empty/falsy string exactly like null everywhere it's read -- so this
   // frees up headroom for the object fields that actually need null.
-  // Transcribed as said, not converted -- see parseClockTime below for why.
+  // Transcribed as said, not converted -- see parseClockRange below for why.
   from: z.string().describe("The time exactly as the carer said it, e.g. \"3pm\", \"3:30pm\", \"15:00\", \"9am\", \"9.30\" -- do NOT convert 12-hour to 24-hour yourself, just transcribe it as closely as possible. Empty string if not given."),
   to: z.string().describe("Same as \"from\" above, for the end time."),
   reason: z.string().describe("empty string if not given"),
@@ -462,8 +462,7 @@ Split into one item per separate thing, under "items".`;
       const others = rawOthers.map((o) => matchChild(names, o));
       const kids = [...new Set([child, ...others].filter(Boolean))];
       const unmatched = rawNames.filter((n) => !matchChild(names, n));
-      const timeFrom = parseClockTime(p.from);
-      const timeTo = parseClockTime(p.to);
+      const { from: timeFrom, to: timeTo } = parseClockRange(p.from, p.to);
       let flag: string = p.flag && (FLAG_KEYS as readonly string[]).includes(p.flag) ? p.flag : "";
       let flagNote = p.flagNote || "";
       if (!flag) {
