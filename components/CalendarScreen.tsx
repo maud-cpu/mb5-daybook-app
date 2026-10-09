@@ -781,9 +781,19 @@ export default function CalendarScreen() {
                       ℹ️
                     </button>
                   )}
-                  <button className="chip" onClick={() => toggleDone(r)}>
-                    {r.done ? "Undo" : "Done"}
-                  </button>
+                  {/* A plain calendar/presence marker (a stay, a club
+                      session) has nothing to tick off -- shown only for
+                      something actionable, or to undo a past mistake if one
+                      somehow still got marked done. This is the Calendar
+                      page's own equivalent of needs_action already gating
+                      Up next: ticking "Done" here marks the SAME reminder
+                      done, which is also what removes a visiting child from
+                      today's presence/phone-list filters -- see 0090. */}
+                  {(r.needs_action || r.done) && (
+                    <button className="chip" onClick={() => toggleDone(r)}>
+                      {r.done ? "Undo" : "Done"}
+                    </button>
+                  )}
                 </div>
               </div>
             ),
