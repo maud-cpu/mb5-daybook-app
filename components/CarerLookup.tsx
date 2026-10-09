@@ -103,9 +103,10 @@ export default function CarerLookup() {
         the only way to check they&apos;ve signed in, reset a forgotten password, or fix whether they&apos;re seeing
         your news/training/rota, since they never show up in the list above.
       </p>
-      <form onSubmit={handleLookup} className="row">
+      <form onSubmit={handleLookup}>
         <input type="email" placeholder="their@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <button className="btn" style={{ flex: "0 0 auto" }} type="submit" disabled={busy || !email.trim()}>
+        <div style={{ height: 8 }} />
+        <button className="btn" type="submit" disabled={busy || !email.trim()}>
           {busy ? "Looking…" : "Find"}
         </button>
       </form>
