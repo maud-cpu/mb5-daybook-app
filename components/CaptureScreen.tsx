@@ -757,14 +757,16 @@ export default function CaptureScreen() {
     });
   }
 
-  // A multi-night day care stay (kind "daycare", overnight, stay_end_date
-  // set -- see lib/types.ts) is ONE expense row for the whole stay --
-  // "nights" on that row (set in saveAll's main rows builder) bills every
-  // night at once, not held back one row per elapsed night. All this adds
-  // is the calendar side: one reminder for every day of the stay except
-  // the last (which the normal save below already creates, dated the
-  // stay's END, as its own "...stay with us ends" reminder) -- so there's
-  // a visible "staying over" marker on every day in between too.
+  // Any stay/visit with a known end date (stay_end_date set -- see
+  // lib/types.ts), billable daycare or not, gets a calendar marker for
+  // every day of the stay except the last (which the normal save below
+  // already creates, dated the stay's END, as its own "...stay with us
+  // ends" reminder) -- so there's a visible "staying over" marker on every
+  // day in between too. Billing itself is unaffected: when kind IS "daycare"
+  // and overnight is true, "nights" on that record (set in saveAll's main
+  // rows builder) separately bills every night at once as one expense row,
+  // not held back one row per elapsed night -- a non-overnight item here
+  // never gets billed just because it has an end date.
   async function saveMultiNightStay(p: PendingItem, recordId: string | null): Promise<{ ok: boolean; error?: string }> {
     const start = p.date || today();
     const end = p.stay_end_date;

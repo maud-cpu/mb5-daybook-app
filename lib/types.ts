@@ -776,6 +776,6 @@ export type PendingItem = Partial<EntryRecord> & {
   hub_update?: { carer_names: string; support_type: string } | null;
   /** When flag is "reminder": a link in the text for where to actually act on it (RSVP, log in, pay, book). Empty string if none found. */
   reminder_url?: string;
-  /** Set when kind is "daycare", overnight is true, and the text gave a known end/return date later than this item's own `date` (the stay's start) -- e.g. "staying with us from 27 September until 14 October". Shown as one summary row rather than one per night; saving it (see CaptureScreen's saveMultiNightStay) backfills one expense row per elapsed night and a calendar entry for every day of the stay, including days still to come. Null/undefined for a single-night day care item. */
+  /** Set whenever the text gave a known end/return date for a stay/visit/placement, later than this item's own `date` (the stay's start) -- e.g. "staying with us from 27 September until 14 October" -- regardless of bucket/kind, so a plain diary note about a non-billable stay still gets calendar coverage. Shown as one summary row rather than one per night; saving it (see CaptureScreen's saveMultiNightStay) adds a calendar entry for every day of the stay, including days still to come, and -- only when kind is "daycare" and overnight is true -- also backfills one expense row per elapsed night. Null/undefined for a single-day/single-night item. */
   stay_end_date?: string | null;
 };

@@ -692,13 +692,18 @@ Split into one item per separate thing, under "items".`;
             }
           : null,
         // The schema can only ever describe ONE item per child/date -- so a
-        // multi-night day care stay with a known start AND end date (e.g.
-        // "staying with us from 27 September until 14 October") carries its
-        // end date through here rather than being expanded into several
-        // items. CaptureScreen reads this to show one summary row (not one
-        // per night) and, on save, builds every night's expense row plus a
-        // calendar entry for every day of the stay -- see saveMultiNightStay.
-        stay_end_date: itemKind === "daycare" && !!p.overnight && stayEndDate && stayEndDate > itemDate ? stayEndDate : null,
+        // multi-night stay with a known start AND end date (e.g. "staying
+        // with us from 27 September until 14 October") carries its end date
+        // through here rather than being expanded into several items.
+        // CaptureScreen reads this to show one summary row (not one per
+        // night) and, on save, builds a calendar entry for every day of the
+        // stay -- see saveMultiNightStay. Not gated to kind "daycare" --
+        // this is about the CALENDAR showing a visible "staying over" marker
+        // on every day of ANY stay (a non-billable family visit included),
+        // not just a billable one; actual nightly billing stays separately
+        // gated on "overnight" downstream, so a non-overnight diary item
+        // never gets charged just because it has an end date here.
+        stay_end_date: stayEndDate && stayEndDate > itemDate ? stayEndDate : null,
       };
 
       return base;
