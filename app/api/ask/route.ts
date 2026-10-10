@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { BASICS_SECTIONS } from "@/lib/basics";
 import { PROFILE_FIELDS } from "@/lib/handover";
@@ -158,43 +160,82 @@ export async function POST(req: NextRequest) {
   ]);
   const profiles = await lazyMigrateRows(supabase, "handover_child_profiles", "id", profilesRaw ?? [], PROFILE_ENC_FIELDS);
 
-  const { data: documents } = await supabase
-    .from("child_documents")
-    .select("child_id, title, category, file_path, file_name")
-    .order("uploaded_at", { ascending: false });
+  const { data: documents } = await supabase.from("child_documents").select("*").order("uploaded_at", { ascending: false });
 
   type ChildRow = { id: string; name: string; basics: Record<string, string> | null };
   const allChildren: ChildRow[] = [...((children ?? []) as ChildRow[]), ...((householdChildren ?? []) as ChildRow[])];
   const nameById = new Map(allChildren.map((c) => [c.id, c.name]));
 
-  // Actual uploaded files (a handover doc, old diaries, an assessment) --
-  // not just the structured basics/handover forms above. Capped generously
-  // rather than really limited, same reasoning as the records cap: a real
-  // household's document library is small, this just stops one runaway
-  // request if it ever isn't.
-  type DocRow = { child_id: string; title: string; category: string; file_path: string; file_name: string };
-  const docRows = ((documents ?? []) as DocRow[]).slice(0, 12);
+  // Actual uploaded files (a handover doc, old diaries, an assessment) -- not
+  // just the structured basics/handover forms above. A document library can
+  // grow well past what fits in one request (years of diaries), so which
+  // ones actually get read in full is a two-step decision: first triage
+  // every document by its own short one-time summary (child_documents.
+  // summary_enc, written once at upload -- see lib/childLifeSummary.ts) --
+  // cheap no matter how many documents exist, since each one is just a
+  // title/date/summary line here, not its full content -- then only
+  // download and attach the ones that actually look relevant to THIS
+  // question, rather than blindly taking the most recently uploaded.
+  type DocRow = { id: string; child_id: string; title: string; category: string; file_path: string; file_name: string; uploaded_at: string; summary: string };
+  const docRowsAll = (await lazyMigrateRows(supabase, "child_documents", "id", (documents ?? []) as Record<string, unknown>[], [
+    "title",
+    "category",
+    "file_name",
+    "summary",
+  ])) as unknown as DocRow[];
+
   const docTextBlocks: string[] = [];
   const docContentBlocks: Anthropic.ContentBlockParam[] = [];
   const docListingLines: string[] = [];
-  await Promise.all(
-    docRows.map(async (d) => {
-      const childName = nameById.get(d.child_id) || "Unknown child";
-      const label = `${childName} — ${d.title || d.file_name}${d.category ? " (" + d.category + ")" : ""}`;
-      const result = await readChildDocument(supabase, d.file_path);
-      if (result.kind === "text") {
-        // Caps one huge document from crowding out everything else in the prompt.
-        const text = result.text.length > 8000 ? result.text.slice(0, 8000) + "…" : result.text;
-        docTextBlocks.push(`### ${label}\n${text}`);
-        docListingLines.push(`${label} — included below`);
-      } else if (result.kind === "block") {
-        docContentBlocks.push({ type: "text", text: `Document: ${label}` }, result.block);
-        docListingLines.push(`${label} — attached`);
-      } else {
-        docListingLines.push(`${label} — couldn't be read automatically`);
-      }
-    }),
-  );
+
+  if (docRowsAll.length) {
+    const indexLines = docRowsAll.map(
+      (d) =>
+        `id=${d.id} | ${nameById.get(d.child_id) || "Unknown child"} | ${d.title || d.file_name}${d.category ? ` (${d.category})` : ""}, added ${d.uploaded_at.slice(0, 10)} | ${d.summary || "(not summarised yet -- title/category only)"}`,
+    );
+
+    let selectedIds: Set<string>;
+    try {
+      const anthropic = new Anthropic({ apiKey });
+      const triage = await anthropic.messages.parse({
+        model: "claude-sonnet-5",
+        max_tokens: 1000,
+        system: `You decide which of a UK foster carer's uploaded documents are worth reading in FULL to answer their question. You're shown each one's title, category, upload date, which child it's about, and a short summary only -- never its full content. Pick every document that could plausibly help answer the question; it's fine to pick none, one, or several. Prefer being inclusive when genuinely unsure rather than missing something relevant, but don't pick a document that's clearly unrelated to the question just because it exists.`,
+        messages: [{ role: "user", content: `Question: ${question.trim()}\n\nDocuments on file:\n${indexLines.join("\n")}` }],
+        output_config: { format: zodOutputFormat(z.object({ relevantDocumentIds: z.array(z.string()) })) },
+      });
+      selectedIds = new Set((triage.parsed_output?.relevantDocumentIds ?? []).filter(Boolean));
+    } catch {
+      // Triage is a narrowing step on top of the real answer -- if it fails
+      // outright, fall back to the most recently uploaded documents rather
+      // than answering with none at all.
+      selectedIds = new Set(docRowsAll.slice(0, 12).map((d) => d.id));
+    }
+
+    // A safety cap regardless of how many the triage step picked -- same
+    // reasoning as the old flat 12-document cap, just applied to a
+    // relevance-narrowed list instead of a recency-narrowed one.
+    const docRows = docRowsAll.filter((d) => selectedIds.has(d.id)).slice(0, 15);
+
+    await Promise.all(
+      docRows.map(async (d) => {
+        const childName = nameById.get(d.child_id) || "Unknown child";
+        const label = `${childName} — ${d.title || d.file_name}${d.category ? " (" + d.category + ")" : ""}`;
+        const result = await readChildDocument(supabase, d.file_path);
+        if (result.kind === "text") {
+          // Caps one huge document from crowding out everything else in the prompt.
+          const text = result.text.length > 8000 ? result.text.slice(0, 8000) + "…" : result.text;
+          docTextBlocks.push(`### ${label}\n${text}`);
+          docListingLines.push(`${label} — included below`);
+        } else if (result.kind === "block") {
+          docContentBlocks.push({ type: "text", text: `Document: ${label}` }, result.block);
+          docListingLines.push(`${label} — attached`);
+        } else {
+          docListingLines.push(`${label} — couldn't be read automatically`);
+        }
+      }),
+    );
+  }
 
   const childrenBlock =
     allChildren.map((c) => `### ${c.name}\n${formatBasics(c.basics) || "(no profile details filled in)"}`).join("\n\n") || "(none)";
@@ -255,7 +296,7 @@ export async function POST(req: NextRequest) {
     "\n## Mockingbird hub log",
     hubLogBlock,
     "\n## Attached documents (uploaded files, e.g. an old handover, meeting notes, an assessment)",
-    docListingLines.join("\n") || "(none uploaded)",
+    docListingLines.join("\n") || (docRowsAll.length ? "(nothing on file looked relevant to this question)" : "(none uploaded)"),
     docTextBlocks.length ? "\n" + docTextBlocks.join("\n\n") : "",
   ].join("\n");
 
