@@ -1891,6 +1891,7 @@ export default function AboutScreen() {
           {docsOpen && (
             <ChildDocuments
               childId={c.id}
+              childName={c.name}
               basics={c.basics || {}}
               onApplyExtracted={(patch) => saveBasicsBulk(c.id, "household_children", patch)}
             />
@@ -2011,7 +2012,7 @@ export default function AboutScreen() {
             </button>
           </div>
           {docsOpen && (
-            <ChildDocuments childId={c.id} basics={cb} onApplyExtracted={(patch) => saveBasicsBulk(c.id, "children", patch)} />
+            <ChildDocuments childId={c.id} childName={c.name} basics={cb} onApplyExtracted={(patch) => saveBasicsBulk(c.id, "children", patch)} />
           )}
           <div style={{ marginTop: 10 }}>
             <ChildBasicsPanel
@@ -2090,7 +2091,7 @@ export default function AboutScreen() {
           {open && <ChildSchoolAdmin childId={c.id} />}
           {clubsOpen && <ChildClubs childId={c.id} />}
           {docsOpen && (
-            <ChildDocuments childId={c.id} basics={cb} onApplyExtracted={(patch) => saveBasicsBulk(c.id, "children", patch)} />
+            <ChildDocuments childId={c.id} childName={c.name} basics={cb} onApplyExtracted={(patch) => saveBasicsBulk(c.id, "children", patch)} />
           )}
           <div style={{ marginTop: 10 }}>
             <b style={{ fontSize: 14 }}>Living arrangement</b>

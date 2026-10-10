@@ -6,7 +6,11 @@ import { encryptFieldsForWrite, lazyMigrateRows } from "@/lib/encryptedTable";
 // file_path stays plaintext -- the Storage object key, needed verbatim to
 // open/delete the actual file. The file's own bytes in the "child-documents"
 // bucket are out of scope for this plan -- only this row's metadata.
-const ENC_FIELDS = ["title", "category", "file_name"];
+// "summary" has no plaintext companion column (see 0097) -- lazyMigrateRows
+// still handles it correctly: a row with no summary_enc yet just decrypts
+// to "" and never attempts to write back a plaintext "summary" column that
+// doesn't exist.
+const ENC_FIELDS = ["title", "category", "file_name", "summary"];
 
 export async function GET() {
   const supabase = await createClient();

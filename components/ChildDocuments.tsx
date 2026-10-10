@@ -13,6 +13,8 @@ type Doc = {
   file_path: string;
   file_name: string;
   uploaded_at: string;
+  summary: string;
+  summarized_at: string | null;
 };
 
 type Conflict = { key: string; current: string; extracted: string };
@@ -27,10 +29,13 @@ function fieldLabel(key: string): string {
 
 export default function ChildDocuments({
   childId,
+  childName,
   basics,
   onApplyExtracted,
 }: {
   childId: string;
+  /** Used only to label the one-time AI summary/overview written for this child's documents. */
+  childName?: string;
   /** Current basics values, so extraction only offers to fill empty boxes and flags the rest as conflicts. */
   basics?: Record<string, string>;
   /** Applies one or more extracted fields straight to this child's basics -- caller owns which table (children vs household_children). */
@@ -48,6 +53,8 @@ export default function ChildDocuments({
   const [extractError, setExtractError] = useState("");
   const [filledCount, setFilledCount] = useState(0);
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
+  const [summarizingId, setSummarizingId] = useState<string | null>(null);
+  const [summarizingAll, setSummarizingAll] = useState(false);
 
   async function load() {
     setLoaded(false);
@@ -89,14 +96,44 @@ export default function ChildDocuments({
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Couldn't save that document");
       }
+      const data = await res.json();
       setTitle("");
       setCategory("");
-      load();
+      await load();
+      if (data?.id) summarize(data.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't upload that file");
     }
     setUploading(false);
     input.value = "";
+  }
+
+  async function summarize(documentId: string) {
+    setSummarizingId(documentId);
+    try {
+      const res = await fetch("/api/summarize-child-doc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentId, childName }),
+      });
+      const data = await res.json();
+      if (data.summary) {
+        setDocs((prev) => prev.map((d) => (d.id === documentId ? { ...d, summary: data.summary, summarized_at: new Date().toISOString() } : d)));
+      }
+    } catch {
+      // A failed one-time summary isn't worth surfacing as an error -- the
+      // document itself uploaded fine, and the "Summarize" button covers
+      // retrying this document specifically whenever it's convenient.
+    }
+    setSummarizingId(null);
+  }
+
+  async function summarizeAll() {
+    setSummarizingAll(true);
+    for (const d of docs.filter((d) => !d.summarized_at)) {
+      await summarize(d.id);
+    }
+    setSummarizingAll(false);
   }
 
   async function open(doc: Doc) {
@@ -176,8 +213,13 @@ export default function ChildDocuments({
       </p>
       {error && <p style={{ color: "var(--danger)", fontSize: 14 }}>{error}</p>}
       {docs.length === 0 && <p className="empty">Nothing uploaded yet.</p>}
+      {docs.length > 0 && docs.some((d) => !d.summarized_at) && (
+        <button className="chip" style={{ marginBottom: 8 }} disabled={summarizingAll || !!summarizingId} onClick={summarizeAll}>
+          {summarizingAll ? "Summarising…" : "🪄 Summarise all unsummarised"}
+        </button>
+      )}
       {docs.map((d) => (
-        <div key={d.id} className="rec" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+        <div key={d.id} className="rec" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
           <span style={{ flex: 1 }}>
             <b>{d.title || d.file_name}</b>
             <br />
@@ -186,6 +228,21 @@ export default function ChildDocuments({
                 .filter(Boolean)
                 .join(" · ")}
             </small>
+            {summarizingId === d.id ? (
+              <p className="hint" style={{ marginTop: 4 }}>
+                Summarising…
+              </p>
+            ) : d.summary ? (
+              <p className="hint" style={{ marginTop: 4 }}>
+                {d.summary}
+              </p>
+            ) : (
+              <p style={{ marginTop: 4 }}>
+                <button className="chip" disabled={summarizingAll} onClick={() => summarize(d.id)}>
+                  🪄 Summarise
+                </button>
+              </p>
+            )}
           </span>
           <span style={{ flex: "0 0 auto" }}>
             <button className="chip" disabled={openingId === d.id} onClick={() => open(d)}>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { today } from "@/lib/domain";
 import { Child } from "@/lib/types";
+import ChildDocumentOverview from "@/components/ChildDocumentOverview";
 
 type ChildOption = Pick<Child, "id" | "name" | "lives_here">;
 
@@ -190,6 +191,8 @@ export default function LifeSummaryTab({ childList }: { childList: ChildOption[]
           </>
         )}
       </div>
+
+      {!isHousehold && selectedChild && <ChildDocumentOverview childId={selectedChild.id} childName={selectedChild.name} />}
 
       {renderResult(scopeLabel ? `${scopeLabel} — ${fmtRange(period)}` : "", result)}
       {compareOn && renderResult(scopeLabel ? `${scopeLabel} — ${fmtRange(comparePeriod)}` : "", compareResult)}
