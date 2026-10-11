@@ -6,6 +6,7 @@ const LINKS = [
   { href: "/admin", label: "Usage" },
   { href: "/admin/carers", label: "Carers" },
   { href: "/admin/shared", label: "Shared content" },
+  { href: "/admin/training", label: "Training" },
   { href: "/admin/shared-entries", label: "Shared with you" },
 ];
 
