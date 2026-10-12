@@ -415,7 +415,7 @@ function ChildBasicsPanel({
                   {householdSsw.edt && (
                     <>
                       <br />
-                      EDT (out of hours): {householdSsw.edt}
+                      EDT (daytime): {householdSsw.edt}
                     </>
                   )}
                 </div>
@@ -1495,8 +1495,12 @@ export default function AboutScreen() {
               onChange={(e) => saveHousehold({ ssw_manager_phone: e.target.value })}
             />
           </div>
-          <label style={{ marginTop: 10, display: "block" }}>Emergency Duty Team (out-of-hours) number</label>
+          <label style={{ marginTop: 10, display: "block" }}>Emergency Duty Team (daytime) number</label>
           <input value={household.edt} onChange={(e) => saveHousehold({ edt: e.target.value })} />
+          <p className="hint">
+            For daytime emergencies. The phone quick-access shows this during the working day and switches to your
+            out-of-hours rota contact (set under admin Shared content) once it ends.
+          </p>
           {savedAt && <p className="hint">Saved {savedAt}</p>}
           {closeButton()}
         </div>

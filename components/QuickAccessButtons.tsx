@@ -89,16 +89,25 @@ export default function QuickAccessButtons() {
     ]).filter((c) => c.lives_here === true || presentToday.has(c.name));
     const out: Item[] = [];
     if (kind === "phone") {
-      if (rota?.phone) {
-        const isWeekend = [0, 6].includes(new Date().getDay());
+      // EDT is the DAYTIME emergency number -- the separate out-of-hours
+      // rota contact is who's actually on call once the working day ends,
+      // so the two are never both relevant at once. Weekends have no
+      // daytime service at all, so out-of-hours is the only one that ever
+      // applies there, whatever the actual time of day is.
+      const now = new Date();
+      const isWeekend = [0, 6].includes(now.getDay());
+      const outOfHoursNow = isWeekend || now.getHours() >= 18;
+      if (outOfHoursNow && rota?.phone) {
         const hours = (isWeekend ? rotaHours?.weekend_hours : rotaHours?.weekday_hours)?.trim();
         out.push({ label: hours ? `Out of hours tonight (${hours})` : "Out of hours tonight", name: rota.name || "", value: rota.phone });
       }
       if (household?.ssw_phone) out.push({ label: "SSW", name: household.ssw_name || "", value: household.ssw_phone });
       if (household?.ssw_manager_phone) out.push({ label: "SSW's manager", name: household.ssw_manager_name || "", value: household.ssw_manager_phone });
       if (household?.hub_leader_phone) out.push({ label: "Mockingbird hub leader", name: household.hub_leader_name || "", value: household.hub_leader_phone });
-      const edtPhone = extractPhone(household?.edt);
-      if (edtPhone) out.push({ label: "Emergency Duty Team", name: "", value: edtPhone });
+      if (!outOfHoursNow) {
+        const edtPhone = extractPhone(household?.edt);
+        if (edtPhone) out.push({ label: "Emergency Duty Team", name: "", value: edtPhone });
+      }
       allKids.forEach((c) => {
         if (c.basics?.child_phone) out.push({ label: `${c.name}'s mobile`, name: "", value: c.basics.child_phone });
         const p = c.basics?.csw_phone || extractPhone(c.basics?.csw);
