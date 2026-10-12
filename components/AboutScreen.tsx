@@ -1469,19 +1469,22 @@ export default function AboutScreen() {
           {household.is_mockingbird && (
             <div className="row" style={{ marginTop: 8 }}>
               <input
+                key={`hub_leader_name:${household.hub_leader_name}`}
                 placeholder="Hub leader name"
-                value={household.hub_leader_name}
-                onChange={(e) => saveHousehold({ hub_leader_name: e.target.value })}
+                defaultValue={household.hub_leader_name}
+                onBlur={(e) => saveHousehold({ hub_leader_name: e.target.value })}
               />
               <input
+                key={`hub_leader_phone:${household.hub_leader_phone}`}
                 placeholder="Hub leader phone"
-                value={household.hub_leader_phone}
-                onChange={(e) => saveHousehold({ hub_leader_phone: e.target.value })}
+                defaultValue={household.hub_leader_phone}
+                onBlur={(e) => saveHousehold({ hub_leader_phone: e.target.value })}
               />
               <input
+                key={`hub_leader_email:${household.hub_leader_email}`}
                 placeholder="Hub leader email"
-                value={household.hub_leader_email}
-                onChange={(e) => saveHousehold({ hub_leader_email: e.target.value })}
+                defaultValue={household.hub_leader_email}
+                onBlur={(e) => saveHousehold({ hub_leader_email: e.target.value })}
               />
             </div>
           )}
@@ -1495,21 +1498,32 @@ export default function AboutScreen() {
       return (
         <div className="card">
           <h3>Your supervising social worker</h3>
+          {/* defaultValue + onBlur, not value + onChange -- a save fired on
+              every keystroke races the next one over a slow connection, and
+              whichever one's response lands last on the server wins even if
+              it was sent first, silently truncating whatever was typed
+              after it (e.g. "Emily Dabin" saved as "Emily Dab"). Keyed on
+              the value too, same reason as ChildBasicsPanel's inputs: an
+              uncontrolled input's defaultValue only applies on first mount,
+              so a value arriving from elsewhere (a reload, another carer's
+              edit) needs a remount to actually show. */}
           <div className="row">
-            <input placeholder="SSW name" value={household.ssw_name} onChange={(e) => saveHousehold({ ssw_name: e.target.value })} />
-            <input placeholder="SSW phone" value={household.ssw_phone} onChange={(e) => saveHousehold({ ssw_phone: e.target.value })} />
+            <input key={`ssw_name:${household.ssw_name}`} placeholder="SSW name" defaultValue={household.ssw_name} onBlur={(e) => saveHousehold({ ssw_name: e.target.value })} />
+            <input key={`ssw_phone:${household.ssw_phone}`} placeholder="SSW phone" defaultValue={household.ssw_phone} onBlur={(e) => saveHousehold({ ssw_phone: e.target.value })} />
           </div>
-          <input placeholder="SSW email" value={household.ssw_email} onChange={(e) => saveHousehold({ ssw_email: e.target.value })} />
+          <input key={`ssw_email:${household.ssw_email}`} placeholder="SSW email" defaultValue={household.ssw_email} onBlur={(e) => saveHousehold({ ssw_email: e.target.value })} />
           <div className="row" style={{ marginTop: 10 }}>
             <input
+              key={`ssw_manager_name:${household.ssw_manager_name}`}
               placeholder="SSW's manager name"
-              value={household.ssw_manager_name}
-              onChange={(e) => saveHousehold({ ssw_manager_name: e.target.value })}
+              defaultValue={household.ssw_manager_name}
+              onBlur={(e) => saveHousehold({ ssw_manager_name: e.target.value })}
             />
             <input
+              key={`ssw_manager_phone:${household.ssw_manager_phone}`}
               placeholder="SSW's manager phone"
-              value={household.ssw_manager_phone}
-              onChange={(e) => saveHousehold({ ssw_manager_phone: e.target.value })}
+              defaultValue={household.ssw_manager_phone}
+              onBlur={(e) => saveHousehold({ ssw_manager_phone: e.target.value })}
             />
           </div>
           <p className="hint" style={{ marginTop: 10 }}>
