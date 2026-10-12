@@ -212,6 +212,7 @@ function ChildBasicsPanel({
   onSurreyContact,
   basics,
   onBasics,
+  onBasicsBulk,
   justFilled,
   siblings,
   onShareSection,
@@ -230,6 +231,15 @@ function ChildBasicsPanel({
   onSurreyContact: (v: string) => void;
   basics: Record<string, string>;
   onBasics: (key: string, value: string) => void;
+  /** Saves several basics keys in one write -- used for "Copy from…" so every
+   * copied field lands in the same save, against the same up-to-date basics
+   * snapshot. Firing onBasics once per key instead let each one read a stale,
+   * pre-copy snapshot of the others (React hadn't re-rendered between the
+   * synchronous calls yet), so whichever single-field save finished last on
+   * the server won, wiping out every other field it hadn't been told about.
+   * Falls back to the one-key-at-a-time path only if a caller hasn't wired
+   * this up. */
+  onBasicsBulk?: (patch: Record<string, string>) => void;
   /** Keys "Extract info" (ChildDocuments) just filled in -- highlighted so
    * they're easy to spot among everything else on the page. */
   justFilled?: string[];
@@ -281,7 +291,8 @@ function ChildBasicsPanel({
   function confirmCopy() {
     if (!pendingCopy) return;
     const keys = Object.keys(pendingCopy.values);
-    keys.forEach((k) => onBasics(k, pendingCopy.values[k]));
+    if (onBasicsBulk) onBasicsBulk(pendingCopy.values);
+    else keys.forEach((k) => onBasics(k, pendingCopy.values[k]));
     setCopiedKeys(keys);
     setPendingCopy(null);
   }
@@ -806,6 +817,11 @@ export default function AboutScreen() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: childId, patch: { basics: next } }),
     });
+    // Safe to call once per key here, unlike the basics merge above --
+    // each one touches its own independent reminder row (keyed by
+    // childId+key), not a shared blob several calls would race over.
+    const childName = (table === "children" ? children : householdChildren).find((c) => c.id === childId)?.name || "";
+    Object.entries(patch).forEach(([key, value]) => syncKeyDateReminder(childId, childName, key, value));
     flashSaved();
   }
 
@@ -1906,6 +1922,7 @@ export default function AboutScreen() {
               onSurreyContact={(v) => updateHouseholdChild(c.id, { surrey_contact: v })}
               basics={c.basics || {}}
               onBasics={(key, value) => saveHouseholdChildBasics(c.id, key, value)}
+              onBasicsBulk={(patch) => saveBasicsBulk(c.id, "household_children", patch)}
               justFilled={justFilled}
               siblings={siblingsFor(c.id)}
               onShareSection={shareSectionWithSibling}
@@ -2028,6 +2045,7 @@ export default function AboutScreen() {
               onSurreyContact={(v) => saveChild(c.id, { surrey_contact: v })}
               basics={cb}
               onBasics={(key, value) => saveChildBasics(c.id, key, value)}
+              onBasicsBulk={(patch) => saveBasicsBulk(c.id, "children", patch)}
               justFilled={justFilled}
               siblings={siblingsFor(c.id)}
               onShareSection={shareSectionWithSibling}
@@ -2127,6 +2145,7 @@ export default function AboutScreen() {
               onSurreyContact={(v) => saveChild(c.id, { surrey_contact: v })}
               basics={cb}
               onBasics={(key, value) => saveChildBasics(c.id, key, value)}
+              onBasicsBulk={(patch) => saveBasicsBulk(c.id, "children", patch)}
               justFilled={justFilled}
               siblings={siblingsFor(c.id)}
               onShareSection={shareSectionWithSibling}
