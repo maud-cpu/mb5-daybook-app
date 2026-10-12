@@ -41,18 +41,18 @@ export default function AdminSharedContent() {
   const [rota, setRota] = useState<RotaRow[]>([]);
   const [rotaPaste, setRotaPaste] = useState("");
   const [importingRotaFile, setImportingRotaFile] = useState(false);
-  const [rotaHours, setRotaHours] = useState({ weekday_hours: "", weekend_hours: "" });
+  const [rotaHours, setRotaHours] = useState({ weekday_hours: "", weekend_hours: "", edt: "" });
   const [toast, setToast] = useState("");
 
   async function load() {
     const [{ data: r }, { data: rt }, { data: rh }] = await Promise.all([
       supabase.from("shared_rates").select("*").single(),
       supabase.from("shared_rota").select("date, name, phone").order("date"),
-      supabase.from("shared_rota_hours").select("weekday_hours, weekend_hours").maybeSingle(),
+      supabase.from("shared_rota_hours").select("weekday_hours, weekend_hours, edt").maybeSingle(),
     ]);
     setRates(r as Rates);
     setRota((rt as RotaRow[]) ?? []);
-    if (rh) setRotaHours({ weekday_hours: rh.weekday_hours || "", weekend_hours: rh.weekend_hours || "" });
+    if (rh) setRotaHours({ weekday_hours: rh.weekday_hours || "", weekend_hours: rh.weekend_hours || "", edt: rh.edt || "" });
   }
 
   useEffect(() => {
@@ -222,6 +222,22 @@ export default function AdminSharedContent() {
             onBlur={(e) => saveRotaHours({ weekend_hours: e.target.value })}
           />
         </div>
+        <div className="row" style={{ alignItems: "center", marginTop: 6 }}>
+          <span className="muted" style={{ flex: "0 0 130px" }}>
+            EDT (daytime)
+          </span>
+          <input
+            placeholder="e.g. 01483 517 898"
+            value={rotaHours.edt}
+            onChange={(e) => setRotaHours({ ...rotaHours, edt: e.target.value })}
+            onBlur={(e) => saveRotaHours({ edt: e.target.value })}
+          />
+        </div>
+        <p className="hint" style={{ marginTop: 6 }}>
+          The Emergency Duty Team&apos;s daytime number — the same for every carer here, so it&apos;s set once here
+          rather than separately by each carer. The phone quick-access shows this during the working day and
+          switches to the out-of-hours number above once it ends.
+        </p>
         <p className="muted" style={{ marginTop: 10 }}>
           {rota.length} days loaded {rota.length ? `(${rota[0].date} to ${rota[rota.length - 1].date})` : ""}
         </p>

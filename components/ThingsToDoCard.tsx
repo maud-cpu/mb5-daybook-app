@@ -10,7 +10,6 @@ import {
   bandChangeItems,
   diaryDueItems,
   dueReminders,
-  edtMissingItem,
   invoiceMonthItems,
   missingNumbersItems,
   placementEndItems,
@@ -142,7 +141,6 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
       ...statutoryDateItems(allChildren),
       ...diaryDueItems(allChildren, (diariesRes.diaries as Diary[]) ?? []),
       ...placementEndItems(children ?? []),
-      ...edtMissingItem(householdRes.household?.edt ?? ""),
       ...annualReviewItems(householdRes.household ?? null),
       ...dueReminders(remindersList),
     ].filter((x) => !dismissedKeys.has(dismissKeyFor(x.key)));
@@ -303,15 +301,15 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
     .filter((r) => r.category === "medical" && r.people[0] && gpByChildName[r.people[0]])
     .forEach((r) => (medicalGpForKey["rem-" + r.id] = gpByChildName[r.people[0]]));
 
-  // Missing CSW/GP/duty-line details and a missing EDT number are safeguarding
-  // basics that only ever leave this list once the field is actually filled
-  // in -- so they used to sit permanently at the top, "new" or not, and that
-  // was exactly the nagging she kept coming back to say was stressing her
-  // out. They now never appear in the un-collapsed part of the list at all --
-  // they're admin housekeeping, not a today-shaped task -- and live only in
-  // "Been on your list a while" like everything else that's been sitting
-  // around, however long they've actually been outstanding.
-  const isEssential = (x: DueItem) => x.key.startsWith("nums-") || x.key === "edt";
+  // Missing CSW/GP/duty-line details are safeguarding basics that only ever
+  // leave this list once the field is actually filled in -- so they used to
+  // sit permanently at the top, "new" or not, and that was exactly the
+  // nagging she kept coming back to say was stressing her out. They now
+  // never appear in the un-collapsed part of the list at all -- they're
+  // admin housekeeping, not a today-shaped task -- and live only in "Been
+  // on your list a while" like everything else that's been sitting around,
+  // however long they've actually been outstanding.
+  const isEssential = (x: DueItem) => x.key.startsWith("nums-");
   const essentialDue = due.filter(isEssential);
   const routineDue = due.filter((x) => !isEssential(x));
 

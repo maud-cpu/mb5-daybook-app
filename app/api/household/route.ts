@@ -3,11 +3,15 @@ import { createClient } from "@/lib/supabase/server";
 import { encryptFieldsForWrite, lazyMigrateRow } from "@/lib/encryptedTable";
 
 // Phase 2 of application-level encryption (see 0067_encrypt_household_contacts.sql).
-// household holds the SSW/CSW/GP/hub-leader/emergency-duty-team contact
-// details for the whole household -- genuinely identifying information
-// about real professionals and arrangements around the children, so it
-// moves behind a server route rather than being read/written straight from
-// the browser's anon-key client.
+// household holds the SSW/CSW/GP/hub-leader contact details for the whole
+// household -- genuinely identifying information about real professionals
+// and arrangements around the children, so it moves behind a server route
+// rather than being read/written straight from the browser's anon-key
+// client. The emergency duty team number used to live here too, but it's
+// the same number for every carer in a content group, so it moved onto the
+// shared, admin-set shared_rota_hours.edt instead (see 0098_shared_edt.sql)
+// -- this table's own "edt" column is left in place, unused, rather than
+// dropped.
 const ENC_FIELDS = [
   "ssw_name",
   "ssw_phone",
@@ -24,7 +28,6 @@ const ENC_FIELDS = [
   "hub_leader_name",
   "hub_leader_phone",
   "hub_leader_email",
-  "edt",
 ];
 
 export async function GET() {

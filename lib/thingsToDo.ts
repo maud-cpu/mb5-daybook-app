@@ -79,10 +79,6 @@ export function invoiceMonthItems(invoiceDay: number, payDay: number, hasUnpaidC
   return out;
 }
 
-export function edtMissingItem(edt: string): DueItem[] {
-  return (edt || "").trim() ? [] : [{ key: "edt", urgent: false, text: "Add the Emergency Duty Team (out-of-hours) number — About us" }];
-}
-
 // Once a placement ends, the carer's diary/expenses/meds records for that
 // child stop being needed day-to-day and should go to the supervising social
 // worker or be removed, per the fostering provider's retention policy --

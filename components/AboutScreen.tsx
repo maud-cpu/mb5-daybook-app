@@ -247,7 +247,7 @@ function ChildBasicsPanel({
    * own CSW below, shown as read-only reference in Social work team so
    * it's visible here without retyping it, never written into the child's
    * own fields. */
-  householdSsw?: { name: string; phone: string; email: string; edt: string };
+  householdSsw?: { name: string; phone: string; email: string };
   /** Set only for a child who actually lives in this household -- "their
    * own carer" and "their carer's SSW" (the fields below, meant for a
    * VISITING child whose day-to-day carer is someone else entirely) are
@@ -407,17 +407,11 @@ function ChildBasicsPanel({
               // it up here as well would just say the same thing twice.
               !householdCarer &&
               householdSsw &&
-              (householdSsw.name || householdSsw.phone || householdSsw.email || householdSsw.edt) && (
+              (householdSsw.name || householdSsw.phone || householdSsw.email) && (
                 <div className="note" style={{ marginTop: 6 }}>
                   <b>Your supervising social worker</b> — not their own CSW above, shown here for reference only:
                   <br />
                   {[householdSsw.name, householdSsw.phone, householdSsw.email].filter(Boolean).join(" · ") || "—"}
-                  {householdSsw.edt && (
-                    <>
-                      <br />
-                      EDT (daytime): {householdSsw.edt}
-                    </>
-                  )}
                 </div>
               )}
             {section.fields.map((f) => {
@@ -1495,11 +1489,9 @@ export default function AboutScreen() {
               onChange={(e) => saveHousehold({ ssw_manager_phone: e.target.value })}
             />
           </div>
-          <label style={{ marginTop: 10, display: "block" }}>Emergency Duty Team (daytime) number</label>
-          <input value={household.edt} onChange={(e) => saveHousehold({ edt: e.target.value })} />
-          <p className="hint">
-            For daytime emergencies. The phone quick-access shows this during the working day and switches to your
-            out-of-hours rota contact (set under admin Shared content) once it ends.
+          <p className="hint" style={{ marginTop: 10 }}>
+            The Emergency Duty Team (daytime) and out-of-hours numbers are set once by admin, under Shared content —
+            the same for every carer here, so there&apos;s nothing to set separately on this page.
           </p>
           {savedAt && <p className="hint">Saved {savedAt}</p>}
           {closeButton()}
@@ -1917,7 +1909,7 @@ export default function AboutScreen() {
               justFilled={justFilled}
               siblings={siblingsFor(c.id)}
               onShareSection={shareSectionWithSibling}
-              householdSsw={{ name: household.ssw_name, phone: household.ssw_phone, email: household.ssw_email, edt: household.edt }}
+              householdSsw={{ name: household.ssw_name, phone: household.ssw_phone, email: household.ssw_email }}
               householdCarer={householdCarerFor}
             />
           </div>
@@ -2039,7 +2031,7 @@ export default function AboutScreen() {
               justFilled={justFilled}
               siblings={siblingsFor(c.id)}
               onShareSection={shareSectionWithSibling}
-              householdSsw={{ name: household.ssw_name, phone: household.ssw_phone, email: household.ssw_email, edt: household.edt }}
+              householdSsw={{ name: household.ssw_name, phone: household.ssw_phone, email: household.ssw_email }}
             />
           </div>
           {closeButton()}
@@ -2138,7 +2130,7 @@ export default function AboutScreen() {
               justFilled={justFilled}
               siblings={siblingsFor(c.id)}
               onShareSection={shareSectionWithSibling}
-              householdSsw={{ name: household.ssw_name, phone: household.ssw_phone, email: household.ssw_email, edt: household.edt }}
+              householdSsw={{ name: household.ssw_name, phone: household.ssw_phone, email: household.ssw_email }}
               householdCarer={c.lives_here === true ? householdCarerFor : undefined}
             />
           </div>

@@ -129,6 +129,7 @@ export async function POST(req: NextRequest) {
     { data: adults },
     { data: visitors },
     { data: household },
+    { data: rotaHours },
     { data: profilesRaw },
     { data: records },
     { data: reminders },
@@ -142,6 +143,10 @@ export async function POST(req: NextRequest) {
     supabase.from("household_adults").select("name, phone, email, role"),
     supabase.from("household_visitors").select("name, phone, email, role"),
     supabase.from("household").select("*").maybeSingle(),
+    // EDT is shared across the whole content group (set once by admin,
+    // same as the out-of-hours rota hours it sits alongside) -- no longer
+    // the household table's own (per-carer) edt column.
+    supabase.from("shared_rota_hours").select("edt").maybeSingle(),
     supabase
       .from("handover_child_profiles")
       .select(
@@ -261,7 +266,7 @@ export async function POST(req: NextRequest) {
   const householdBlock =
     [
       h?.ssw_name ? `SSW: ${h.ssw_name}${h.ssw_phone ? ", " + h.ssw_phone : ""}${h.ssw_email ? ", " + h.ssw_email : ""}` : "",
-      h?.edt ? `Emergency Duty Team: ${h.edt}` : "",
+      rotaHours?.edt ? `Emergency Duty Team (daytime): ${rotaHours.edt}` : "",
       h?.hub_leader_name ? `Hub leader: ${h.hub_leader_name}${h.hub_leader_phone ? ", " + h.hub_leader_phone : ""}` : "",
     ]
       .filter(Boolean)

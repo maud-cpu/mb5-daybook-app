@@ -59,7 +59,7 @@ export default function QuickAccessButtons() {
     setLoading(true);
     const [{ data: rota }, { data: rotaHours }, householdRes, childrenRes, householdChildrenRes, contactsRes, remindersRes] = await Promise.all([
       kind === "phone" ? supabase.from("shared_rota").select("name, phone").eq("date", today()).maybeSingle() : Promise.resolve({ data: null }),
-      kind === "phone" ? supabase.from("shared_rota_hours").select("weekday_hours, weekend_hours").maybeSingle() : Promise.resolve({ data: null }),
+      kind === "phone" ? supabase.from("shared_rota_hours").select("weekday_hours, weekend_hours, edt").maybeSingle() : Promise.resolve({ data: null }),
       fetch("/api/household").then((r) => r.json()),
       fetch("/api/children").then((r) => r.json()),
       fetch("/api/household-children").then((r) => r.json()),
@@ -105,7 +105,10 @@ export default function QuickAccessButtons() {
       if (household?.ssw_manager_phone) out.push({ label: "SSW's manager", name: household.ssw_manager_name || "", value: household.ssw_manager_phone });
       if (household?.hub_leader_phone) out.push({ label: "Mockingbird hub leader", name: household.hub_leader_name || "", value: household.hub_leader_phone });
       if (!outOfHoursNow) {
-        const edtPhone = extractPhone(household?.edt);
+        // Shared across every carer in the content group -- same place and
+        // same reasoning as the out-of-hours rota hours above, rather than
+        // each carer having to type in the same number separately.
+        const edtPhone = extractPhone(rotaHours?.edt);
         if (edtPhone) out.push({ label: "Emergency Duty Team", name: "", value: edtPhone });
       }
       allKids.forEach((c) => {
