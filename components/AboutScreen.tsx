@@ -1436,6 +1436,13 @@ export default function AboutScreen() {
               </select>
             </>
           )}
+          {household.is_mockingbird && hubDirectory.length === 0 && (
+            <p className="hint" style={{ marginTop: 8 }}>
+              No hubs have been added to the directory yet, so there&apos;s nothing to pick from — an admin can add
+              one under admin &gt; Shared content &gt; Hub directory. In the meantime, just fill in the hub leader&apos;s
+              details yourself below.
+            </p>
+          )}
           {household.is_mockingbird &&
             (() => {
               // Matched back against the saved hub_leader_* fields rather
