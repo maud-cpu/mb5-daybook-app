@@ -102,7 +102,16 @@ export default function ThingsToDoCard({ refreshKey }: { refreshKey?: number } =
       supabase.from("dismissed_todos").select("key, text, dismissed_at").order("dismissed_at", { ascending: false }).limit(20),
       fetch("/api/diaries").then((r) => r.json()),
     ]);
-    const reminders = ((remindersRes.reminders as { date: string }[]) ?? []).sort((a, b) => a.date.localeCompare(b.date));
+    // Chronological within a day too, same as the calendar tab -- untimed
+    // items first, then by start time -- not just date order.
+    const reminders = ((remindersRes.reminders as { date: string; time_from: string | null }[]) ?? []).sort((a, b) => {
+      const d = a.date.localeCompare(b.date);
+      if (d !== 0) return d;
+      if (!a.time_from && !b.time_from) return 0;
+      if (!a.time_from) return -1;
+      if (!b.time_from) return 1;
+      return a.time_from.localeCompare(b.time_from);
+    });
     const children = childrenRes.children;
     const householdChildren = householdChildrenRes.children;
     const allRecords: EntryRecord[] = recordsRes.records ?? [];

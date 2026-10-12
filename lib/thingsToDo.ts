@@ -157,6 +157,19 @@ export function recurringCheckItems(children: (Pick<Child, "id" | "name"> & { ba
 // the full record if it's ever needed again.
 const REMINDER_ADVANCE_DAYS = 3;
 
+// One consistent "<date>, <time>" suffix for every reminder, built from its
+// own structured date/time fields -- never from whatever the note's own
+// wording happened to look like. Before this, the date (when shown at all)
+// came from here but the time never did, so whether a reminder read as a
+// short tidy line or a longer one with a date and/or time baked into its
+// own text depended entirely on how that one note happened to get phrased
+// when it was captured.
+function reminderWhen(r: Reminder, isToday: boolean): string {
+  const date = isToday ? "" : new Date(r.date + "T12:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+  const time = r.time_from ? `${r.time_from.slice(0, 5)}${r.time_to ? `–${r.time_to.slice(0, 5)}` : ""}` : "";
+  return [date, time].filter(Boolean).join(", ");
+}
+
 export function dueReminders(reminders: Reminder[]): DueItem[] {
   const t = today();
   const windowEnd = new Date();
@@ -167,7 +180,7 @@ export function dueReminders(reminders: Reminder[]): DueItem[] {
     .map((r) => ({
       key: "rem-" + r.id,
       urgent: false,
-      text: r.date === t ? r.text : `${r.text} — ${new Date(r.date + "T12:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}`,
+      text: [r.text, reminderWhen(r, r.date === t)].filter(Boolean).join(" — "),
       detail: r.source_text || undefined,
       url: r.url || undefined,
     }));
