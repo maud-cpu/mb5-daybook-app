@@ -267,8 +267,18 @@ export default function CalendarScreen() {
       (peopleFilter.length === 0 || r.people.some((p) => peopleFilter.includes(p))),
   );
 
+  // Chronological within a day -- untimed items (an all-day stay marker, a
+  // reminder with no specific time) sort first, same convention as most
+  // calendar views, then whatever's left sorts by its own start time.
+  const sortedReminders = [...visibleReminders].sort((a, b) => {
+    if (!a.time_from && !b.time_from) return 0;
+    if (!a.time_from) return -1;
+    if (!b.time_from) return 1;
+    return a.time_from.localeCompare(b.time_from);
+  });
+
   const byDate: Record<string, Reminder[]> = {};
-  visibleReminders.forEach((r) => {
+  sortedReminders.forEach((r) => {
     (byDate[r.date] ||= []).push(r);
   });
 
