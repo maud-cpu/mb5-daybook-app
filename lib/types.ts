@@ -421,6 +421,7 @@ export const REPEAT_OPTIONS = [
 ] as const;
 
 export const REMINDER_CATEGORIES = [
+  ["birthday", "🎂 Birthday"],
   ["school", "🏫 School"],
   ["club", "🧩 Club"],
   ["training", "🎓 Training"],

@@ -44,6 +44,32 @@ function f2fReminder(id: string, text: string, date: string): Reminder {
   };
 }
 
+// A child's birthday isn't a real row in reminders either -- it recurs
+// every year on the same month/day, so (same reasoning as clubs below) one
+// virtual entry is synthesised for the visible month whenever "born" falls
+// in it, rather than pre-generating years of real rows. Read-only, like a
+// club or face-to-face session -- edit the child's own date of birth in
+// About us to change it.
+const BIRTHDAY_PREFIX = "birthday:";
+function birthdayReminder(childId: string, name: string, date: string, turningAge: number | null): Reminder {
+  return {
+    id: `${BIRTHDAY_PREFIX}${childId}:${date}`,
+    text: `🎂 ${name}'s birthday${turningAge !== null ? ` — turns ${turningAge}` : ""}`,
+    date,
+    time_from: null,
+    time_to: null,
+    done: false,
+    done_at: null,
+    category: "birthday",
+    needs_action: true,
+    child: "",
+    people: [name],
+    amount: null,
+    series_id: null,
+    source_text: "",
+  };
+}
+
 // A club a child attends isn't a real row in reminders either -- it recurs
 // every week indefinitely, so rather than pre-generating (and having to
 // clean up) months of real rows, one virtual entry is synthesised per day
@@ -224,7 +250,26 @@ export default function CalendarScreen() {
       }
     });
 
-    setReminders([...((rem as Reminder[]) ?? []), ...f2fReminders, ...clubReminders]);
+    // Known birthdays (date of birth given) falling in the visible month --
+    // works out this year's occurrence from the month/day alone, so it's
+    // never dependent on which year "born" happens to be. 29 Feb in a
+    // non-leap year falls back to the 28th rather than vanishing entirely.
+    const allKidsWithDob = [
+      ...((kids as { id: string; name: string; born: string | null }[] | null) ?? []),
+      ...((hhKids as { id: string; name: string; born: string | null }[] | null) ?? []),
+    ];
+    const birthdayReminders: Reminder[] = allKidsWithDob
+      .map((c) => {
+        if (!c.born) return null;
+        const [birthYear, birthMonth, birthDay] = c.born.split("-").map(Number);
+        if (birthMonth - 1 !== month) return null;
+        const day = Math.min(birthDay, daysInMonth(year, month));
+        const turningAge = year - birthYear;
+        return turningAge >= 0 ? birthdayReminder(c.id, c.name, isoOf(year, month, day), turningAge) : null;
+      })
+      .filter((r): r is Reminder => r !== null);
+
+    setReminders([...((rem as Reminder[]) ?? []), ...f2fReminders, ...clubReminders, ...birthdayReminders]);
     setPersonOptions(
       [
         ...((kids as { name: string }[] | null) ?? []).map((c) => ({ name: c.name, kind: "child" as const })),
@@ -420,7 +465,7 @@ export default function CalendarScreen() {
   }
 
   function startEdit(r: Reminder) {
-    if (r.id.startsWith(F2F_PREFIX) || r.id.startsWith(CLUB_PREFIX)) return;
+    if (r.id.startsWith(F2F_PREFIX) || r.id.startsWith(CLUB_PREFIX) || r.id.startsWith(BIRTHDAY_PREFIX)) return;
     setEditingId(r.id);
     setEditDraft(draftFrom(r));
     const rec = r.record_id ? records.find((x) => x.id === r.record_id) : undefined;
@@ -750,6 +795,21 @@ export default function CalendarScreen() {
                     <span>{reminderCategoryText(r.category)}</span>
                     {r.time_from && <span>{r.time_from.slice(0, 5)}{r.time_to ? `–${r.time_to.slice(0, 5)}` : ""}</span>}
                     <PersonTags people={r.people} />
+                  </span>
+                </span>
+              </Link>
+            ) : r.id.startsWith(BIRTHDAY_PREFIX) ? (
+              <Link
+                key={r.id}
+                href={`/dashboard/about?person=${encodeURIComponent(r.people[0] || "")}`}
+                className="day-item"
+              >
+                <span className="day-item-icon">{reminderCategoryIcon(r.category)}</span>
+                <span className="day-item-body">
+                  <span className="day-item-title">{r.text}</span>
+                  <span className="day-item-meta">
+                    <span>{reminderCategoryText(r.category)}</span>
+                    <span title="Every year">🔁</span>
                   </span>
                 </span>
               </Link>
