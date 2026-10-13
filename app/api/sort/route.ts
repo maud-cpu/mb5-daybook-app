@@ -478,12 +478,13 @@ Split into one item per separate thing, under "items".`;
     const anthropic = new Anthropic({ apiKey });
     const msg = await anthropic.messages.parse({
       model: "claude-sonnet-5",
-      // Was 1500, then 4096 -- still too low for a long, multi-part note
-      // (e.g. a whole safeguarding incident spanning several hours) that
-      // splits into many richly-filled items, each with its own training
-      // suggestions. A cut response is invalid JSON even mid-string, which
+      // Was 1500, then 4096, then 8192 -- still too low for a note that
+      // splits into a dozen-plus items (e.g. a hub group chat listing every
+      // half-term activity on offer), since each item fills out this
+      // schema's ~30 fields regardless of how little of the note it actually
+      // needed. A cut response is invalid JSON even mid-string, which
       // silently lost everything in the note rather than just running short.
-      max_tokens: 8192,
+      max_tokens: 16000,
       system: sys,
       messages: [{ role: "user", content: text }],
       output_config: { format: zodOutputFormat(SortResponseSchema) },
