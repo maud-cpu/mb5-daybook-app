@@ -17,7 +17,15 @@ import { aiErrorMessage } from "@/lib/aiErrors";
 // 60 seconds" Vercel error, not a flaky request. Fluid Compute (enabled on
 // this project) supports well beyond 60s, so this was the code's own
 // ceiling, not the account's -- raised for real headroom on a rich note.
-export const maxDuration = 120;
+// Raised again, 120 -> 300, after max_tokens went 8192 -> 16000 below: a
+// genuine multi-child safeguarding incident (several named children, direct
+// quotes to preserve, an incident flag, diary items, possible training
+// matches) generating close to that larger budget silently hit this same
+// ceiling again -- the request was simply killed server-side with no
+// response at all, which the client-side retry-then-toast logic in
+// CaptureScreen.sortIt() has no way to distinguish from a dropped
+// connection, so it looked like "nothing happened" rather than a timeout.
+export const maxDuration = 300;
 
 const REMINDER_CATEGORY_KEYS = REMINDER_CATEGORIES.map(([k]) => k);
 

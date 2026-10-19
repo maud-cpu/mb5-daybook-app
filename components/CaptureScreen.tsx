@@ -438,7 +438,17 @@ export default function CaptureScreen() {
         }
         break;
       } catch {
-        if (attempt === 2) showToast("Couldn't reach the sorting service after retrying — try again in a moment.");
+        // A toast alone (gone after 1.8s) was easy to miss after sitting
+        // through two slow attempts in a row waiting for a result -- by the
+        // time it showed up most people had looked away, so this looked like
+        // "nothing happened" rather than a reported failure. The warning
+        // note doesn't auto-dismiss, so it's still there whenever she looks
+        // back, same as any other sort warning.
+        if (attempt === 2) {
+          const msg = "Couldn't reach the sorting service after retrying — try again in a moment. Your note is still in the box below, nothing was lost.";
+          showToast(msg);
+          setWarning(msg);
+        }
       }
     }
     setBusy(false);
