@@ -1224,9 +1224,17 @@ export default function AboutScreen() {
   const centerLabel = carerAdults.length ? carerAdults.map((a) => firstName(a.name)).join(" & ") : "+ Add carer";
   const householdCenter: WheelNode = { id: CENTER_NODE, label: centerLabel, color: CENTER_COLOR };
 
+  // A grown child still living at home is recorded as a household_adults
+  // row (role "Adult child") rather than a children row, since they're an
+  // adult, not a placement -- but leaving them out of the wheel entirely
+  // made them feel forgotten next to siblings who still get a spoke of
+  // their own. They're excluded from carerAdults/the centre label above
+  // (they aren't "the carer(s)"), so this is the only place they appear.
+  const adultChildren = adults.filter((a) => a.role === "Adult child");
   const householdRing: WheelNode[] = [
     ...livingChildren.map((c) => ({ id: `child:${c.id}`, label: firstName(c.name), color: householdCategoryColor(c.category) })),
     ...householdChildren.map((c) => ({ id: `hh:${c.id}`, label: firstName(c.name), color: householdCategoryColor(c.category) })),
+    ...adultChildren.map((a) => ({ id: `adult:${a.id}`, label: firstName(a.name), color: CATEGORY_COLOR.adultChild })),
     { id: ADD_HH_CHILD, label: "+", color: "", dashed: true },
   ];
 
@@ -1319,7 +1327,7 @@ export default function AboutScreen() {
   function renderSelected() {
     if (!selected) return null;
 
-    if (selected === CENTER_NODE) {
+    if (selected === CENTER_NODE || selected.startsWith("adult:")) {
       return (
         <div className="card">
           <h3>Adults in your household</h3>
@@ -2249,14 +2257,10 @@ export default function AboutScreen() {
             maxWidth="380px"
           />
         </div>
-        {/* Only the two colours that actually appear on the wheel itself --
-            "Visiting/day care child" and "Adult child" live in the Visitors
-            card and the Adults panel respectively, so explaining them here,
-            above a wheel that never shows them, was more confusing than
-            having no key at all. */}
         <div className="chips" style={{ marginTop: 10 }}>
           {[
             ["Active placement", CATEGORY_COLOR.placement],
+            ["Adult child", CATEGORY_COLOR.adultChild],
           ].map(([label, color]) => (
             <span key={label} className="hint" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
               <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, display: "inline-block" }} />
