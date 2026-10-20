@@ -15,6 +15,12 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 type DayItem = {
   id: string | null;
   text: string;
+  // Shown before "text" on the day's chip, but kept out of "text" itself --
+  // startEdit() below seeds the edit box straight from "text", and this is
+  // derived fresh from time_from/time_to on every load, not something to
+  // round-trip through a save (which would otherwise bake "09:30 " into the
+  // stored text permanently, then double up next time it's shown).
+  timeLabel: string;
   color: string;
   icon: string;
   category: string;
@@ -94,6 +100,8 @@ export default function MiniCalendarCard() {
         todo_only: boolean;
         record_id: string | null;
         record_ids: string[] | null;
+        time_from: string | null;
+        time_to: string | null;
       }[]) ?? []
     ).filter((r) => r.date >= from && r.date <= to && !r.done && !r.todo_only);
     const clubs = clubsRes.clubs;
@@ -104,9 +112,14 @@ export default function MiniCalendarCard() {
 
     const map: Record<string, DayItem[]> = {};
     rem.forEach((r) => {
+      // Same plain "HH:MM" prefix the full Calendar tab shows for a
+      // reminder's own time -- this card is too compact for a separate meta
+      // row, so it goes in front of the text itself instead.
+      const timeLabel = r.time_from ? `${r.time_from.slice(0, 5)}${r.time_to ? `–${r.time_to.slice(0, 5)}` : ""} ` : "";
       (map[r.date] ||= []).push({
         id: r.id,
         text: r.text,
+        timeLabel,
         color: r.people.length ? personColor(r.people.join(" & ")) : "var(--accent)",
         icon: categoryIcon(r.category),
         category: r.category,
@@ -124,6 +137,7 @@ export default function MiniCalendarCard() {
           (map[iso] ||= []).push({
             id: null,
             text,
+            timeLabel: "",
             color: personColor(c.childNames.join(" & ")),
             icon: "🧩",
             category: "club",
@@ -331,7 +345,7 @@ export default function MiniCalendarCard() {
                   {items.slice(0, 2).map((it, idx) => (
                     <div
                       key={idx}
-                      title={it.text}
+                      title={`${it.timeLabel}${it.text}`}
                       style={{
                         background: it.color,
                         borderRadius: 5,
@@ -399,7 +413,7 @@ export default function MiniCalendarCard() {
                       font: "inherit",
                     }}
                   >
-                    {it.icon} {it.text}
+                    {it.icon} {it.timeLabel}{it.text}
                   </button>
                 ))}
               </div>
