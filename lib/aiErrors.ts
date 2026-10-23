@@ -8,5 +8,15 @@
  */
 export function aiErrorMessage(e: unknown, tooLongMessage: string): string {
   const message = e instanceof Error ? e.message : "unknown error";
-  return /Failed to parse structured output/i.test(message) ? tooLongMessage : message;
+  if (/Failed to parse structured output/i.test(message)) return tooLongMessage;
+  // A raw "401 {...\"authentication_error\"...\"invalid x-api-key\"...}" blob
+  // reads like an app bug to someone who isn't expecting it, when it's
+  // actually an account-level problem affecting every AI feature at once
+  // (sort, ask, summaries, everything shares this one key) -- worth naming
+  // plainly rather than surfacing the raw JSON, same reasoning as the
+  // credit-balance case in app/api/sort/route.ts.
+  if (/authentication_error|invalid x-api-key/i.test(message)) {
+    return "The AI service's API key is invalid or has been revoked -- this affects every AI feature, not just this one. Check ANTHROPIC_API_KEY in Vercel's project settings (Settings > Environment Variables) against a current key from console.anthropic.com.";
+  }
+  return message;
 }
