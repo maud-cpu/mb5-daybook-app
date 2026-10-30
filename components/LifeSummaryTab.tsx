@@ -43,18 +43,27 @@ export default function LifeSummaryTab({ childList }: { childList: ChildOption[]
   const scopeLabel = isHousehold ? "Whole household" : selectedChild?.name;
 
   async function runOne(p: Period): Promise<Result> {
-    const res = await fetch("/api/life-summary", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        isHousehold
-          ? { household: true, dateFrom: p.dateFrom, dateTo: p.dateTo, length }
-          : { childId, childName: selectedChild?.name || "", dateFrom: p.dateFrom, dateTo: p.dateTo, length },
-      ),
-    });
-    const data = await res.json();
-    if (!res.ok || data.error) return { error: data.error || "Couldn't generate that summary" };
-    return data as Result;
+    // A dropped connection or a request killed by the serverless function's
+    // own time limit throws here rather than resolving with a normal
+    // response -- without this, that left "busy" stuck true forever (the
+    // button looked frozen) with no error shown at all, same failure shape
+    // CaptureScreen's sort retry logic exists to avoid.
+    try {
+      const res = await fetch("/api/life-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          isHousehold
+            ? { household: true, dateFrom: p.dateFrom, dateTo: p.dateTo, length }
+            : { childId, childName: selectedChild?.name || "", dateFrom: p.dateFrom, dateTo: p.dateTo, length },
+        ),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) return { error: data.error || "Couldn't generate that summary" };
+      return data as Result;
+    } catch {
+      return { error: "Couldn't reach the summarising service — try again in a moment." };
+    }
   }
 
   async function generate() {

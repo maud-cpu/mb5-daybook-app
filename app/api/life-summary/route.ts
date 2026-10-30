@@ -5,8 +5,11 @@ import { createClient } from "@/lib/supabase/server";
 import { aiErrorMessage } from "@/lib/aiErrors";
 
 // Same AI-heavy shape of request as /api/sort -- generous enough for several
-// documents plus a wide date range of notes.
-export const maxDuration = 120;
+// documents plus a wide date range of notes. Raised alongside max_tokens
+// below, 120 -> 300, for the same reason /api/sort needed it: more tokens to
+// generate is more time to generate them in, and a request that gets killed
+// by this ceiling comes back as a dropped connection, not a readable error.
+export const maxDuration = 300;
 
 // A child's document library can grow large over time (old handovers,
 // assessments, reports) -- capped so one request doesn't try to attach
@@ -208,7 +211,11 @@ Never invent or assume anything that isn't actually in the notes or documents. I
       // Brief still gets real headroom despite the short target length --
       // this is an output CAP, not the actual expected length, and a cap
       // too close to the target is exactly what risks truncating mid-reply.
-      max_tokens: isHousehold ? (isBrief ? 2000 : 6000) : isBrief ? 600 : 1500,
+      // All four raised again after a single detailed safeguarding note --
+      // the kind the prompt explicitly says never to shorten for length --
+      // was still enough on its own to blow past the old caps even once the
+      // date range was narrowed right down around it.
+      max_tokens: isHousehold ? (isBrief ? 3000 : 8000) : isBrief ? 1200 : 3000,
       system: sys,
       messages: [{ role: "user", content }],
     });
