@@ -11,6 +11,12 @@ import { aiErrorMessage } from "@/lib/aiErrors";
 // first and last brace" -- see /api/draft-diary for why that broke.
 const HandoverDraftSchema = z.object(Object.fromEntries(PROFILE_FIELDS.map((f) => [f[0], z.string()])) as Record<ProfileFieldKey, z.ZodString>);
 
+// A longer max_tokens below (see that comment) needs genuine headroom to
+// actually finish generating in, not just permission to -- the same
+// 120-second ceiling /api/sort hit once it started regularly needing more
+// than a couple of seconds of generation.
+export const maxDuration = 120;
+
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const {
@@ -70,10 +76,12 @@ export async function POST(req: NextRequest) {
     const msg = await anthropic.messages.parse({
       model: "claude-sonnet-5",
       // 13 sections of specific, practical detail for a child with a long,
-      // well-logged placement (e.g. years of diary entries) genuinely needs
-      // more than the 2000 this used to cap at -- that's exactly what was
-      // truncating mid-draft and showing as "too long to draft in one go".
-      max_tokens: 4000,
+      // well-logged placement (e.g. years of diary entries, or even one
+      // detailed safeguarding incident) genuinely needs more than the 2000
+      // this used to cap at, then more again than the 4000 it was raised to
+      // -- that's exactly what was truncating mid-draft and showing as "too
+      // long to draft in one go".
+      max_tokens: 8000,
       system: sys,
       messages: [{ role: "user", content: src }],
       output_config: { format: zodOutputFormat(HandoverDraftSchema) },
