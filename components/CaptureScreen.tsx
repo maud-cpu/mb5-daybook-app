@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { daycareAmount, gbp, sortChildren, today } from "@/lib/domain";
-import { datesBetween } from "@/lib/calendarHelpers";
+import { addDays, datesBetween, occurrenceDates } from "@/lib/calendarHelpers";
 import { withAmazonAffiliateTag } from "@/lib/amazon";
 import ThingsToDoCard from "@/components/ThingsToDoCard";
 import NewsCard from "@/components/NewsCard";
@@ -24,6 +24,7 @@ import {
   livesHereOf,
   PendingItem,
   Rates,
+  REPEAT_OPTIONS,
 } from "@/lib/types";
 
 const MONTH_NAMES = [
@@ -875,6 +876,11 @@ export default function CaptureScreen() {
         // records is later deleted, instead of being left behind forever
         // once record_id itself falls back to null.
         recordIds: string[];
+        // "none" for the ordinary case -- a standing routine instead expands
+        // into one real row per occurrence below, same mechanism (and same
+        // default 12-week window, since there's nowhere here to ask for an
+        // end date) as a recurring reminder added by hand on the Calendar tab.
+        repeat: string;
       }
     >();
     const reminderOrder: string[] = [];
@@ -900,6 +906,7 @@ export default function CaptureScreen() {
             recordId: null,
             recordAmbiguous: false,
             recordIds: [],
+            repeat: p.reminder_repeat || "none",
           };
           reminderGroups.set(key, group);
           reminderOrder.push(key);
@@ -919,20 +926,32 @@ export default function CaptureScreen() {
           if (recId) group.recordIds.push(recId);
         }
       });
-    const reminderRows = reminderOrder.map((k) => {
+    const reminderRows = reminderOrder.flatMap((k) => {
       const g = reminderGroups.get(k)!;
-      return {
+      const base = {
         text: g.text,
-        date: g.date,
         category: g.category,
         people: g.people,
         needs_action: g.needsAction,
         url: g.url || null,
         time_from: g.timeFrom || null,
         time_to: g.timeTo || null,
-        record_id: g.recordAmbiguous ? null : g.recordId,
-        record_ids: g.recordIds,
       };
+      if (g.repeat === "none") {
+        return [{ ...base, date: g.date, record_id: g.recordAmbiguous ? null : g.recordId, record_ids: g.recordIds }];
+      }
+      // A linked priced record (daycare hours) belongs to the one specific
+      // day it was actually charged for -- never duplicated across every
+      // future occurrence of what's otherwise just a standing routine, which
+      // in practice is never itself a priced daycare item anyway.
+      const seriesId = crypto.randomUUID();
+      return occurrenceDates(g.date, addDays(g.date, 12 * 7), g.repeat).map((d, i) => ({
+        ...base,
+        date: d,
+        series_id: seriesId,
+        record_id: i === 0 ? (g.recordAmbiguous ? null : g.recordId) : null,
+        record_ids: i === 0 ? g.recordIds : [],
+      }));
     });
     if (reminderRows.length) {
       const remRes = await fetch("/api/reminders", {
@@ -1536,6 +1555,29 @@ export default function CaptureScreen() {
                             onChange={(e) => updatePending(i, { reminder_time_to: e.target.value || null })}
                           />
                         </div>
+                      )}
+                      {p.flag === "reminder" && (
+                        <div className="row" style={{ marginTop: 6, alignItems: "center" }}>
+                          <span className="muted" style={{ flex: "0 0 auto" }}>
+                            Repeats
+                          </span>
+                          <select
+                            value={p.reminder_repeat || "none"}
+                            onChange={(e) => updatePending(i, { reminder_repeat: e.target.value })}
+                          >
+                            {REPEAT_OPTIONS.map(([k, l]) => (
+                              <option key={k} value={k}>
+                                {l}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      {p.flag === "reminder" && p.reminder_repeat && p.reminder_repeat !== "none" && (
+                        <p className="hint" style={{ marginTop: 4 }}>
+                          🔁 Repeats until {addDays(p.reminder_date || today(), 12 * 7)} — open the calendar afterwards to
+                          keep it going for longer.
+                        </p>
                       )}
                       {p.flag === "reminder" && (
                         <input

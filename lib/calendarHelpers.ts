@@ -1,4 +1,8 @@
-export const MAX_OCCURRENCES = 104; // ~2 years weekly -- a safety cap, not a real limit anyone should hit
+// ~2 years weekly, but only ~1 year if it's daily (see "daily" below) --
+// raised from 104 once daily became a real cadence, so a standing daily
+// routine with a generous "until" doesn't quietly stop partway through its
+// own requested window. Still a safety cap, not a real limit anyone should hit.
+export const MAX_OCCURRENCES = 365;
 
 export function addDays(iso: string, days: number): string {
   const d = new Date(iso + "T12:00");
@@ -26,7 +30,8 @@ export function datesBetween(start: string, end: string): string[] {
 }
 
 export function occurrenceDates(start: string, until: string, repeat: string): string[] {
-  const step = (d: string) => (repeat === "weekly" ? addDays(d, 7) : repeat === "fortnightly" ? addDays(d, 14) : addMonths(d, 1));
+  const step = (d: string) =>
+    repeat === "daily" ? addDays(d, 1) : repeat === "weekly" ? addDays(d, 7) : repeat === "fortnightly" ? addDays(d, 14) : addMonths(d, 1);
   const dates = [start];
   while (dates.length < MAX_OCCURRENCES) {
     const next = step(dates[dates.length - 1]);

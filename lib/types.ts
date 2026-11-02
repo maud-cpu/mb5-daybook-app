@@ -415,6 +415,7 @@ export type Reminder = {
 
 export const REPEAT_OPTIONS = [
   ["none", "Does not repeat"],
+  ["daily", "Daily"],
   ["weekly", "Weekly"],
   ["fortnightly", "Fortnightly"],
   ["monthly", "Monthly"],
@@ -747,6 +748,8 @@ export type PendingItem = Partial<EntryRecord> & {
   /** When flag is "reminder" and the text gave a specific time (a start time, or a start-end range), HH:MM. Null/empty if the text gave no time of its own. */
   reminder_time_from?: string | null;
   reminder_time_to?: string | null;
+  /** When flag is "reminder" and the text describes a standing routine rather than a one-off (e.g. "every day", "twice a week") -- one of REPEAT_OPTIONS' keys, "none" for a one-off. Expanded into a real per-occurrence series at save time, same mechanism as a manually-added recurring reminder. */
+  reminder_repeat?: string;
   /** A school contact (e.g. class teacher) the AI spotted in the text, offered as a one-click save to the tagged child's School admin. */
   school_contact?: { name: string; contact: string } | null;
   /** A recurring club/activity the AI spotted in the text, offered as a one-click save to the tagged child's Clubs list. */
